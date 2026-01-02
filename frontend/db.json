@@ -1,0 +1,16 @@
+{
+  "students": [
+    {
+      "id": 1,
+      "username": "student1",
+      "password": "Password123"
+    }
+  ],
+  "landlords": [
+    {
+      "id": 1,
+      "username": "owner1",
+      "password": "Password123"
+    }
+  ]
+}
