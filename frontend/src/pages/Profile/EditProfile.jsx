@@ -17,7 +17,7 @@ const EditProfile = () => {
     bio: "Computer Science student at EELU. I am a quiet person who loves coding and coffee.",
     email: "mathewperry@xyz.com",
     phone: "+20 123 456 7890",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80", // الصورة الحالية
+    avatar: "https://ui-avatars.com/api/?name=Mathew+Perry&background=1A56DB&color=fff&size=256",
     
     location: "Nasr City, Cairo",
     university: "EELU",

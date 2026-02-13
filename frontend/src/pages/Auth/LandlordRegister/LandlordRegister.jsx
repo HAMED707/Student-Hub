@@ -71,6 +71,8 @@ const LandlordRegister = () => {
     const [fileNames, setFileNames] = useState({ idFront: '', profilePhoto: '' });
     const [errors, setErrors] = useState({});
     const [availableCities, setAvailableCities] = useState([]);
+    const [submitError, setSubmitError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleChange = (e) => {
         const { name, value, files } = e.target;
@@ -119,7 +121,33 @@ const LandlordRegister = () => {
         return isValid;
     };
 
-    const handleNext = () => { if (validateStep(currentStep)) { if (currentStep < 3) setCurrentStep(prev => prev + 1); else console.log("Landlord Registered:", formData); } };
+    const handleNext = () => {
+        if (!validateStep(currentStep)) return;
+        if (currentStep < 3) {
+            setCurrentStep(prev => prev + 1);
+            return;
+        }
+        setSubmitError('');
+        setIsSubmitting(true);
+        // No backend for now: save user locally and redirect
+        const user = {
+            username: formData.email,
+            password: formData.password,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            gender: formData.gender,
+            phone: formData.phone,
+            dob: formData.dob,
+            nationalId: formData.nationalId,
+            governorate: formData.governorate,
+            city: formData.city,
+        };
+        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('role', 'landlord');
+        setIsSubmitting(false);
+        navigate('/home');
+    };
     const handleBack = () => { setErrors({}); if (currentStep > 1) setCurrentStep(prev => prev - 1); };
 
     return (
@@ -160,10 +188,17 @@ const LandlordRegister = () => {
                             </div>
                         )}
                         
+                        {submitError && currentStep === 3 && (
+                            <div className="flex items-center gap-2 mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                <span>{submitError}</span>
+                            </div>
+                        )}
+
                         {/* الأزرار */}
                         <div className="flex justify-between items-center mt-10 mb-2 w-full">
-                            <button onClick={handleBack} className={`flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-300 px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition ${currentStep === 1 ? 'invisible' : 'visible'}`}><ArrowLeft className="w-5 h-5" /> Back</button>
-                            <button onClick={handleNext} className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95">{currentStep === 3 ? "Create Account" : "NEXT"} <ChevronRight className="w-5 h-5" /></button>
+                            <button onClick={handleBack} disabled={isSubmitting} className={`flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-300 px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition disabled:opacity-50 ${currentStep === 1 ? 'invisible' : 'visible'}`}><ArrowLeft className="w-5 h-5" /> Back</button>
+                            <button onClick={handleNext} disabled={isSubmitting} className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">{currentStep === 3 ? (isSubmitting ? "Creating…" : "Create Account") : "NEXT"} <ChevronRight className="w-5 h-5" /></button>
                         </div>
                     </div>
                 </div>
@@ -201,7 +236,7 @@ const LandlordRegister = () => {
                         <p className="text-sm text-blue-100/80 leading-relaxed">Provide your details to list and manage your properties.</p>
                     </div>
                     <div className="relative w-full h-full overflow-hidden rounded-[45px]">
-                        <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=1200&auto=format&fit=crop" alt="Landlord" className="w-full h-full object-cover object-top opacity-90" />
+                        <img src="https://picsum.photos/seed/landlord-register/1200/900" alt="Landlord" className="w-full h-full object-cover object-top opacity-90" />
                     </div>
                 </div>
             </div>

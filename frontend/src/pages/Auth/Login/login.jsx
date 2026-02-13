@@ -149,7 +149,7 @@ const Login = () => {
                         <h2 className="text-2xl font-bold text-white mb-4 leading-relaxed">"Find your next room or roommate - <br/> Login to get started!"</h2>
                     </div>
                     <div className="relative w-full h-full overflow-hidden rounded-[45px] flex items-end justify-center">
-                        <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=1200&auto=format&fit=crop" alt="Login" className="w-[90%] h-[85%] object-cover object-top rounded-t-[30px]" />
+                        <img src="https://picsum.photos/seed/login-side/1200/800" alt="Login" className="w-[90%] h-[85%] object-cover object-top rounded-t-[30px]" />
                     </div>
                 </div>
             </div>

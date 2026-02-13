@@ -19,7 +19,7 @@ const propertyData = {
   description: "A modern and fully furnished student accommodation offering private and shared rooms near major universities. Enjoy high-speed Wi-Fi, study spaces, and 24/7 security in a friendly and safe environment — perfect for focused study and comfortable living.",
   landlord: {
     name: "Mohamed Ahmed",
-    image: "https://randomuser.me/api/portraits/men/32.jpg"
+    image: "https://ui-avatars.com/api/?name=Mohamed+Ahmed&background=1A56DB&color=fff&size=128"
   },
   images: [
     "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=1200&q=80", 
@@ -49,8 +49,8 @@ const propertyData = {
     { name: "Gas", icon: Flame }
   ],
   reviews: [
-    { id: 1, user: "Kim Jhone", text: "Lorem ipsum is simply dummy text of the printing and typesetting industry.", rating: 5, avatar: "https://randomuser.me/api/portraits/women/44.jpg" },
-    { id: 2, user: "Ruri Kyla", text: "Standard dummy text ever since the 1500s.", rating: 4.5, avatar: "https://randomuser.me/api/portraits/women/65.jpg" }
+    { id: 1, user: "Kim Jhone", text: "Lorem ipsum is simply dummy text of the printing and typesetting industry.", rating: 5, avatar: "https://ui-avatars.com/api/?name=Kim+Jhone&background=0A2647&color=fff&size=64" },
+    { id: 2, user: "Ruri Kyla", text: "Standard dummy text ever since the 1500s.", rating: 4.5, avatar: "https://ui-avatars.com/api/?name=Ruri+Kyla&background=10B981&color=fff&size=64" }
   ]
 };
 

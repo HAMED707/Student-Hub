@@ -10,9 +10,9 @@ import Messages from './Messages.jsx';
 
 // بيانات المحادثات (نرفعها هنا لتكون مشتركة)
 const chatsData = [
-  { id: 1, name: "Suzana Colin", lastMsg: "next time you'll be awake...", time: "Dec 15", avatar: "https://randomuser.me/api/portraits/women/65.jpg", active: true },
-  { id: 2, name: "Christina Ker", lastMsg: "Thanks for the recommendation!", time: "Dec 15", avatar: "https://randomuser.me/api/portraits/women/33.jpg", active: false },
-  { id: 3, name: "Hazem", lastMsg: "See you tomorrow!", time: "Dec 15", avatar: "https://randomuser.me/api/portraits/men/22.jpg", active: false },
+  { id: 1, name: "Suzana Colin", lastMsg: "next time you'll be awake...", time: "Dec 15", avatar: "https://ui-avatars.com/api/?name=Suzana+Colin&background=1A56DB&color=fff&size=64", active: true },
+  { id: 2, name: "Christina Ker", lastMsg: "Thanks for the recommendation!", time: "Dec 15", avatar: "https://ui-avatars.com/api/?name=Christina+Ker&background=10B981&color=fff&size=64", active: false },
+  { id: 3, name: "Hazem", lastMsg: "See you tomorrow!", time: "Dec 15", avatar: "https://ui-avatars.com/api/?name=Hazem&background=0A2647&color=fff&size=64", active: false },
 ];
 
 const Community = () => {

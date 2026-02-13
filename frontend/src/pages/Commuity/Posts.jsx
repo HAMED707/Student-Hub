@@ -3,17 +3,17 @@ import { MessageCircle, Heart, MoreVertical, Image as ImageIcon, Send, Hash, Thu
 
 const postsData = [
   {
-    id: 1, author: "John Doe", role: "Student", time: "Aug 19, 2021", avatar: "https://randomuser.me/api/portraits/men/1.jpg",
+    id: 1, author: "John Doe", role: "Student", time: "Aug 19, 2021", avatar: "https://ui-avatars.com/api/?name=John+Doe&background=1A56DB&color=fff&size=64",
     title: "Looking for a roommate in Nasr City",
     content: "Hey guys! I'm looking for a roommate to share a 2-bedroom apartment in Nasr City near Al-Ahly Club. The apartment is fully furnished and the rent is 2000 EGP per person. DM me if interested!",
     likes: 12, comments: 5,
     replies: [
-        { id: 101, author: "Ralph Edwards", time: "2 hrs ago", avatar: "https://randomuser.me/api/portraits/men/5.jpg", text: "Is it close to the metro station?" },
-        { id: 102, author: "Albert Flores", time: "1 hr ago", avatar: "https://randomuser.me/api/portraits/men/12.jpg", text: "I sent you a message, please check." }
+        { id: 101, author: "Ralph Edwards", time: "2 hrs ago", avatar: "https://ui-avatars.com/api/?name=Ralph+Edwards&background=0A2647&color=fff&size=48", text: "Is it close to the metro station?" },
+        { id: 102, author: "Albert Flores", time: "1 hr ago", avatar: "https://ui-avatars.com/api/?name=Albert+Flores&background=10B981&color=fff&size=48", text: "I sent you a message, please check." }
     ]
   },
   {
-    id: 2, author: "Sarah Miller", role: "Admin", time: "Yesterday", avatar: "https://randomuser.me/api/portraits/women/44.jpg",
+    id: 2, author: "Sarah Miller", role: "Admin", time: "Yesterday", avatar: "https://ui-avatars.com/api/?name=Sarah+Miller&background=6366f1&color=fff&size=64",
     title: "Tips for exams preparation 📚",
     content: "Since finals are approaching, here are some quick tips: 1. Start early. 2. Stay hydrated. 3. Group study helps a lot with revision. Good luck everyone!",
     likes: 45, comments: 12,

@@ -11,7 +11,7 @@ const roommatesData = [
     id: 1, name: "Sara Mohamed", gender: "Female", year: "1st Year", university: "Cairo University",
     budget: "2000-3000", bio: "Medicine student, quiet and organized.",
     tags: ["Quiet", "Clean"], matchPercentage: 98,
-    image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&q=80",
+    image: "https://ui-avatars.com/api/?name=Sara+Mohamed&background=ec4899&color=fff&size=128",
     details: { sleepTime: "10 PM", cleanliness: "High", hobbies: ["Reading", "Yoga"] }
   },
   {
@@ -25,7 +25,7 @@ const roommatesData = [
     id: 3, name: "Nourhan Ezzat", gender: "Female", year: "3rd Year", university: "Helwan University",
     budget: "3000+", bio: "Fine Arts student, loves painting and music.",
     tags: ["Artistic", "Friendly"], matchPercentage: 85,
-    image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&q=80",
+    image: "https://ui-avatars.com/api/?name=Nourhan+Ezzat&background=a855f7&color=fff&size=128",
     details: { sleepTime: "12 AM", cleanliness: "High", hobbies: ["Drawing", "Music"] }
   },
   {
@@ -46,7 +46,7 @@ const roommatesData = [
     id: 6, name: "Laila Ahmed", gender: "Female", year: "2nd Year", university: "Cairo University",
     budget: "3000+", bio: "Pharmacy student, clean and cooks well.",
     tags: ["Cook", "Tidy"], matchPercentage: 92,
-    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80",
+    image: "https://ui-avatars.com/api/?name=Laila+Ahmed&background=f43f5e&color=fff&size=128",
     details: { sleepTime: "11 PM", cleanliness: "High", hobbies: ["Cooking", "Travel"] }
   },
   {
@@ -60,7 +60,7 @@ const roommatesData = [
     id: 8, name: "Salma Hany", gender: "Female", year: "4th Year", university: "Ain Shams University",
     budget: "1000-2000", bio: "Architecture student, always working on models.",
     tags: ["Creative", "Night owl"], matchPercentage: 80,
-    image: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&q=80",
+    image: "https://ui-avatars.com/api/?name=Salma+Hany&background=14b8a6&color=fff&size=128",
     details: { sleepTime: "3 AM", cleanliness: "Moderate", hobbies: ["Design", "Photography"] }
   },
   {
@@ -74,7 +74,7 @@ const roommatesData = [
     id: 10, name: "Hana Magdy", gender: "Female", year: "2nd Year", university: "Helwan University",
     budget: "1000-2000", bio: "Law student, loves reading books.",
     tags: ["Reader", "Calm"], matchPercentage: 89,
-    image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80",
+    image: "https://ui-avatars.com/api/?name=Hana+Magdy&background=0ea5e9&color=fff&size=128",
     details: { sleepTime: "10 PM", cleanliness: "Very High", hobbies: ["Reading", "Writing"] }
   }
 ];

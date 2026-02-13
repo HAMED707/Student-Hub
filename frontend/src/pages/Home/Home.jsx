@@ -3,11 +3,9 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../../assets/components/Navbar/navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
 import { ArrowRight, ChevronLeft, ChevronRight, MapPin, Map, FileText, CheckCircle } from "lucide-react"; 
-import heroBanner from "../../assets/images/banners/hero_banner.png"; 
-
-// 👇 استيراد الصورة المجمعة (تأكد من أن المسار واسم الملف صحيحين)
-// يفضل إعادة تسمية الملف ليكون بدون مسافات، مثلاً: students_group.png
-import studentsGroupImage from "../../assets/images/banners/image.png"; 
+// Reliable placeholder URLs (no local files required)
+const heroBanner = "https://picsum.photos/seed/hero-banner/1200/500";
+const studentsGroupImage = "https://picsum.photos/seed/students-group/800/400"; 
 
 // --- بيانات شعارات الجامعات ---
 const partnerLogos = [
@@ -31,7 +29,7 @@ const testimonialsData = [
     user: {
       name: "Amaaney Zulqarnain",
       location: "Cairo, EG",
-      image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80"
+      image: "https://ui-avatars.com/api/?name=Amaaney+Zulqarnain&background=1A56DB&color=fff&size=128"
     }
   },
   {
@@ -42,7 +40,7 @@ const testimonialsData = [
     user: {
       name: "Sarah Johnson",
       location: "London, UK",
-      image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80"
+      image: "https://ui-avatars.com/api/?name=Sarah+Johnson&background=0A2647&color=fff&size=128"
     }
   },
   {
@@ -53,7 +51,7 @@ const testimonialsData = [
     user: {
       name: "Michael Chen",
       location: "Sydney, AU",
-      image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80"
+      image: "https://ui-avatars.com/api/?name=Michael+Chen&background=10B981&color=fff&size=128"
     }
   }
 ];

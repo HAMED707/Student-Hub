@@ -87,6 +87,8 @@ const StudentRegister = () => {
 
     const [errors, setErrors] = useState({});
     const [availableCities, setAvailableCities] = useState([]);
+    const [submitError, setSubmitError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -143,10 +145,23 @@ const StudentRegister = () => {
     };
 
     const handleNext = () => { 
-        if (validateStep(currentStep)) {
-            if (currentStep < 3) setCurrentStep(prev => prev + 1); 
-            else console.log("Form Submitted:", formData);
+        if (!validateStep(currentStep)) return;
+        if (currentStep < 3) {
+            setCurrentStep(prev => prev + 1);
+            return;
         }
+        setSubmitError('');
+        setIsSubmitting(true);
+        // No backend for now: save user locally and redirect
+        const user = {
+            username: formData.email,
+            password: formData.password,
+            ...formData,
+        };
+        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('role', 'student');
+        setIsSubmitting(false);
+        navigate('/home');
     };
 
     const handleBack = () => { 
@@ -208,20 +223,29 @@ const StudentRegister = () => {
                             </div>
                         )}
 
+                        {submitError && currentStep === 3 && (
+                            <div className="flex items-center gap-2 mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                <span>{submitError}</span>
+                            </div>
+                        )}
+
                         {/* الأزرار (قريبة من الحقول) */}
                         <div className="flex justify-between items-center mt-10 mb-2 w-full">
                             <button 
                                 onClick={handleBack}
-                                className={`flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-300 px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition ${currentStep === 1 ? 'invisible' : 'visible'}`}
+                                disabled={isSubmitting}
+                                className={`flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-300 px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition disabled:opacity-50 ${currentStep === 1 ? 'invisible' : 'visible'}`}
                             >
                                 <ArrowLeft className="w-5 h-5" /> Back
                             </button>
 
                             <button 
                                 onClick={handleNext}
-                                className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95"
+                                disabled={isSubmitting}
+                                className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                {currentStep === 3 ? "Create Account" : "NEXT"} <ChevronRight className="w-5 h-5" />
+                                {currentStep === 3 ? (isSubmitting ? "Creating…" : "Create Account") : "NEXT"} <ChevronRight className="w-5 h-5" />
                             </button>
                         </div>
                     </div>
@@ -272,7 +296,7 @@ const StudentRegister = () => {
                         <p className="text-sm text-blue-100/80 leading-relaxed">Provide your details to find housing, match with roommates, and access student services.</p>
                     </div>
                     <div className="relative w-full h-full overflow-hidden rounded-[45px]">
-                        <img src="https://images.unsplash.com/photo-1594744803329-e58f27611757?q=80&w=1500&auto=format&fit=crop" alt="Student" className="w-full h-full object-cover object-top opacity-90" />
+                        <img src="https://picsum.photos/seed/student-register/1500/900" alt="Student" className="w-full h-full object-cover object-top opacity-90" />
                     </div>
                     <div className="absolute -left-8 bottom-24 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-2xl z-40">
                         <div className="w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center text-white">

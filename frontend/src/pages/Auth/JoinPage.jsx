@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GraduationCap, Briefcase, ArrowLeft } from 'lucide-react';
 
+// Housing-related image (apartment / student accommodation); fallback if it fails
+const SIDE_IMAGE_PRIMARY = "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1200&q=80";
+const SIDE_IMAGE_FALLBACK = "https://picsum.photos/seed/join-welcome/1200/800";
+
 const JoinPage = () => {
     const navigate = useNavigate();
+    const [sideImgSrc, setSideImgSrc] = useState(SIDE_IMAGE_PRIMARY);
 
     return (
         <div className="flex h-screen w-full bg-white overflow-hidden font-sans">
@@ -75,9 +80,10 @@ const JoinPage = () => {
                     <div className="absolute inset-0 bg-white/10 backdrop-blur-md rounded-[50px] border border-white/20"></div>
                     <div className="relative w-full h-full p-4 overflow-hidden rounded-[50px]">
                         <img 
-                            src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=1200&auto=format&fit=crop" 
-                            alt="Welcome" 
+                            src={sideImgSrc} 
+                            alt="Student accommodation - find your room" 
                             className="w-full h-full object-cover rounded-[40px]"
+                            onError={() => setSideImgSrc(SIDE_IMAGE_FALLBACK)}
                         />
                     </div>
                     <div className="absolute -left-8 bottom-20 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-2xl z-20">

@@ -2,10 +2,10 @@ import React from 'react';
 import { Users, ExternalLink } from 'lucide-react';
 
 const groupsData = [
-  { id: 1, name: "EELU Community", members: "1.2k", image: "https://randomuser.me/api/portraits/men/32.jpg", desc: "A community for EELU University students to share housing tips, study groups, and events.", isMyGroup: true },
-  { id: 2, name: "Cairo University Students", members: "3.5k", image: "https://randomuser.me/api/portraits/women/44.jpg", desc: "Join communities that match your interests - universities, cities, and activities.", isMyGroup: false },
-  { id: 3, name: "Ain Shams Hub", members: "900", image: "https://randomuser.me/api/portraits/men/85.jpg", desc: "Official hub for Ain Shams students looking for roommates.", isMyGroup: false },
-  { id: 4, name: "AUC Housing", members: "2.1k", image: "https://randomuser.me/api/portraits/women/65.jpg", desc: "Premium housing discussion for AUC students.", isMyGroup: false },
+  { id: 1, name: "EELU Community", members: "1.2k", image: "https://ui-avatars.com/api/?name=EELU&background=1A56DB&color=fff&size=128", desc: "A community for EELU University students to share housing tips, study groups, and events.", isMyGroup: true },
+  { id: 2, name: "Cairo University Students", members: "3.5k", image: "https://ui-avatars.com/api/?name=Cairo+Uni&background=0A2647&color=fff&size=128", desc: "Join communities that match your interests - universities, cities, and activities.", isMyGroup: false },
+  { id: 3, name: "Ain Shams Hub", members: "900", image: "https://ui-avatars.com/api/?name=Ain+Shams&background=10B981&color=fff&size=128", desc: "Official hub for Ain Shams students looking for roommates.", isMyGroup: false },
+  { id: 4, name: "AUC Housing", members: "2.1k", image: "https://ui-avatars.com/api/?name=AUC&background=6366f1&color=fff&size=128", desc: "Premium housing discussion for AUC students.", isMyGroup: false },
 ];
 
 const Groups = () => {
@@ -49,7 +49,7 @@ const Groups = () => {
             <div key={group.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-lg transition group flex flex-col">
                {/* Cover Image */}
                <div className="h-36 bg-gray-200 relative overflow-hidden">
-                  <img src={`https://source.unsplash.com/random/800x400?university,students&sig=${group.id}`} alt="cover" className="w-full h-full object-cover group-hover:scale-105 transition duration-700" />
+                  <img src={`https://picsum.photos/seed/group-${group.id}/800/400`} alt="cover" className="w-full h-full object-cover group-hover:scale-105 transition duration-700" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-60"></div>
                </div>
                
@@ -63,7 +63,7 @@ const Groups = () => {
                   <div className="mt-auto flex justify-between items-center pt-4 border-t border-gray-50">
                      <div className="flex -space-x-2">
                         {[1,2,3].map(i => (
-                           <img key={i} src={`https://randomuser.me/api/portraits/men/${i+20}.jpg`} className="w-6 h-6 rounded-full border-2 border-white" alt="member" />
+                           <img key={i} src={`https://ui-avatars.com/api/?name=M${i}&background=94a3b8&color=fff&size=48`} className="w-6 h-6 rounded-full border-2 border-white" alt="member" />
                         ))}
                         <div className="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-500">
                            +1k

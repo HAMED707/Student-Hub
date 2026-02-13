@@ -14,8 +14,8 @@ const userData = {
   role: "Student",
   status: "Looking for a Roommate", // تم التعديل لتناسب سياق الطالب
   bio: "Computer Science student at EELU. I am a quiet person who loves coding and coffee. Looking for a respectful roommate who values cleanliness and privacy.",
-  avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80",
-  cover: "https://images.unsplash.com/photo-1557683316-973673baf926?w=1600&q=80",
+  avatar: "https://ui-avatars.com/api/?name=Mathew+Perry&background=1A56DB&color=fff&size=256",
+  cover: "https://picsum.photos/seed/profile-cover/1600/500",
   
   matchScore: 85, // نسبة التوافق مع الطالب الزائر (افتراضي)
   
@@ -42,8 +42,8 @@ const userData = {
   },
 
   reviews: [
-    { id: 1, author: "Kim Jhone", role: "Landlord", text: "Very polite and pays rent on time.", rating: 5, date: "2 days ago", avatar: "https://randomuser.me/api/portraits/women/44.jpg" },
-    { id: 2, author: "Ruri Kyla", role: "Student", text: "Quiet and clean roommate.", rating: 4.5, date: "1 week ago", avatar: "https://randomuser.me/api/portraits/women/65.jpg" }
+    { id: 1, author: "Kim Jhone", role: "Landlord", text: "Very polite and pays rent on time.", rating: 5, date: "2 days ago", avatar: "https://ui-avatars.com/api/?name=Kim+Jhone&background=0A2647&color=fff&size=64" },
+    { id: 2, author: "Ruri Kyla", role: "Student", text: "Quiet and clean roommate.", rating: 4.5, date: "1 week ago", avatar: "https://ui-avatars.com/api/?name=Ruri+Kyla&background=10B981&color=fff&size=64" }
   ]
 };
 

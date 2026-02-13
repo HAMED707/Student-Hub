@@ -18,8 +18,8 @@ const userData = {
   role: "Student",
   status: "Looking for a Room", 
   bio: "Computer Science student at EELU. I am a quiet person who loves coding and coffee. Looking for a respectful roommate who values cleanliness and privacy.",
-  avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80",
-  cover: "https://images.unsplash.com/photo-1557683316-973673baf926?w=1600&q=80",
+  avatar: "https://ui-avatars.com/api/?name=Mathew+Perry&background=1A56DB&color=fff&size=256",
+  cover: "https://picsum.photos/seed/profile-cover/1600/500",
   
   profileCompletion: 85,
   languages: ["Arabic", "English", "German"],
@@ -67,7 +67,7 @@ const userData = {
         text: "Mathew is an exceptional tenant. Always pays rent on time and keeps the apartment in perfect condition. Highly recommended!", 
         rating: 5.0, 
         date: "2 days ago", 
-        avatar: "https://randomuser.me/api/portraits/women/44.jpg" 
+        avatar: "https://ui-avatars.com/api/?name=Kim+Jhone&background=0A2647&color=fff&size=64" 
     },
     { 
         id: 2, 
@@ -76,7 +76,7 @@ const userData = {
         text: "Quiet and clean roommate. We studied together often, and he respects personal space.", 
         rating: 4.8, 
         date: "1 week ago", 
-        avatar: "https://randomuser.me/api/portraits/women/65.jpg" 
+        avatar: "https://ui-avatars.com/api/?name=Ruri+Kyla&background=10B981&color=fff&size=64" 
     },
     { 
         id: 3, 
@@ -85,7 +85,7 @@ const userData = {
         text: "Very friendly and helpful. He helped me a lot with the graduation project. Great person to live with.", 
         rating: 5.0, 
         date: "3 weeks ago", 
-        avatar: "https://randomuser.me/api/portraits/men/32.jpg" 
+        avatar: "https://ui-avatars.com/api/?name=Omar+Hassan&background=6366f1&color=fff&size=64" 
     },
     { 
         id: 4, 
@@ -94,7 +94,7 @@ const userData = {
         text: "Never had any noise issues. Very polite and respectful young man.", 
         rating: 4.5, 
         date: "1 month ago", 
-        avatar: "https://randomuser.me/api/portraits/women/22.jpg" 
+        avatar: "https://ui-avatars.com/api/?name=Sarah+Miller&background=f43f5e&color=fff&size=64" 
     }
   ]
 };

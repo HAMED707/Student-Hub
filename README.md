@@ -1,4 +1,4 @@
-# Accommodation Finder - Capstone Project
+# Student-Hub
 
 ## 🚧 Project Status: In Progress
 
@@ -21,5 +21,4 @@ Accommodation Finder is a comprehensive web application designed to help users d
 
 ### Frontend
 - React + Tailwind CSS (planned upgrade)
-
 
