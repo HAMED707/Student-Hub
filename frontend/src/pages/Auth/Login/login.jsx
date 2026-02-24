@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Eye, EyeOff, Lock, AlertCircle } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
 
 const Login = () => {
     const navigate = useNavigate();
-    
+    const { login } = useAuth();
+
     const [formData, setFormData] = useState({ username: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
     const [errors, setErrors] = useState({});
@@ -20,7 +22,7 @@ const Login = () => {
     const handleLogin = async (e) => {
         e.preventDefault();
         setServerError('');
-        
+
         // 1. التحقق من المدخلات (Validation)
         let newErrors = {};
         const arabicRegex = /[\u0600-\u06FF]/;
@@ -38,38 +40,42 @@ const Login = () => {
 
         // 2. الاتصال بالسيرفر والربط (Backend & Linking)
         try {
-            // أ) البحث في جدول الطلاب
-            const resStudent = await fetch(`http://localhost:3001/students?username=${formData.username}&password=${formData.password}`);
-            const students = await resStudent.json();
+            const response = await fetch('http://localhost:8000/api/accounts/login/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: formData.username,
+                    password: formData.password
+                })
+            });
 
-            if (students.length > 0) {
-                // ✅ نجاح الدخول كطالب
-                console.log("Logged in as Student");
-                localStorage.setItem('user', JSON.stringify(students[0])); // حفظ البيانات
-                localStorage.setItem('role', 'student'); 
-                navigate('/student-dashboard'); // ⬅️ التوجيه لصفحة الطالب
+            const data = await response.json();
+
+            if (response.ok) {
+                // ✅ نجاح الدخول
+                console.log("Logged in successfully");
+                localStorage.setItem('user', JSON.stringify(data.user));
+                localStorage.setItem('tokens', JSON.stringify(data.tokens));
+                localStorage.setItem('access', data.tokens.access);
+                localStorage.setItem('refresh', data.tokens.refresh);
+
+                login(data.user);
+
+                // Decide role based on user data if available, or stay with generic dashboard
+                // For now, let's stick to the redirection logic in the original code if possible
+                // or just redirect to a default home/dashboard.
+                navigate('/student-dashboard');
                 return;
+            } else {
+                // ❌ فشل الدخول
+                setServerError(data.detail || "Invalid Username or Password");
             }
-
-            // ب) البحث في جدول الملاك
-            const resLandlord = await fetch(`http://localhost:3001/landlords?username=${formData.username}&password=${formData.password}`);
-            const landlords = await resLandlord.json();
-
-            if (landlords.length > 0) {
-                // ✅ نجاح الدخول كمالك
-                console.log("Logged in as Landlord");
-                localStorage.setItem('user', JSON.stringify(landlords[0])); // حفظ البيانات
-                localStorage.setItem('role', 'landlord');
-                navigate('/landlord-dashboard'); // ⬅️ التوجيه لصفحة المالك
-                return;
-            }
-
-            // ج) فشل الدخول
-            setServerError("Invalid Username or Password");
 
         } catch (error) {
             console.error("Login Error:", error);
-            setServerError("Connection error. Make sure json-server is running.");
+            setServerError("Connection error. Make sure the backend is running.");
         }
     };
 
@@ -83,7 +89,7 @@ const Login = () => {
                     </div>
 
                     <form onSubmit={handleLogin} className="flex flex-col gap-5">
-                        
+
                         {serverError && (
                             <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm text-center border border-red-200 animate-fadeIn">
                                 {serverError}
@@ -93,20 +99,20 @@ const Login = () => {
                         <div className="flex flex-col gap-1">
                             <div className="relative">
                                 <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"><User className="w-5 h-5" /></div>
-                                <input 
-                                    type="text" name="username" placeholder="Username" 
+                                <input
+                                    type="text" name="username" placeholder="Username"
                                     value={formData.username} onChange={handleChange} dir="ltr"
                                     className={`w-full h-12 pl-12 pr-4 border rounded-xl outline-none transition text-gray-700 ${errors.username ? 'border-red-500' : 'border-gray-300 focus:border-[#1A56DB]'}`}
                                 />
                             </div>
-                            {errors.username && <span className="text-red-500 text-xs ml-1 flex gap-1"><AlertCircle className="w-3 h-3"/>{errors.username}</span>}
+                            {errors.username && <span className="text-red-500 text-xs ml-1 flex gap-1"><AlertCircle className="w-3 h-3" />{errors.username}</span>}
                         </div>
 
                         <div className="flex flex-col gap-1">
                             <div className="relative">
                                 <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"><Lock className="w-5 h-5" /></div>
-                                <input 
-                                    type={showPassword ? "text" : "password"} name="password" placeholder="Password" 
+                                <input
+                                    type={showPassword ? "text" : "password"} name="password" placeholder="Password"
                                     value={formData.password} onChange={handleChange} dir="ltr"
                                     className={`w-full h-12 pl-12 pr-12 border rounded-xl outline-none transition text-gray-700 ${errors.password ? 'border-red-500' : 'border-gray-300 focus:border-[#1A56DB]'}`}
                                 />
@@ -114,7 +120,7 @@ const Login = () => {
                                     {showPassword ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
                                 </button>
                             </div>
-                            {errors.password && <span className="text-red-500 text-xs ml-1 flex gap-1"><AlertCircle className="w-3 h-3"/>{errors.password}</span>}
+                            {errors.password && <span className="text-red-500 text-xs ml-1 flex gap-1"><AlertCircle className="w-3 h-3" />{errors.password}</span>}
                         </div>
 
                         <div className="flex justify-between items-center text-sm">
@@ -146,7 +152,7 @@ const Login = () => {
                 <div className="relative z-10 w-[80%] h-[75%]">
                     <div className="absolute inset-0 bg-white/10 backdrop-blur-md rounded-[45px] border border-white/20"></div>
                     <div className="absolute top-12 left-10 z-30 max-w-[280px]">
-                        <h2 className="text-2xl font-bold text-white mb-4 leading-relaxed">"Find your next room or roommate - <br/> Login to get started!"</h2>
+                        <h2 className="text-2xl font-bold text-white mb-4 leading-relaxed">"Find your next room or roommate - <br /> Login to get started!"</h2>
                     </div>
                     <div className="relative w-full h-full overflow-hidden rounded-[45px] flex items-end justify-center">
                         <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=1200&auto=format&fit=crop" alt="Login" className="w-[90%] h-[85%] object-cover object-top rounded-t-[30px]" />
