@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import subprocess
 from pathlib import Path
-
+import sys
 try:
     from importlib.metadata import version as pkg_version  # py3.8+
 except Exception:  # pragma: no cover
@@ -81,7 +81,7 @@ def pin_versions(pkgs: set[str]) -> list[str]:
 
 def main() -> None:
     # 1) generate base requirements from imports
-    run(["pipreqs", ".", "--force"])
+    run([sys.executable, "-m", "pipreqs", ".", "--force"])
 
     base = parse_requirements(REQ_FILE)
 
