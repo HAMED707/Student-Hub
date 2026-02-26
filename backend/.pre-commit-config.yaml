@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: update-requirements
+        name: Auto-update requirements.txt
+        entry: python scripts/update_requirements.py
+        language: system
+        pass_filenames: false

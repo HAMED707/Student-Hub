@@ -48,8 +48,18 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'phonenumber_field',
     'corsheaders',
-    # Local
-    'accounts.apps.AccountsConfig',
+    # (11) Local
+    'accounts',
+    'bookings',
+    'favorites',
+    'community',
+    'messaging',
+    'notifications',
+    'payments',
+    'services',
+    'roommates',
+    'reviews',
+    'properties',
 ]
 
 MIDDLEWARE = [
