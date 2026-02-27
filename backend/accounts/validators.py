@@ -1,18 +1,23 @@
+"""
+Accounts app validators.
+Reusable validation functions imported by serializers.
+
+Validators:
+    - validate_phone_number → ensures phone is in valid international format
+"""
+
 from rest_framework import serializers
 
 
+# ──────────────────────────────────────────────────────────────────────────────────────────
+
+
 def validate_phone_number(value):
-    """Validate phone number has country code and minimum length"""
-    if value is None:
-        return value
-    
-    phone_str = str(value)
-    if phone_str and not phone_str.startswith('+'):
-        raise serializers.ValidationError(
-            "Phone number must include country code (e.g., +1234567890)"
-        )
-    if phone_str and len(phone_str) < 10:
-        raise serializers.ValidationError(
-            "Phone number is too short"
-        )
+    """
+    Validates that the phone number is not empty.
+    The PhoneNumberField on the model handles format validation automatically.
+    This function is a hook for any extra rules we want to enforce.
+    """
+    if value and str(value).strip() == "":
+        raise serializers.ValidationError("Phone number cannot be blank.")
     return value

@@ -1,3 +1,14 @@
+"""
+Accounts app models.
+Handles all user authentication, profiles, and verification.
+
+Models:
+    - Users                → base user for both students and landlords
+    - StudentProfile       → lifestyle and preferences (students only)
+    - LandlordProfile      → business and financial info (landlords only)
+    - VerificationDocument → uploaded IDs and documents for verification
+"""
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from phonenumber_field.modelfields import PhoneNumberField

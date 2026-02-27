@@ -1,24 +1,40 @@
-from .models import Users
+"""
+Accounts app services.
+Business logic layer — keeps views and serializers clean.
+
+Functions:
+    - create_user_account → creates a new user with hashed password
+    - authenticated       → verifies credentials and returns user or None
+"""
+
 from django.contrib.auth import authenticate
+from accounts.models import Users
 
-def create_user_account(username, email, first_name=None, last_name=None, password=None,
-                        phone_number=None, gender=None, date_of_birth=None, profile_picture=None):
-    user = Users.objects.create_user(
-        username=username,
-        email=email,
-        password=password,
-        first_name=first_name,
-        last_name=last_name,
-    )
 
-    user.phone_number = phone_number
-    user.gender = gender
-    user.date_of_birth = date_of_birth
-    user.profile_picture = profile_picture
-    user.save(update_fields=["phone_number", "gender", "date_of_birth", "profile_picture"])
+# ──────────────────────────────────────────────────────────────────────────────────────────
+
+
+def create_user_account(password, **kwargs):
+    """
+    Creates a new user with a properly hashed password.
+
+    Using create_user() instead of create() is critical —
+    create() stores the password in plain text which breaks authentication.
+
+    Called by: RegisterSerializer.create()
+    """
+    user = Users.objects.create_user(password=password, **kwargs)
     return user
+
 
 def authenticated(username, password):
-    # returns user obj or None
+    """
+    Checks credentials and returns the user object if valid, otherwise None.
+
+    Using Django's built-in authenticate() so it respects
+    any auth backends configured in settings.
+
+    Called by: LoginSerializer.validate()
+    """
     user = authenticate(username=username, password=password)
-    return user
+    return user  # None if credentials are wrong
