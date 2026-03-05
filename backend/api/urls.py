@@ -5,4 +5,5 @@ urlpatterns = [
     path('properties/', include('api.properties_api.urls')),
     path('bookings/', include('api.bookings_api.urls')),
     path('favorites/', include('api.favorites_api.urls')),
+    path('reviews/', include('api.reviews_api.urls')),
 ]
