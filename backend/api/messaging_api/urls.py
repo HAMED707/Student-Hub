@@ -10,14 +10,14 @@ from api.messaging_api.views import (
 
 urlpatterns = [
     # ── Inbox ─────────────────────────────────────────────────────────────────
-    path("messages/",               ConversationListView.as_view(),   name="messaging-inbox"),
+    path("",               ConversationListView.as_view(),   name="messaging-inbox"),
 
     # ── Start a DM ────────────────────────────────────────────────────────────
-    path("messages/start/",         StartConversationView.as_view(),  name="messaging-start"),
+    path("start/",         StartConversationView.as_view(),  name="messaging-start"),
 
     # ── Open thread ───────────────────────────────────────────────────────────
-    path("messages/<int:conversation_id>/",       ConversationDetailView.as_view(), name="messaging-detail"),
+    path("<int:conversation_id>/",       ConversationDetailView.as_view(), name="messaging-detail"),
 
     # ── Send message ──────────────────────────────────────────────────────────
-    path("messages/<int:conversation_id>/send/",  SendMessageView.as_view(),        name="messaging-send"),
+    path("<int:conversation_id>/send/",  SendMessageView.as_view(),        name="messaging-send"),
 ]
