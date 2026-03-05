@@ -6,4 +6,6 @@ urlpatterns = [
     path('bookings/', include('api.bookings_api.urls')),
     path('favorites/', include('api.favorites_api.urls')),
     path('reviews/', include('api.reviews_api.urls')),
+    path('roommates/', include('api.roommates_api.urls')),
+    path('community/', include('api.community_api.urls')),
 ]
