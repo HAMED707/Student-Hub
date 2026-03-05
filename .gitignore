@@ -305,3 +305,4 @@ secrets.yaml
 .secrets/
 credentials.json
 service-account*.json
+backend/StudentHub_Backend_Overview.md
