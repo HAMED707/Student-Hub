@@ -9,11 +9,11 @@ from api.notifications_api.views import (
 
 urlpatterns = [
     # ── Bell feed ─────────────────────────────────────────────────────────────
-    path("notifications/",                    NotificationListView.as_view(), name="notifications-list"),
+    path("",                    NotificationListView.as_view(), name="notifications-list"),
 
     # ── Mark all read ─────────────────────────────────────────────────────────
-    path("notifications/read/",               MarkAllReadView.as_view(),      name="notifications-read-all"),
+    path("read/",               MarkAllReadView.as_view(),      name="notifications-read-all"),
 
     # ── Mark one read ─────────────────────────────────────────────────────────
-    path("notifications/<int:notification_id>/read/", MarkOneReadView.as_view(), name="notifications-read-one"),
+    path("<int:notification_id>/read/", MarkOneReadView.as_view(), name="notifications-read-one"),
 ]

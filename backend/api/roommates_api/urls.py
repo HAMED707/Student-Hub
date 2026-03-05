@@ -11,12 +11,12 @@ from api.roommates_api.views import (
 
 urlpatterns = [
     # ── Browse & Profile ──────────────────────────────────────
-    path("roommates/",                         RoommateListView.as_view(),          name="roommate-list"),
-    path("roommates/profile/",                 RoommateProfileView.as_view(),       name="roommate-profile"),
-    path("roommates/profile/<int:user_id>/",   RoommateProfileDetailView.as_view(), name="roommate-profile-detail"),
+    path("",                         RoommateListView.as_view(),          name="roommate-list"),
+    path("profile/",                 RoommateProfileView.as_view(),       name="roommate-profile"),
+    path("profile/<int:user_id>/",   RoommateProfileDetailView.as_view(), name="roommate-profile-detail"),
 
     # ── Requests ─────────────────────────────────────────────
-    path("roommates/request/",                 RoommateRequestCreateView.as_view(), name="roommate-request-create"),
-    path("roommates/requests/",                RoommateRequestListView.as_view(),   name="roommate-request-list"),
-    path("roommates/request/<int:request_id>/",RoommateRequestStatusView.as_view(), name="roommate-request-status"),
+    path("request/",                 RoommateRequestCreateView.as_view(), name="roommate-request-create"),
+    path("requests/",                RoommateRequestListView.as_view(),   name="roommate-request-list"),
+    path("request/<int:request_id>/",RoommateRequestStatusView.as_view(), name="roommate-request-status"),
 ]
