@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom"; 
-import Navbar from "../../assets/components/Navbar/navbar.jsx";
+import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
 import { ArrowRight, ChevronLeft, ChevronRight, MapPin, Map, FileText, CheckCircle } from "lucide-react"; 
 // Reliable placeholder URLs (no local files required)

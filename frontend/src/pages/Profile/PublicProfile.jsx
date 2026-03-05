@@ -1,5 +1,5 @@
 import React from 'react';
-import Navbar from "../../assets/components/Navbar/navbar.jsx"; 
+import Navbar from "../../assets/components/Navbar/Navbar.jsx"; 
 import { 
   MapPin, School, Calendar, CheckCircle, Share2, 
   Shield, Quote, FileText, GraduationCap, User, Star, 
