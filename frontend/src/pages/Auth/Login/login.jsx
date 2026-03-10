@@ -40,7 +40,7 @@ const Login = () => {
 
         // 2. الاتصال بالسيرفر والربط (Backend & Linking)
         try {
-            const response = await fetch('http://localhost:8000/api/accounts/login/', {
+            const response = await fetch('http://localhost:8000/api/auth/login/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -57,9 +57,12 @@ const Login = () => {
                 // ✅ نجاح الدخول
                 console.log("Logged in successfully");
                 localStorage.setItem('user', JSON.stringify(data.user));
-                localStorage.setItem('tokens', JSON.stringify(data.tokens));
-                localStorage.setItem('access', data.tokens.access);
-                localStorage.setItem('refresh', data.tokens.refresh);
+                localStorage.setItem('tokens', JSON.stringify({
+                    access: data.access,
+                    refresh: data.refresh,
+                }));
+                localStorage.setItem('access', data.access);
+                localStorage.setItem('refresh', data.refresh);
 
                 login(data.user);
 
@@ -70,7 +73,13 @@ const Login = () => {
                 return;
             } else {
                 // ❌ فشل الدخول
-                setServerError(data.detail || "Invalid Username or Password");
+                console.error("Login failed with status:", response.status);
+                console.error("Error data:", data);
+                setServerError(
+                    data.detail
+                    || data.non_field_errors?.[0]
+                    || (typeof data === 'object' ? JSON.stringify(data) : "Invalid Username or Password")
+                );
             }
 
         } catch (error) {

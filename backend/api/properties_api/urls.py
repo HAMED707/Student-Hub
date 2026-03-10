@@ -9,7 +9,7 @@ from api.properties_api.views import (
     PropertyEditView,
     PropertyImageUploadView,
     PropertyImageDeleteView,
-    OwnerPropertiesView,
+    LandlordPropertiesView,
 )
 
 urlpatterns = [
@@ -28,5 +28,5 @@ urlpatterns = [
     path("<int:property_id>/images/<int:image_id>/", PropertyImageDeleteView.as_view(), name="property-image-delete"),
 
     # ── Owner Dashboard ───────────────────────────────────────────────────────
-    path("owner/properties/", OwnerPropertiesView.as_view(), name="owner-properties"),
+    path("landlord/properties/", LandlordPropertiesView.as_view(), name="landlord-properties"),
 ]

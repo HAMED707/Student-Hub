@@ -26,11 +26,11 @@ class PropertyAdmin(admin.ModelAdmin):
     inlines = [PropertyImageInline]
 
     list_display = [
-        "title", "owner", "property_type", "price",
+        "title", "landlord", "property_type", "price",
         "city", "status", "is_featured", "view_count", "created_at",
     ]
     list_filter = ["property_type", "status", "is_featured", "city", "gender_preference"]
-    search_fields = ["title", "owner__username", "city", "district", "nearby_university"]
+    search_fields = ["title", "landlord__username", "city", "district", "nearby_university"]
     readonly_fields = ["view_count", "created_at", "updated_at"]
 
     # Allow featuring/unfeaturing directly from the list without opening each record
@@ -38,7 +38,7 @@ class PropertyAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Ownership", {
-            "fields": ("owner",),
+            "fields": ("landlord",),
         }),
         ("Basic Info", {
             "fields": ("title", "description", "property_type"),
@@ -78,5 +78,5 @@ class PropertyImageAdmin(admin.ModelAdmin):
     """
     list_display = ["property", "is_cover", "uploaded_at"]
     list_filter = ["is_cover"]
-    search_fields = ["property__title", "property__owner__username"]
+    search_fields = ["property__title", "property__landlord__username"]
     readonly_fields = ["uploaded_at"]

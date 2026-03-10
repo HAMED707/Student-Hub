@@ -114,39 +114,62 @@ const LandlordRegister = () => {
             if (!formData.email.trim()) newErrors.email = "Required";
             else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid Email";
             if (!formData.password) newErrors.password = "Required";
-            else if (formData.password.length < 6) newErrors.password = "Min 6 chars";
+            else if (formData.password.length < 8) newErrors.password = "Min 8 chars";
             if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords mismatch";
         }
         if (Object.keys(newErrors).length > 0) { setErrors(newErrors); isValid = false; }
         return isValid;
     };
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (!validateStep(currentStep)) return;
         if (currentStep < 3) {
             setCurrentStep(prev => prev + 1);
             return;
         }
+
         setSubmitError('');
         setIsSubmitting(true);
-        // No backend for now: save user locally and redirect
-        const user = {
-            username: formData.email,
-            password: formData.password,
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            email: formData.email,
-            gender: formData.gender,
-            phone: formData.phone,
-            dob: formData.dob,
-            nationalId: formData.nationalId,
-            governorate: formData.governorate,
-            city: formData.city,
-        };
-        localStorage.setItem('user', JSON.stringify(user));
-        localStorage.setItem('role', 'landlord');
-        setIsSubmitting(false);
-        navigate('/home');
+
+        try {
+            const response = await fetch('http://localhost:8000/api/auth/register/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: formData.email,
+                    email: formData.email,
+                    first_name: formData.firstName,
+                    last_name: formData.lastName,
+                    password: formData.password,
+                    phone_number: formData.phone,
+                    gender: formData.gender === 'Male' ? 'M' : 'F',
+                    date_of_birth: formData.dob,
+                    city: formData.city,
+                    role: 'landlord',
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                navigate('/login');
+                return;
+            }
+
+            if (data && typeof data === 'object') {
+                setErrors(data);
+                setSubmitError(data.detail || "Registration failed. Please check your data.");
+            } else {
+                setSubmitError("Registration failed. Please try again.");
+            }
+        } catch (error) {
+            console.error("Connection Error:", error);
+            setSubmitError("Connection error. Make sure the backend is running.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
     const handleBack = () => { setErrors({}); if (currentStep > 1) setCurrentStep(prev => prev - 1); };
 

@@ -306,3 +306,4 @@ secrets.yaml
 credentials.json
 service-account*.json
 backend/StudentHub_Backend_Overview.md
+frontend/FRONTEND_CODE_SNAPSHOT.md

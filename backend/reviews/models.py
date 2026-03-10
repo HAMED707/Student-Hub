@@ -12,6 +12,7 @@ from accounts.models import Users
 from properties.models import Property
 
 
+
 class Review(models.Model):
     """
     Unified review model for both property reviews and user reviews.

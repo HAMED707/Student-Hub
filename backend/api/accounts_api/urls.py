@@ -25,9 +25,9 @@ from api.accounts_api.views import (
 
 urlpatterns = [
     # ── Auth ──────────────────────────────────────────────────
-    path("auth/register/", RegisterView.as_view(), name="register"),
-    path("auth/login/", LoginView.as_view(), name="login"),
-    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),  # built-in
+    path("register/", RegisterView.as_view(), name="register"),
+    path("login/", LoginView.as_view(), name="login"),
+    path("token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),  # built-in
 
     # ── Profile ───────────────────────────────────────────────
     path("profile/", ProfileView.as_view(), name="my-profile"),

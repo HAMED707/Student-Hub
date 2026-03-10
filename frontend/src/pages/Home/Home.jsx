@@ -1,8 +1,9 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom"; 
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
-import { ArrowRight, ChevronLeft, ChevronRight, MapPin, Map, FileText, CheckCircle } from "lucide-react"; 
+import { fetchFeaturedProperties, fetchPropertiesByUniversity, normalizeProperty } from "../../services/propertyService.js";
+import { ArrowRight, ChevronLeft, ChevronRight, MapPin, Map, FileText, CheckCircle, Loader2 } from "lucide-react"; 
 // Reliable placeholder URLs (no local files required)
 const heroBanner = "https://picsum.photos/seed/hero-banner/1200/500";
 const studentsGroupImage = "https://picsum.photos/seed/students-group/800/400"; 
@@ -65,6 +66,12 @@ const Home = () => {
   
   // State for selected university
   const [selectedUniversity, setSelectedUniversity] = useState("Cairo University");
+  const [featuredProperties, setFeaturedProperties] = useState([]);
+  const [featuredLoading, setFeaturedLoading] = useState(true);
+  const [featuredError, setFeaturedError] = useState(null);
+  const [uniProperties, setUniProperties] = useState([]);
+  const [uniLoading, setUniLoading] = useState(false);
+  const [uniError, setUniError] = useState(null);
 
   // State for Testimonials Slider
   const [testimonialIndex, setTestimonialIndex] = useState(0);
@@ -99,69 +106,6 @@ const Home = () => {
   const currentTestimonial = testimonialsData[testimonialIndex];
 
   // ================= DATA =================
-  const propertiesList = [
-    {
-      id: 1,
-      title: "Furnished Apartment - El Hamra",
-      location: "Cairo - El Hamra",
-      distance: "14 mins from university of Cairo",
-      city: "Cairo",
-      roommates: 2,
-      price: 2500,
-      rating: 4.5,
-      reviews: 10,
-      image: "https://images.unsplash.com/photo-1554995207-c18c203602cb?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80"
-    },
-    {
-      id: 2,
-      title: "Modern Studio - Nasr City",
-      location: "Cairo - Nasr City",
-      distance: "5 mins from Al-Azhar University",
-      city: "Cairo",
-      roommates: 1,
-      price: 3200,
-      rating: 4.8,
-      reviews: 25,
-      image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?ixlib=rb-4.0.3&auto=format&fit=crop&w=1180&q=80"
-    },
-    {
-      id: 3,
-      title: "Cozy Room - Dokki",
-      location: "Giza - Dokki",
-      distance: "10 mins from Cairo University",
-      city: "Giza",
-      roommates: 3,
-      price: 1800,
-      rating: 4.2,
-      reviews: 8,
-      image: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80"
-    },
-    {
-      id: 4,
-      title: "Luxury Flat - New Cairo",
-      location: "Cairo - 5th Settlement",
-      distance: "Near AUC",
-      city: "New Cairo",
-      roommates: 2,
-      price: 5000,
-      rating: 4.9,
-      reviews: 15,
-      image: "https://images.unsplash.com/photo-1493809842364-78817add7ffb?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80"
-    },
-    {
-      id: 5,
-      title: "Private Room - Zamalek",
-      location: "Cairo - Zamalek",
-      distance: "Near Helwan Fine Arts",
-      city: "Cairo",
-      roommates: 0,
-      price: 6000,
-      rating: 5.0,
-      reviews: 4,
-      image: "https://images.unsplash.com/photo-1501183638710-841dd1904471?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80"
-    }
-  ];
-
   const egyptUniversities = [
     "Cairo University", "Ain Shams University", "Alexandria University", "Al-Azhar University",
     "Helwan University", "Mansoura University", "Assiut University", "Zagazig University",
@@ -173,34 +117,37 @@ const Home = () => {
     "Misr International University (MIU)", "October 6 University", "MSA University", "Future University in Egypt (FUE)"
   ];
 
-  const uniPropertiesData = [
-    // --- Cairo University ---
-    { id: 101, title: "Walking distance to Campus", location: "Giza - Dokki", university: "Cairo University", distance: "5 mins walk", city: "Giza", roommates: 2, price: 2000, rating: 4.6, reviews: 12, image: "https://images.unsplash.com/photo-1522771753035-4850d32f7041?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 102, title: "Cozy Room in Bein El-Sarayat", location: "Giza - Bein El-Sarayat", university: "Cairo University", distance: "2 mins walk", city: "Giza", roommates: 3, price: 1500, rating: 4.2, reviews: 8, image: "https://images.unsplash.com/photo-1596276020587-8044fe049813?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 103, title: "Modern Apartment - Manial", location: "Cairo - Manial", university: "Cairo University", distance: "10 mins transport", city: "Cairo", roommates: 1, price: 3000, rating: 4.8, reviews: 20, image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 104, title: "Shared Flat - Giza Square", location: "Giza - Giza Square", university: "Cairo University", distance: "5 mins metro", city: "Giza", roommates: 4, price: 1200, rating: 4.0, reviews: 5, image: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    // --- Ain Shams University ---
-    { id: 201, title: "Luxury Apartment near Gate 3", location: "Cairo - Abbasiya", university: "Ain Shams University", distance: "2 mins walk", city: "Cairo", roommates: 1, price: 3500, rating: 4.8, reviews: 20, image: "https://images.unsplash.com/photo-1493809842364-78817add7ffb?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 202, title: "Budget Room - Roxy", location: "Cairo - Roxy", university: "Ain Shams University", distance: "10 mins metro", city: "Cairo", roommates: 2, price: 1800, rating: 4.3, reviews: 15, image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 203, title: "Student Residence - Khalifa", location: "Cairo - El Khalifa El Maamoun", university: "Ain Shams University", distance: "5 mins walk", city: "Cairo", roommates: 3, price: 2200, rating: 4.5, reviews: 9, image: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    // --- Alexandria University ---
-    { id: 301, title: "Sea View Apartment - Shatby", location: "Alexandria - Shatby", university: "Alexandria University", distance: "Opposite Campus", city: "Alexandria", roommates: 2, price: 2800, rating: 4.9, reviews: 30, image: "https://images.unsplash.com/photo-1502005229766-939cb93c59a5?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 302, title: "Cozy Studio - Camp Cesar", location: "Alexandria - Camp Cesar", university: "Alexandria University", distance: "5 mins tram", city: "Alexandria", roommates: 1, price: 2000, rating: 4.4, reviews: 12, image: "https://images.unsplash.com/photo-1555854743-e3c2f6f58951?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 303, title: "Shared Room - Ibrahimiya", location: "Alexandria - Ibrahimiya", university: "Alexandria University", distance: "10 mins walk", city: "Alexandria", roommates: 3, price: 1100, rating: 4.1, reviews: 8, image: "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    // --- Suez Canal University ---
-    { id: 401, title: "Student Housing Complex", location: "Ismailia - Circular Rd", university: "Suez Canal University", distance: "10 mins bus ride", city: "Ismailia", roommates: 3, price: 1200, rating: 4.3, reviews: 8, image: "https://images.unsplash.com/photo-1555854743-e3c2f6f58951?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 402, title: "Apartment near Old Campus", location: "Ismailia - El Sheikh Zayed", university: "Suez Canal University", distance: "5 mins walk", city: "Ismailia", roommates: 2, price: 1500, rating: 4.5, reviews: 5, image: "https://images.unsplash.com/photo-1501183638710-841dd1904471?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    // --- Al-Azhar University ---
-    { id: 501, title: "Al-Azhar Special Housing", location: "Nasr City - Taiaran St", university: "Al-Azhar University", distance: "5 mins walk", city: "Cairo", roommates: 4, price: 800, rating: 4.1, reviews: 50, image: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 502, title: "Private Room - Hay El-Sabea", location: "Nasr City - Hay El-Sabea", university: "Al-Azhar University", distance: "10 mins walk", city: "Cairo", roommates: 1, price: 1800, rating: 4.6, reviews: 14, image: "https://images.unsplash.com/photo-1493809842364-78817add7ffb?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    // --- AUC ---
-    { id: 601, title: "Studio near AUC Gate 4", location: "New Cairo - The Spot", university: "American University in Cairo (AUC)", distance: "Across the street", city: "New Cairo", roommates: 0, price: 7000, rating: 4.9, reviews: 30, image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" },
-    { id: 602, title: "Luxury Shared Flat", location: "New Cairo - Eastown", university: "American University in Cairo (AUC)", distance: "5 mins walk", city: "New Cairo", roommates: 2, price: 5500, rating: 4.8, reviews: 18, image: "https://images.unsplash.com/photo-1522771753035-4850d32f7041?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" }
-  ];
+  useEffect(() => {
+    const loadFeatured = async () => {
+      setFeaturedLoading(true);
+      setFeaturedError(null);
+      try {
+        const data = await fetchFeaturedProperties();
+        setFeaturedProperties(data.map(normalizeProperty));
+      } catch (err) {
+        setFeaturedError(err.message);
+      } finally {
+        setFeaturedLoading(false);
+      }
+    };
+    loadFeatured();
+  }, []);
 
-  const filteredUniProperties = uniPropertiesData.filter(
-    (item) => item.university === selectedUniversity
-  );
+  useEffect(() => {
+    const loadUni = async () => {
+      setUniLoading(true);
+      setUniError(null);
+      try {
+        const data = await fetchPropertiesByUniversity(selectedUniversity);
+        setUniProperties(data.map(normalizeProperty));
+      } catch (err) {
+        setUniError(err.message);
+      } finally {
+        setUniLoading(false);
+      }
+    };
+    loadUni();
+  }, [selectedUniversity]);
 
   return (
     <div className="min-h-screen bg-white font-sans pb-0">
@@ -286,7 +233,15 @@ const Home = () => {
           className="flex gap-6 overflow-x-auto pb-4 scroll-smooth"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {propertiesList.map((item) => (
+          {featuredLoading && (
+            <div className="w-full flex justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-[#0A2647]" />
+            </div>
+          )}
+          {featuredError && (
+            <div className="w-full text-center text-red-500 font-medium py-8">{featuredError}</div>
+          )}
+          {!featuredLoading && !featuredError && featuredProperties.map((item) => (
             <div key={item.id} className="flex-shrink-0 w-full max-w-sm">
               <PropertyCard property={item} />
             </div>
@@ -344,8 +299,14 @@ const Home = () => {
           className="flex gap-6 overflow-x-auto pb-4 scroll-smooth"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {filteredUniProperties.length > 0 ? (
-            filteredUniProperties.map((item) => (
+          {uniLoading ? (
+            <div className="w-full flex justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-[#0A2647]" />
+            </div>
+          ) : uniError ? (
+            <div className="w-full text-center text-red-500 font-medium py-8">{uniError}</div>
+          ) : uniProperties.length > 0 ? (
+            uniProperties.map((item) => (
               <div key={item.id} className="flex-shrink-0 w-full max-w-sm">
                 <PropertyCard property={item} />
               </div>

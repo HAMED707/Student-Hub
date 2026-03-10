@@ -7,7 +7,7 @@ Views:
     - UniversityPropertiesView  → GET  /api/properties/university/ (filter by nearby_university)
     - PropertyDetailView        → GET  /api/properties/<id>/       (increments view_count)
     - PropertyCreateView        → POST /api/properties/create/     (landlords only)
-    - PropertyEditView          → PATCH /api/properties/<id>/edit/ (owner only)
+    - PropertyEditView          → PATCH /api/properties/<id>/edit/ (landlord only)
 """
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -88,7 +88,7 @@ class PropertyListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get(self, request):
-        queryset = Property.objects.select_related("owner").prefetch_related("images")
+        queryset = Property.objects.select_related("landlord").prefetch_related("images")
 
         # Default to available only — frontend can pass status=rented to override
         if not request.query_params.get("status"):
@@ -111,7 +111,7 @@ class FeaturedPropertiesView(APIView):
         queryset = (
             Property.objects
             .filter(is_featured=True, status="available")
-            .select_related("owner")
+            .select_related("landlord")
             .prefetch_related("images")
         )
         serializer = PropertyListSerializer(queryset, many=True, context={"request": request})
@@ -132,7 +132,7 @@ class UniversityPropertiesView(APIView):
             .filter(status="available")
             .exclude(nearby_university__isnull=True)
             .exclude(nearby_university="")
-            .select_related("owner")
+            .select_related("landlord")
             .prefetch_related("images")
         )
         queryset = apply_filters(queryset, request.query_params)
@@ -152,7 +152,7 @@ class PropertyDetailView(APIView):
         try:
             prop = (
                 Property.objects
-                .select_related("owner")
+                .select_related("landlord")
                 .prefetch_related("images")
                 .get(id=property_id)
             )
@@ -171,7 +171,7 @@ class PropertyDetailView(APIView):
 class PropertyCreateView(APIView):
     """
     POST /api/properties/create/
-    Landlords only. owner is injected server-side — never trust the client to send it.
+    Landlords only. landlord is injected server-side — never trust the client to send it.
     """
     permission_classes = [IsLandlord]
 
@@ -180,7 +180,7 @@ class PropertyCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        prop = serializer.save(owner=request.user)
+        prop = serializer.save(landlord=request.user)
 
         # Return full detail so the frontend can immediately show the new listing
         return Response(
@@ -203,7 +203,7 @@ class PropertyEditView(APIView):
             return Response({"error": "Property not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Prevent landlords from editing other landlords' listings
-        if prop.owner != request.user:
+        if prop.landlord != request.user:
             return Response({"error": "You do not own this property."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = PropertyUpdateSerializer(prop, data=request.data, partial=True)
@@ -220,7 +220,7 @@ class PropertyEditView(APIView):
 class PropertyImageUploadView(APIView):
     """
     POST /api/properties/<id>/images/
-    Add images to an existing listing. Only the owner can upload.
+    Add images to an existing listing. Only the landlord can upload.
     Send images as multipart/form-data with key 'images' (multiple files allowed).
     """
     permission_classes = [IsLandlord]
@@ -231,7 +231,7 @@ class PropertyImageUploadView(APIView):
         except Property.DoesNotExist:
             return Response({"error": "Property not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if prop.owner != request.user:
+        if prop.landlord != request.user:
             return Response({"error": "You do not own this property."}, status=status.HTTP_403_FORBIDDEN)
 
         images = request.FILES.getlist("images")
@@ -267,7 +267,7 @@ class PropertyImageDeleteView(APIView):
         except Property.DoesNotExist:
             return Response({"error": "Property not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if prop.owner != request.user:
+        if prop.landlord != request.user:
             return Response({"error": "You do not own this property."}, status=status.HTTP_403_FORBIDDEN)
 
         try:
@@ -288,18 +288,18 @@ class PropertyImageDeleteView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class OwnerPropertiesView(APIView):
+class LandlordPropertiesView(APIView):
     """
     GET /api/owner/properties/
     Returns all properties belonging to the logged-in landlord.
-    Used in the owner dashboard 'My Properties' tab.
+    Used in the landlord dashboard 'My Properties' tab.
     """
     permission_classes = [IsLandlord]
 
     def get(self, request):
         queryset = (
             Property.objects
-            .filter(owner=request.user)
+            .filter(landlord=request.user)
             .prefetch_related("images")
         )
         serializer = PropertyListSerializer(queryset, many=True, context={"request": request})
