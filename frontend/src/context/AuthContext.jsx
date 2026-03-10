@@ -22,9 +22,15 @@ export const AuthProvider = ({ children }) => {
 
   // عند تحميل الموقع، نتحقق هل المستخدم مسجل دخول من قبل؟
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    try {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser && storedUser !== "undefined" && storedUser !== "null") {
+        setUser(JSON.parse(storedUser));
+      }
+    } catch (error) {
+      console.error("Failed to parse stored user:", error);
+      localStorage.removeItem("user");
+      setUser(null);
     }
   }, []);
 

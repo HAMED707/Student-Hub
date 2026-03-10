@@ -119,10 +119,10 @@ class Migration(migrations.Migration):
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
                 (
-                    "owner",
+                    "landlord",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="properties",
+                        related_name="landlord_properties",
                         to=settings.AUTH_USER_MODEL,
                     ),
                 ),

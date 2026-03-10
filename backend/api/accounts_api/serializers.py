@@ -187,15 +187,25 @@ class LoginSerializer(serializers.Serializer):
     Validates login credentials.
     Used for POST /api/auth/login/
 
-    TODO: add email login option (currently username only)
+    Supports login with username or email.
     """
 
-    username = serializers.CharField()
+    username = serializers.CharField()  # accepts username or email
     password = serializers.CharField(write_only=True)  # never returned in response
 
     def validate(self, data):
         """Authenticate user and return user object, or raise error."""
-        user = authenticated(username=data["username"], password=data["password"])
+        identifier = data["username"].strip()
+        password = data["password"]
+
+        # First try direct username authentication.
+        user = authenticated(username=identifier, password=password)
+
+        # Fallback: allow email in the same field.
+        if not user and "@" in identifier:
+            matched_user = Users.objects.filter(email__iexact=identifier).first()
+            if matched_user:
+                user = authenticated(username=matched_user.username, password=password)
 
         if not user:
             raise serializers.ValidationError("Invalid username or password.")

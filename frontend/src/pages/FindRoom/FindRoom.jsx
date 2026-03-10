@@ -1,66 +1,41 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "../../assets/components/Navbar/Navbar-2.jsx"; 
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx"; 
+import { fetchProperties, normalizeProperty } from "../../services/propertyService.js";
 import { 
   Search, 
   Home, 
   DollarSign, 
   Map, 
   Calendar, 
-  Filter, 
-  ChevronDown 
+  Filter,
+  ChevronDown,
+  Loader2
 } from "lucide-react";
 
-// --- دالة توليد البيانات ---
-const generateData = () => {
-  const images = [
-    "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1501183638710-841dd1904471?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1554995207-c18c203602cb?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1522771753035-4850d32f7041?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1600596542815-2a4d9f8770d3?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=800&q=80"
-  ];
-
-  const locations = [
-    { city: "Cairo", area: "Maadi" }, { city: "Cairo", area: "Zamalek" },
-    { city: "Giza", area: "Dokki" }, { city: "Cairo", area: "Nasr City" },
-    { city: "New Cairo", area: "5th Settlement" }, { city: "Giza", area: "6th October" },
-    { city: "Cairo", area: "Heliopolis" }, { city: "Cairo", area: "Rehab" }
-  ];
-
-  let data = [];
-  for (let i = 0; i < 24; i++) {
-    const loc = locations[i % locations.length];
-    data.push({
-      id: i,
-      title: i % 2 === 0 ? `Modern Apartment in ${loc.area}` : `Cozy Studio - ${loc.area}`,
-      location: `${loc.city} - ${loc.area}`,
-      universityDistance: `${Math.floor(Math.random() * 20) + 5} mins to campus`,
-      price: Math.floor(Math.random() * (10000 - 2000) + 2000),
-      rating: (Math.random() * (5 - 3.5) + 3.5).toFixed(1),
-      reviews: Math.floor(Math.random() * 50) + 5,
-      roommates: Math.floor(Math.random() * 4),
-      image: images[i % images.length],
-      isAvailable: i % 5 !== 0,
-      amenities: ["Wifi", "AC", "Kitchen"], // إضافة مصفوفة الخدمات لتجنب الأخطاء في الكارت
-      city: loc.city // إضافة المدينة للكارت
-    });
-  }
-  return data.sort(() => Math.random() - 0.5);
-};
-
 const FindRoom = () => {
-  const [properties] = useState(() => generateData());
+  const [properties, setProperties] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSort, setActiveSort] = useState("Recommended");
   const [activeFilter, setActiveFilter] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchProperties();
+        setProperties(data.map(normalizeProperty));
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const handleFilterClick = (name) => {
     setActiveFilter(activeFilter === name ? null : name);
@@ -140,10 +115,18 @@ const FindRoom = () => {
           </div>
         </div>
 
-        {filteredProperties.length > 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="w-10 h-10 text-[#0A2647] animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <h3 className="text-xl font-bold text-red-600">Failed to load properties</h3>
+            <p className="text-gray-500 mt-2">{error}</p>
+          </div>
+        ) : filteredProperties.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {filteredProperties.map((item) => (
-              /* ✅ هنا كان الخطأ: تم تغيير item={item} إلى property={item} */
               <PropertyCard 
                 key={item.id} 
                 property={item}  

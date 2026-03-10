@@ -47,8 +47,8 @@ class Property(models.Model):
 
     # ── Ownership ────────────────────────────────────────────
     # Only landlords can own properties — enforced at the API layer
-    owner = models.ForeignKey(
-        Users, on_delete=models.CASCADE, related_name="properties"
+    landlord = models.ForeignKey(
+        Users, on_delete=models.CASCADE, related_name="landlord_properties"
     )
 
     # ── Basic Info ───────────────────────────────────────────
@@ -90,7 +90,7 @@ class Property(models.Model):
     floor = models.IntegerField(blank=True, null=True)
     area_sqm = models.IntegerField(blank=True, null=True)  
     gender_preference = models.CharField(
-        max_length=10, choices=GENDER_CHOICES, default="mixed"
+        max_length=10, choices=GENDER_CHOICES
     )
 
     # ── Amenities ────────────────────────────────────────────
@@ -119,13 +119,13 @@ class Property(models.Model):
         ordering = ["-created_at"]  # newest listings first
 
     def __str__(self):
-        return f"{self.title} — {self.owner.username}"
+        return f"{self.title} — {self.landlord.username}"
 
     # ── Computed Properties ──────────────────────────────────
     @property
     def average_rating(self):
         """Average star rating from all reviews on this property. """
-        reviews = self.reviews.all() # NOTE: not connected yet
+        reviews = self.reviews.all()
         if not reviews.exists():
             return 0
         return round(reviews.aggregate(models.Avg("rating"))["rating__avg"], 1)

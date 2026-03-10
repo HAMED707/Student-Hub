@@ -27,26 +27,28 @@ class PropertySerializer(serializers.ModelSerializer):
     Includes nested images, owner info, and computed rating fields.
     """
 
+    # used many=True because one property has many images (reverse relation)
     images = PropertyImageSerializer(many=True, read_only=True)
 
-    # Computed fields from model properties — require reviews app to return real values
+    # Computed fields from model properties
     average_rating = serializers.FloatField(read_only=True)
     review_count = serializers.IntegerField(read_only=True)
 
-    # Surface owner info without exposing sensitive fields
-    owner_id = serializers.IntegerField(source="owner.id", read_only=True)
-    owner_name = serializers.SerializerMethodField()
-    owner_picture = serializers.ImageField(source="owner.profile_picture", read_only=True)
-    owner_is_verified = serializers.BooleanField(source="owner.is_verified", read_only=True)
-    owner_is_top_rated = serializers.BooleanField(source="owner.is_top_rated", read_only=True)
+    # Landlord info — needed when showing property (ForeignKey relation).
+    # Only expose specific fields to avoid exposing sensitive User data.
+    landlord_id = serializers.IntegerField(source="landlord.id", read_only=True)
+    landlord_name = serializers.CharField(source="landlord.get_full_name", read_only=True)
+    landlord_picture = serializers.ImageField(source="landlord.profile_picture", read_only=True)
+    landlord_is_verified = serializers.BooleanField(source="landlord.is_verified", read_only=True)
+    landlord_is_top_rated = serializers.BooleanField(source="landlord.is_top_rated", read_only=True)
 
     class Meta:
         model = Property
         fields = [
             "id",
             # ── Ownership ────────────────────────────────────
-            "owner_id", "owner_name", "owner_picture",
-            "owner_is_verified", "owner_is_top_rated",
+            "landlord_id", "landlord_name", "landlord_picture",
+            "landlord_is_verified", "landlord_is_top_rated",
             # ── Basic Info ───────────────────────────────────
             "title", "description", "property_type",
             # ── Pricing ──────────────────────────────────────
@@ -75,10 +77,6 @@ class PropertySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "view_count", "is_featured", "created_at", "updated_at"]
 
-    def get_owner_name(self, obj):
-        """Returns full name if set, falls back to username."""
-        full_name = f"{obj.owner.first_name or ''} {obj.owner.last_name or ''}".strip()
-        return full_name or obj.owner.username
 
 
 class PropertyListSerializer(serializers.ModelSerializer):
@@ -90,8 +88,8 @@ class PropertyListSerializer(serializers.ModelSerializer):
     cover_image = serializers.SerializerMethodField()
     average_rating = serializers.FloatField(read_only=True)
     review_count = serializers.IntegerField(read_only=True)
-    owner_name = serializers.SerializerMethodField()
-    owner_is_verified = serializers.BooleanField(source="owner.is_verified", read_only=True)
+    landlord_name = serializers.CharField(source="landlord.get_full_name", read_only=True)
+    landlord_is_verified = serializers.BooleanField(source="landlord.is_verified", read_only=True)
 
     class Meta:
         model = Property
@@ -103,7 +101,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
             "amenities", "status", "is_featured",
             "average_rating", "review_count",
             "cover_image",
-            "owner_name", "owner_is_verified",
+            "landlord_name", "landlord_is_verified",
             "created_at",
         ]
 
@@ -114,11 +112,10 @@ class PropertyListSerializer(serializers.ModelSerializer):
             return None
         request = self.context.get("request")
         # Build absolute URL so frontend doesn't need to prefix the media root
+        # request.build_absolute_uri() adds full domain (e.g., http://localhost:8000) to URL
+        # Without it, frontend only gets "/media/image.jpg" which may not work
         return request.build_absolute_uri(cover.image.url) if request else cover.image.url
 
-    def get_owner_name(self, obj):
-        full_name = f"{obj.owner.first_name or ''} {obj.owner.last_name or ''}".strip()
-        return full_name or obj.owner.username
 
 
 class PropertyCreateSerializer(serializers.ModelSerializer):

@@ -29,5 +29,5 @@ class IsPropertyOwner(BasePermission):
         )
 
     def has_object_permission(self, request, view, obj):
-        """obj is the Property instance. Checks owner field directly."""
-        return obj.owner == request.user
+        """obj is the Property instance. Checks landlord field directly."""
+        return obj.landlord == request.user

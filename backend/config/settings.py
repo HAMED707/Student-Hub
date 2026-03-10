@@ -200,7 +200,7 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-PAYMOB_API_KEY        = env("PAYMOB_API_KEY")        # from dashboard → Settings → API Key
-PAYMOB_INTEGRATION_ID = env("PAYMOB_INTEGRATION_ID") # from Developers → Payment Integrations
-PAYMOB_IFRAME_ID      = env("PAYMOB_IFRAME_ID")      # from Developers → iFrames
-PAYMOB_HMAC_SECRET    = env("PAYMOB_HMAC_SECRET")    # from Settings → HMAC
+# PAYMOB_API_KEY        = env("PAYMOB_API_KEY")        # from dashboard → Settings → API Key
+# PAYMOB_INTEGRATION_ID = env("PAYMOB_INTEGRATION_ID") # from Developers → Payment Integrations
+# PAYMOB_IFRAME_ID      = env("PAYMOB_IFRAME_ID")      # from Developers → iFrames
+# PAYMOB_HMAC_SECRET    = env("PAYMOB_HMAC_SECRET")    # from Settings → HMAC

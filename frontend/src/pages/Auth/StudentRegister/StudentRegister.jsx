@@ -132,7 +132,7 @@ const StudentRegister = () => {
             else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid email";
 
             if (!formData.password) newErrors.password = "Password is required";
-            else if (formData.password.length < 6) newErrors.password = "Min 6 characters";
+            else if (formData.password.length < 8) newErrors.password = "Min 8 characters";
 
             if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords do not match";
         }
@@ -145,66 +145,55 @@ const StudentRegister = () => {
         return isValid;
     };
 
-<<<<<<< HEAD
-    const handleNext = () => { 
+    const handleNext = async () => {
         if (!validateStep(currentStep)) return;
         if (currentStep < 3) {
             setCurrentStep(prev => prev + 1);
             return;
-=======
-    const handleNext = async () => {
-        if (validateStep(currentStep)) {
-            if (currentStep < 3) setCurrentStep(prev => prev + 1);
-            else {
-                // Submit Form to Django Backend
-                try {
-                    const response = await fetch('http://localhost:8000/api/accounts/register/', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            username: formData.username,
-                            email: formData.email,
-                            first_name: formData.firstName,
-                            last_name: formData.lastName,
-                            password: formData.password,
-                            phone_number: formData.phone,
-                            gender: formData.gender === 'Male' ? 'M' : 'F',
-                            date_of_birth: formData.dob
-                        })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        console.log("Registration Success:", data);
-                        alert("Account created successfully. Please login.");
-                        navigate('/login');
-                    } else {
-                        console.error("Registration Error:", data);
-                        setErrors(data); // Display backend errors if they match field names
-                        alert(JSON.stringify(data));
-                    }
-                } catch (error) {
-                    console.error("Connection Error:", error);
-                    alert("Connection error. Make sure the backend is running.");
-                }
-            }
->>>>>>> develop
         }
+
         setSubmitError('');
         setIsSubmitting(true);
-        // No backend for now: save user locally and redirect
-        const user = {
-            username: formData.email,
-            password: formData.password,
-            ...formData,
-        };
-        localStorage.setItem('user', JSON.stringify(user));
-        localStorage.setItem('role', 'student');
-        setIsSubmitting(false);
-        navigate('/home');
+
+        try {
+            const response = await fetch('http://localhost:8000/api/auth/register/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: formData.username,
+                    email: formData.email,
+                    first_name: formData.firstName,
+                    last_name: formData.lastName,
+                    password: formData.password,
+                    phone_number: formData.phone,
+                    gender: formData.gender === 'Male' ? 'M' : 'F',
+                    date_of_birth: formData.dob,
+                    city: formData.city,
+                    role: 'student'
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                navigate('/login');
+                return;
+            }
+
+            if (data && typeof data === 'object') {
+                setErrors(data);
+                setSubmitError(data.detail || "Registration failed. Please check your data.");
+            } else {
+                setSubmitError("Registration failed. Please try again.");
+            }
+        } catch (error) {
+            console.error("Connection Error:", error);
+            setSubmitError("Connection error. Make sure the backend is running.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleBack = () => {
