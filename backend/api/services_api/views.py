@@ -243,6 +243,8 @@ class NearbyUniversityView(APIView):
             {
                 "university": uni_name,
                 "city":       coords.get("city", ""),
+                "lat":        lat,
+                "lng":        lng,
                 "count":      len(places),
                 "place_type": type_raw,
                 "radius_m":   radius_m,

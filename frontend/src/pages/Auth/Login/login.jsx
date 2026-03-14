@@ -56,7 +56,12 @@ const Login = () => {
             if (response.ok) {
                 // ✅ نجاح الدخول
                 console.log("Logged in successfully");
-                localStorage.setItem('user', JSON.stringify(data.user));
+                const userWithTokens = {
+                    ...data.user,
+                    access: data.access,
+                    refresh: data.refresh,
+                };
+                localStorage.setItem('user', JSON.stringify(userWithTokens));
                 localStorage.setItem('tokens', JSON.stringify({
                     access: data.access,
                     refresh: data.refresh,
@@ -64,7 +69,7 @@ const Login = () => {
                 localStorage.setItem('access', data.access);
                 localStorage.setItem('refresh', data.refresh);
 
-                login(data.user);
+                login(userWithTokens);
 
                 // Decide role based on user data if available, or stay with generic dashboard
                 // For now, let's stick to the redirection logic in the original code if possible
