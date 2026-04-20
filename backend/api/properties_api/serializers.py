@@ -1,12 +1,13 @@
 """
-Properties API serializers.
+    Properties API serializers.
 
-Serializers:
-    - PropertyImageSerializer   → nested images list in PropertySerializer
-    - PropertySerializer        → full detail for GET /api/properties/<id>/
-    - PropertyListSerializer    → lightweight card view for GET /api/properties/
-    - PropertyCreateSerializer  → POST /api/properties/create/
-    - PropertyUpdateSerializer  → PATCH /api/properties/<id>/edit/
+    Serializers:
+        - PropertyImageSerializer   → nested images list in PropertySerializer
+        - PropertySerializer        → full detail for GET /api/properties/<id>/
+        - PropertyListSerializer    → lightweight card view for GET /api/properties/
+        - PropertyCreateSerializer  → POST /api/properties/create/
+        - PropertyUpdateSerializer  → PATCH /api/properties/<id>/edit/
+
 """
 from rest_framework import serializers
 from properties.models import Property, PropertyImage
@@ -16,8 +17,8 @@ class PropertyImageSerializer(serializers.ModelSerializer):
     """Nested inside PropertySerializer. Cover image floats first (model-level ordering)."""
 
     class Meta:
-        model = PropertyImage
-        fields = ["id", "image", "is_cover", "uploaded_at"]
+        model            = PropertyImage
+        fields           = ["id", "image", "is_cover", "uploaded_at"]
         read_only_fields = ["id", "uploaded_at"]
 
 
@@ -32,14 +33,14 @@ class PropertySerializer(serializers.ModelSerializer):
 
     # Computed fields from model properties
     average_rating = serializers.FloatField(read_only=True)
-    review_count = serializers.IntegerField(read_only=True)
+    review_count   = serializers.IntegerField(read_only=True)
 
     # Landlord info — needed when showing property (ForeignKey relation).
     # Only expose specific fields to avoid exposing sensitive User data.
-    landlord_id = serializers.IntegerField(source="landlord.id", read_only=True)
-    landlord_name = serializers.CharField(source="landlord.get_full_name", read_only=True)
-    landlord_picture = serializers.ImageField(source="landlord.profile_picture", read_only=True)
-    landlord_is_verified = serializers.BooleanField(source="landlord.is_verified", read_only=True)
+    landlord_id           = serializers.IntegerField(source="landlord.id", read_only=True)
+    landlord_name         = serializers.CharField(source="landlord.get_full_name", read_only=True)
+    landlord_picture      = serializers.ImageField(source="landlord.profile_picture", read_only=True)
+    landlord_is_verified  = serializers.BooleanField(source="landlord.is_verified", read_only=True)
     landlord_is_top_rated = serializers.BooleanField(source="landlord.is_top_rated", read_only=True)
 
     class Meta:
@@ -85,14 +86,14 @@ class PropertyListSerializer(serializers.ModelSerializer):
     Only the fields needed to render a card. Keeps list responses fast.
     """
 
-    cover_image = serializers.SerializerMethodField()
-    average_rating = serializers.FloatField(read_only=True)
-    review_count = serializers.IntegerField(read_only=True)
-    landlord_name = serializers.CharField(source="landlord.get_full_name", read_only=True)
+    cover_image          = serializers.SerializerMethodField()
+    average_rating       = serializers.FloatField(read_only=True)
+    review_count         = serializers.IntegerField(read_only=True)
+    landlord_name        = serializers.CharField(source="landlord.get_full_name", read_only=True)
     landlord_is_verified = serializers.BooleanField(source="landlord.is_verified", read_only=True)
 
     class Meta:
-        model = Property
+        model  = Property
         fields = [
             "id", "title", "property_type", "price",
             "city", "district",
@@ -122,14 +123,11 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
     """
     POST /api/properties/create/ — landlord creates a new listing.
     owner is injected in the view via save(owner=request.user), not sent by client.
+    
     """
 
     # Accept uploaded images at creation time (optional)
-    uploaded_images = serializers.ListField(
-        child=serializers.ImageField(),
-        write_only=True,
-        required=False,
-    )
+    uploaded_images = serializers.ListField(child=serializers.ImageField(),write_only=True,required=False,)
 
     class Meta:
         model = Property

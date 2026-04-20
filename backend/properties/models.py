@@ -47,51 +47,37 @@ class Property(models.Model):
 
     # ── Ownership ────────────────────────────────────────────
     # Only landlords can own properties — enforced at the API layer
-    landlord = models.ForeignKey(
-        Users, on_delete=models.CASCADE, related_name="landlord_properties"
-    )
+    landlord = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="landlord_properties")
 
     # ── Basic Info ───────────────────────────────────────────
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True)
+    title         = models.CharField(max_length=255)
+    description   = models.TextField(blank=True, null=True)
     property_type = models.CharField(max_length=20, choices=PROPERTY_TYPE_CHOICES)
 
     # ── Pricing ──────────────────────────────────────────────
-    price = models.DecimalField(
-        max_digits=10, decimal_places=2, validators=[MinValueValidator(0)]
-    )  # EGP per month
+    price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])  
 
     # ── Location ─────────────────────────────────────────────
-    city = models.CharField(max_length=100)
-    district = models.CharField(max_length=100, blank=True, null=True)
-    address = models.TextField(blank=True, null=True)
-    latitude = models.DecimalField(
-        max_digits=9, decimal_places=6, blank=True, null=True
-    )  # for map pin
-    longitude = models.DecimalField(
-        max_digits=9, decimal_places=6, blank=True, null=True
-    )  # for map pin
+    city      = models.CharField(max_length=100)
+    district  = models.CharField(max_length=100, blank=True, null=True)
+    address   = models.TextField(blank=True, null=True)
+    latitude  = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)  
 
     # ── University Proximity ─────────────────────────────────
     # Used in FindRoom university tab filter
-    nearby_university = models.CharField(max_length=255, blank=True, null=True)
-    distance_to_university = models.CharField(
-        max_length=50, blank=True, null=True
-    ) 
-    transport_type = models.CharField(
-        max_length=20, choices=TRANSPORT_CHOICES, blank=True, null=True
-    )
+    nearby_university      = models.CharField(max_length=255, blank=True, null=True)
+    distance_to_university = models.CharField(max_length=50, blank=True, null=True) 
+    transport_type         = models.CharField(max_length=20, choices=TRANSPORT_CHOICES, blank=True, null=True)
 
     # ── Room Details ─────────────────────────────────────────
-    num_rooms = models.IntegerField(default=1)
-    num_beds = models.IntegerField(default=1)  
-    num_bathrooms = models.IntegerField(default=1)
-    num_roommates = models.IntegerField(default=0)  
-    floor = models.IntegerField(blank=True, null=True)
-    area_sqm = models.IntegerField(blank=True, null=True)  
-    gender_preference = models.CharField(
-        max_length=10, choices=GENDER_CHOICES
-    )
+    num_rooms         = models.IntegerField(default=1)
+    num_beds          = models.IntegerField(default=1)  
+    num_bathrooms     = models.IntegerField(default=1)
+    num_roommates     = models.IntegerField(default=0)  
+    floor             = models.IntegerField(blank=True, null=True)
+    area_sqm          = models.IntegerField(blank=True, null=True)  
+    gender_preference = models.CharField(max_length=10, choices=GENDER_CHOICES)
 
     # ── Amenities ────────────────────────────────────────────
     # Stored as JSON list e.g. ["WiFi", "AC", "Washing Machine", "Parking"]
@@ -103,7 +89,7 @@ class Property(models.Model):
     max_stay_months = models.IntegerField(blank=True, null=True)
 
     # ── Status & Visibility ──────────────────────────────────
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="available")
+    status      = models.CharField(max_length=20, choices=STATUS_CHOICES, default="available")
     is_featured = models.BooleanField(default=False)  # shown in "Featured Properties" section
 
     # ── Analytics ────────────────────────────────────────────
@@ -147,11 +133,9 @@ class PropertyImage(models.Model):
     Shown on: Property cards, Property detail photo gallery
     """
 
-    property = models.ForeignKey(
-        Property, on_delete=models.CASCADE, related_name="images"
-    )
-    image = models.ImageField(upload_to="property_images/")
-    is_cover = models.BooleanField(default=False)  # main thumbnail shown on cards
+    property    = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="images")
+    image       = models.ImageField(upload_to="property_images/")
+    is_cover    = models.BooleanField(default=False)  # main thumbnail shown on cards
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
