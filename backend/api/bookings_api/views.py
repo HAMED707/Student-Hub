@@ -1,16 +1,15 @@
 """
-Bookings API views.
-
-Endpoints:
-    POST   /api/bookings/              → BookingCreateView   (student only)
-    GET    /api/bookings/my/           → MyBookingsView      (student sees their requests; landlord sees incoming)
-    PATCH  /api/bookings/<id>/status/  → BookingStatusView   (landlord: approve/reject | student: cancel)
+View 
+    -BookingList
+    -BookingCreateView
+    -BookingStatusUpdate
 """
 
 from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response 
+from rest_framework import status 
+from rest_framework.permissions import  IsAuthenticated
+from api.accounts_api.permissions import IsStudent
 
 from bookings.models import Booking
 from api.bookings_api.serializers import (
@@ -18,118 +17,73 @@ from api.bookings_api.serializers import (
     BookingCreateSerializer,
     BookingStatusSerializer,
 )
-from api.accounts_api.permissions import IsStudent, IsLandlord
+
+
+
+class MyBookingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get( self , request ):
+
+        if request.user.role == "student":
+            booking = Booking.objects.filter( tenant= request.user)
+        else:
+            booking = Booking.objects.filter( property__landlord= request.user)
+
+        serilaizer = BookingSerializer( booking , many=True )
+            
+        return Response( serilaizer.data )
+
 
 
 class BookingCreateView(APIView):
-    """
-    POST /api/bookings/
-    Student submits a booking request for a property.
-    """
     permission_classes = [IsStudent]
-
-    def post(self, request):
-        serializer = BookingCreateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        # Inject the authenticated student as the tenant
+    
+    def post( self , request ):
+        serializer = BookingCreateSerializer( data = request.data , context={"request":request} )
+        serializer.is_valid(raise_exception=True)
         booking = serializer.save(tenant=request.user)
-        return Response(
-            BookingSerializer(booking, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
+        return Response( BookingSerializer( booking ).data , status=status.HTTP_201_CREATED )
 
-
-class MyBookingsView(APIView):
-    """
-    GET /api/bookings/my/
-
-    - Student  → returns all their own booking requests
-    - Landlord → returns all booking requests for properties they own
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        if request.user.role == "student":
-            # Student sees bookings they submitted
-            queryset = (
-                Booking.objects
-                .filter(tenant=request.user)
-                .select_related("property", "property__owner")
-                .prefetch_related("property__images")
-            )
-        else:
-            # Landlord sees booking requests coming in for their properties
-            queryset = (
-                Booking.objects
-                .filter(property__owner=request.user)
-                .select_related("property", "tenant")
-                .prefetch_related("property__images")
-            )
-
-        serializer = BookingSerializer(queryset, many=True, context={"request": request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class BookingStatusView(APIView):
-    """
-    PATCH /api/bookings/<id>/status/
-
-    Allowed transitions (enforced here, not in serializer):
-        Landlord  → pending → approved | rejected
-        Landlord  → approved → completed
-        Student   → pending | approved → cancelled
-    """
     permission_classes = [IsAuthenticated]
 
-    def patch(self, request, booking_id):
+    def patch( self , request , pk ):
+
         try:
-            booking = Booking.objects.select_related("property", "tenant").get(id=booking_id)
+            booking = Booking.objects.get( pk=pk )
         except Booking.DoesNotExist:
             return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        new_status = request.data.get("status")
-        user       = request.user
-
-        # ── Permission & Transition Rules ─────────────────────────────────────
-        if user.role == "landlord":
-            # Only the property owner can act on this booking
-            if booking.property.owner != user:
+        
+        if request.user.role == "landlord":
+            if request.user != booking.property.landlord:
                 return Response({"error": "You do not own this property."}, status=status.HTTP_403_FORBIDDEN)
-
+            
             allowed_transitions = {
                 "pending":  ["approved", "rejected"],
                 "approved": ["completed"],
             }
-
-        elif user.role == "student":
-            # Only the tenant can cancel their own booking
-            if booking.tenant != user:
+        else:
+            if booking.tenant != request.user:
                 return Response({"error": "This is not your booking."}, status=status.HTTP_403_FORBIDDEN)
-
+            
             allowed_transitions = {
                 "pending":  ["cancelled"],
                 "approved": ["cancelled"],
             }
 
-        else:
-            return Response({"error": "Invalid role."}, status=status.HTTP_403_FORBIDDEN)
-
-        # Check if the transition is valid from the current status
         current = booking.status
+        new_status = request.data.get("status")
         if current not in allowed_transitions or new_status not in allowed_transitions.get(current, []):
             return Response(
                 {"error": f"Cannot change status from '{current}' to '{new_status}'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
+        
         serializer = BookingStatusSerializer(booking, data={"status": new_status}, partial=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer.save()
-        return Response(
-            BookingSerializer(booking, context={"request": request}).data,
-            status=status.HTTP_200_OK,
-        )
+        serializer.is_valid(raise_exception=True)
+        booking = serializer.save()
+        return Response(BookingSerializer( booking ).data,status=status.HTTP_200_OK)
