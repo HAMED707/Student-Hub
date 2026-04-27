@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
 import { fetchPropertyById, fetchProperties, normalizeProperty } from "../../services/propertyService.js";
+import { createBooking } from "../../services/bookingService.js";
 import {
   MapPin, Star, Heart, Wifi, Maximize,
   CheckCircle, Wind, Coffee, Utensils, Zap, Droplet,
@@ -91,23 +92,11 @@ const PropertyDetails = () => {
         return;
       }
 
-      const res = await fetch("http://localhost:8000/api/bookings/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user.access}`,
-        },
-        body: JSON.stringify({
-          property:        property.id,
-          move_in_date:    moveInDate,
-          duration_months: duration,
-        }),
+      await createBooking({
+        property:        property.id,
+        move_in_date:    moveInDate,
+        duration_months: duration,
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || err.error || "Booking failed.");
-      }
 
       setBookingSuccess(true);
     } catch (err) {

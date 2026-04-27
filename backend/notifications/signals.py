@@ -56,7 +56,7 @@ def booking_notification(sender, instance, created, **kwargs):
     if created:
         # Tell the landlord a student wants to book their place
         push_notification(
-            recipient=instance.property.owner,
+            recipient=instance.property.landlord,
             actor=instance.tenant,
             notification_type="booking_request",
             title="New Booking Request",

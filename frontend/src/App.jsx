@@ -20,8 +20,10 @@ import PasswordRecovery from "./pages/Auth/PasswordRecovery/PasswordRecovery.jsx
 // ========================================================
 import Home from "./pages/Home/Home.jsx";
 import FindRoom from "./pages/FindRoom/FindRoom.jsx";
-// تأكد هل الاسم PropertyDetails أم PropertyDetail حسب ملفك
 import PropertyDetails from "./pages/FindRoom/PropertyDetails.jsx"; 
+
+import StudentDashboard from "./pages/Dashboard/StudentDashboard.jsx";
+import LandlordDashboard from "./pages/Dashboard/LandlordDashboard.jsx";
 
 // لاحظ: الاسم في مجلداتك مكتوب "Commuity" (بدون n)
 import Community from "./pages/Commuity/Community.jsx"; 
@@ -81,9 +83,8 @@ function App() {
         <Route path="/home" element={<Home />} />
 
         {/* ✅✅✅ حل مشكلة الشاشة البيضاء ✅✅✅ */}
-        {/* نوجه روابط الداشبورد إلى الصفحة الرئيسية Home */}
-        <Route path="/student-dashboard" element={<Home />} />
-        <Route path="/landlord-dashboard" element={<Home />} />
+        <Route path="/student-dashboard" element={<StudentDashboard />} />
+        <Route path="/landlord-dashboard" element={<LandlordDashboard />} />
 
 
         {/* --- البحث عن سكن --- */}
