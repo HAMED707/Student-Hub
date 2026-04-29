@@ -1,0 +1,763 @@
+{
+  "info": {
+    "name": "StudentHub — Roommate Matching",
+    "_postman_id": "studenthub-roommate-matching-v2",
+    "description": "Run folders in order: 0 → 1 → 2 → 3 → 4.\n\nFolder 0 creates all 6 test accounts.\nFolder 1 logs them in and saves tokens.\nFolder 2 sets up roommate profiles.\nFolder 3 tests the AI matching.\nFolder 4 tests connection requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",       "value": "http://127.0.0.1:8000", "type": "string" },
+    { "key": "token_s1",       "value": "", "type": "string" },
+    { "key": "token_s2",       "value": "", "type": "string" },
+    { "key": "token_s3",       "value": "", "type": "string" },
+    { "key": "token_s4",       "value": "", "type": "string" },
+    { "key": "token_s5",       "value": "", "type": "string" },
+    { "key": "token_s6",       "value": "", "type": "string" },
+    { "key": "user_id_s2",     "value": "", "type": "string" },
+    { "key": "request_id",     "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0 — Create Accounts",
+      "description": "Register all 6 test students. Run once. Safe to re-run if your registration endpoint returns a clear error on duplicate username.",
+      "item": [
+        {
+          "name": "Register student 1 (Nour — requester)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 or 400 (already exists)', () => {",
+                  "  pm.expect([201, 400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/accounts/register/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student1\",\n  \"password\": \"Test1234!\",\n  \"email\": \"nour@test.com\",\n  \"first_name\": \"Nour\",\n  \"last_name\": \"Hassan\",\n  \"role\": \"student\",\n  \"gender\": \"F\",\n  \"city\": \"Cairo\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register student 2 (Layla — ~95% match)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 or 400 (already exists)', () => {",
+                  "  pm.expect([201, 400]).to.include(pm.response.code);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.id) pm.collectionVariables.set('user_id_s2', String(json.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/accounts/register/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student2\",\n  \"password\": \"Test1234!\",\n  \"email\": \"layla@test.com\",\n  \"first_name\": \"Layla\",\n  \"last_name\": \"Ahmed\",\n  \"role\": \"student\",\n  \"gender\": \"F\",\n  \"city\": \"Cairo\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register student 3 (Mariam — ~70% match)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 or 400 (already exists)', () => {",
+                  "  pm.expect([201, 400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/accounts/register/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student3\",\n  \"password\": \"Test1234!\",\n  \"email\": \"mariam@test.com\",\n  \"first_name\": \"Mariam\",\n  \"last_name\": \"Youssef\",\n  \"role\": \"student\",\n  \"gender\": \"F\",\n  \"city\": \"Cairo\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register student 4 (Sara — ~50% match)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 or 400 (already exists)', () => {",
+                  "  pm.expect([201, 400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/accounts/register/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student4\",\n  \"password\": \"Test1234!\",\n  \"email\": \"sara@test.com\",\n  \"first_name\": \"Sara\",\n  \"last_name\": \"Mostafa\",\n  \"role\": \"student\",\n  \"gender\": \"F\",\n  \"city\": \"Cairo\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register student 5 (Dina — ~30% match)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 or 400 (already exists)', () => {",
+                  "  pm.expect([201, 400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/accounts/register/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student5\",\n  \"password\": \"Test1234!\",\n  \"email\": \"dina@test.com\",\n  \"first_name\": \"Dina\",\n  \"last_name\": \"Khalil\",\n  \"role\": \"student\",\n  \"gender\": \"F\",\n  \"city\": \"Cairo\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register student 6 (Omar — MALE, must not appear in matches)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 or 400 (already exists)', () => {",
+                  "  pm.expect([201, 400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/accounts/register/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student6\",\n  \"password\": \"Test1234!\",\n  \"email\": \"omar@test.com\",\n  \"first_name\": \"Omar\",\n  \"last_name\": \"Farouk\",\n  \"role\": \"student\",\n  \"gender\": \"M\",\n  \"city\": \"Cairo\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 — Login & Get Tokens",
+      "description": "Login all 6 students. Tokens are auto-saved to collection variables.",
+      "item": [
+        {
+          "name": "Login student 1 (Nour)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Got access token', () => pm.expect(json.access).to.be.a('string'));",
+                  "pm.collectionVariables.set('token_s1', json.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/token/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student1\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login student 2 (Layla)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_s2', json.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/token/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student2\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login student 3 (Mariam)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_s3', json.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/token/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student3\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login student 4 (Sara)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_s4', json.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/token/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student4\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login student 5 (Dina)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_s5', json.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/token/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student5\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login student 6 (Omar)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_s6', json.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/token/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student6\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 — Setup Roommate Profiles",
+      "description": "Activate each student's roommate profile with lifestyle data. Must run before the AI matching test.",
+      "item": [
+        {
+          "name": "Profile student 1 — Nour (late / high / quiet / non_smoker)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is_active true', () => pm.expect(pm.response.json().is_active).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s1}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/profile/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"university\": \"Cairo University\",\n  \"city\": \"Cairo\",\n  \"sleeping_time\": \"late\",\n  \"cleanliness\": \"high\",\n  \"personality\": \"quiet\",\n  \"smoking\": \"non_smoker\",\n  \"guests_policy\": \"sometimes\",\n  \"budget_min\": 2000,\n  \"budget_max\": 4000,\n  \"room_type_preference\": \"single\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Profile student 2 — Layla (late / high / quiet / non_smoker) ~95%",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s2}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/profile/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"university\": \"Cairo University\",\n  \"city\": \"Cairo\",\n  \"sleeping_time\": \"late\",\n  \"cleanliness\": \"high\",\n  \"personality\": \"quiet\",\n  \"smoking\": \"non_smoker\",\n  \"guests_policy\": \"sometimes\",\n  \"budget_min\": 2500,\n  \"budget_max\": 4500,\n  \"room_type_preference\": \"single\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Profile student 3 — Mariam (normal / high / quiet / non_smoker) ~70%",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s3}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/profile/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"university\": \"Cairo University\",\n  \"city\": \"Cairo\",\n  \"sleeping_time\": \"normal\",\n  \"cleanliness\": \"high\",\n  \"personality\": \"quiet\",\n  \"smoking\": \"non_smoker\",\n  \"guests_policy\": \"never\",\n  \"budget_min\": 2000,\n  \"budget_max\": 3500,\n  \"room_type_preference\": \"single\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Profile student 4 — Sara (early / medium / social / non_smoker) ~50%",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s4}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/profile/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"university\": \"Cairo University\",\n  \"city\": \"Cairo\",\n  \"sleeping_time\": \"early\",\n  \"cleanliness\": \"medium\",\n  \"personality\": \"social\",\n  \"smoking\": \"non_smoker\",\n  \"guests_policy\": \"often\",\n  \"budget_min\": 2000,\n  \"budget_max\": 4000,\n  \"room_type_preference\": \"shared\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Profile student 5 — Dina (early / low / social / smoker) ~30%",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s5}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/profile/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"university\": \"Cairo University\",\n  \"city\": \"Cairo\",\n  \"sleeping_time\": \"early\",\n  \"cleanliness\": \"low\",\n  \"personality\": \"social\",\n  \"smoking\": \"smoker\",\n  \"guests_policy\": \"often\",\n  \"budget_min\": 5000,\n  \"budget_max\": 8000,\n  \"room_type_preference\": \"shared\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Profile student 6 — Omar (male — will be filtered out)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s6}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/profile/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"university\": \"Cairo University\",\n  \"city\": \"Cairo\",\n  \"sleeping_time\": \"late\",\n  \"cleanliness\": \"high\",\n  \"personality\": \"quiet\",\n  \"smoking\": \"non_smoker\",\n  \"guests_policy\": \"sometimes\",\n  \"budget_min\": 2000,\n  \"budget_max\": 4000,\n  \"room_type_preference\": \"single\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 — AI Matching",
+      "description": "All tests run as student 1 (Nour). Expected order: Layla (95%) > Mariam (70%) > Sara (50%) > Dina (30%). Omar must never appear.",
+      "item": [
+        {
+          "name": "Get matches ✅ happy path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('status is success', () => pm.expect(json.status).to.eql('success'));",
+                  "pm.test('matches is array', () => pm.expect(json.matches).to.be.an('array'));",
+                  "pm.test('returns at most 5', () => pm.expect(json.matches.length).to.be.at.most(5));",
+                  "pm.test('returns at least 1', () => pm.expect(json.matches.length).to.be.at.least(1));",
+                  "pm.test('each match has username', () => json.matches.forEach(m => pm.expect(m).to.have.property('username')));",
+                  "pm.test('each match has score', () => json.matches.forEach(m => pm.expect(m).to.have.property('compatibility_score')));",
+                  "pm.test('scores are 0-100', () => json.matches.forEach(m => pm.expect(m.compatibility_score).to.be.within(0, 100)));",
+                  "pm.test('sorted best first', () => {",
+                  "  for (let i = 0; i < json.matches.length - 1; i++) {",
+                  "    pm.expect(json.matches[i].compatibility_score).to.be.at.least(json.matches[i+1].compatibility_score);",
+                  "  }",
+                  "});",
+                  "pm.test('Omar (male) is NOT in results', () => {",
+                  "  const names = json.matches.map(m => m.username);",
+                  "  pm.expect(names).to.not.include('test_student6');",
+                  "});",
+                  "pm.test('student1 not in own results', () => {",
+                  "  const names = json.matches.map(m => m.username);",
+                  "  pm.expect(names).to.not.include('test_student1');",
+                  "});",
+                  "console.log('Match results:', JSON.stringify(json.matches, null, 2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_s1}}" }],
+            "url": "{{base_url}}/api/roommates/matches/"
+          }
+        },
+        {
+          "name": "Get matches ❌ no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/roommates/matches/"
+          }
+        },
+        {
+          "name": "Get matches ❌ inactive profile (deactivate first)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.collectionVariables.get('base_url') + '/api/roommates/profile/',",
+                  "  method: 'PATCH',",
+                  "  header: {",
+                  "    'Authorization': 'Bearer ' + pm.collectionVariables.get('token_s1'),",
+                  "    'Content-Type': 'application/json'",
+                  "  },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ is_active: false }) }",
+                  "}, (err, res) => {",
+                  "  console.log('Profile deactivated:', res.code);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error mentions active profile', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('active roommate profile');",
+                  "});",
+                  "pm.sendRequest({",
+                  "  url: pm.collectionVariables.get('base_url') + '/api/roommates/profile/',",
+                  "  method: 'PATCH',",
+                  "  header: {",
+                  "    'Authorization': 'Bearer ' + pm.collectionVariables.get('token_s1'),",
+                  "    'Content-Type': 'application/json'",
+                  "  },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ is_active: true }) }",
+                  "}, (err, res) => {",
+                  "  console.log('Profile re-activated:', res.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_s1}}" }],
+            "url": "{{base_url}}/api/roommates/matches/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 — Roommate Requests",
+      "description": "Student 1 sends a request to student 2. Student 2 accepts/rejects/withdraws.",
+      "item": [
+        {
+          "name": "Browse all active profiles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "pm.test('Student 1 not in own list', () => {",
+                  "  const usernames = pm.response.json().map(p => p.user?.username);",
+                  "  pm.expect(usernames).to.not.include('test_student1');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_s1}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/roommates/?university=Cairo University&city=Cairo",
+              "host": ["{{base_url}}"],
+              "path": ["api", "roommates", ""],
+              "query": [
+                { "key": "university", "value": "Cairo University" },
+                { "key": "city",       "value": "Cairo" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send request (student 1 → student 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Status is pending', () => pm.expect(json.status).to.eql('pending'));",
+                  "if (json.id) pm.collectionVariables.set('request_id', String(json.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s1}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/request/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiver\": \"{{user_id_s2}}\",\n  \"message\": \"Hey Layla! We seem like a great match. Want to be roommates?\"\n}"
+            }
+          }
+        },
+        {
+          "name": "View sent & received requests (student 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has sent', () => pm.expect(json).to.have.property('sent'));",
+                  "pm.test('Has received', () => pm.expect(json).to.have.property('received'));",
+                  "pm.test('Sent list not empty', () => pm.expect(json.sent.length).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_s1}}" }],
+            "url": "{{base_url}}/api/roommates/requests/"
+          }
+        },
+        {
+          "name": "Accept request (student 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status is accepted', () => pm.expect(pm.response.json().status).to.eql('accepted'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s2}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/request/{{request_id}}/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"accepted\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reject request (student 2) — run instead of Accept",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s2}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/request/{{request_id}}/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"rejected\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Withdraw request (student 1) — run instead of Accept",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s1}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/request/{{request_id}}/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"withdrawn\"\n}"
+            }
+          }
+        },
+        {
+          "name": "❌ Receiver tries to withdraw (should fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400 or 403', () => pm.expect([400, 403]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_s2}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{base_url}}/api/roommates/request/{{request_id}}/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"withdrawn\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
