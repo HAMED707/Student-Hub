@@ -2,12 +2,13 @@
 Roommates API views.
 
 Views:
-    - RoommateListView          → GET  /api/roommates/
+    - RoommateListView          → GET    /api/roommates/
     - RoommateProfileView       → GET/PATCH /api/roommates/profile/
-    - RoommateProfileDetailView → GET  /api/roommates/profile/<user_id>/
-    - RoommateRequestCreateView → POST /api/roommates/request/
-    - RoommateRequestListView   → GET  /api/roommates/requests/
-    - RoommateRequestStatusView → PATCH /api/roommates/request/<id>/
+    - RoommateProfileDetailView → GET    /api/roommates/profile/<user_id>/
+    - RoommateRequestCreateView → POST   /api/roommates/request/
+    - RoommateRequestListView   → GET    /api/roommates/requests/
+    - RoommateRequestStatusView → PATCH  /api/roommates/request/<id>/
+    - RoommateMatchView         → GET    /api/roommates/matches/
 """
 
 from rest_framework.views import APIView
@@ -25,6 +26,7 @@ from api.roommates_api.serializers import (
     RoommateRequestStatusSerializer,
 )
 from api.accounts_api.permissions import IsStudent
+from api.roommates_api.ml_utils import process_and_match
 
 
 class RoommateListView(APIView):
@@ -158,7 +160,7 @@ class RoommateRequestListView(APIView):
     permission_classes = [IsStudent]
 
     def get(self, request):
-        sent = RoommateRequest.objects.filter(sender=request.user).select_related("sender", "receiver")
+        sent     = RoommateRequest.objects.filter(sender=request.user).select_related("sender", "receiver")
         received = RoommateRequest.objects.filter(receiver=request.user).select_related("sender", "receiver")
         return Response(
             {
@@ -210,3 +212,77 @@ class RoommateRequestStatusView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(RoommateRequestSerializer(roommate_request).data, status=status.HTTP_200_OK)
+
+
+class RoommateMatchView(APIView):
+    """
+    GET /api/roommates/matches/
+
+    Returns the top 5 AI-matched roommates for the requesting student.
+
+    Hard constraints (filtered at DB level):
+        - is_active = True
+        - Same gender     (Users.gender)
+        - Same university (RoommateProfile.university)
+        - Same city       (RoommateProfile.city)
+
+    Soft matching via cosine similarity (ml_utils.py):
+        sleeping_time, cleanliness, personality, smoking,
+        guests_policy, budget range
+
+    Students only. Requires an active RoommateProfile.
+
+    Response:
+        {
+            "status": "success",
+            "matches": [
+                {"username": "ahmed99", "compatibility_score": 91.5},
+                ...
+            ]
+        }
+    """
+    permission_classes = [IsStudent]
+
+    def get(self, request):
+        current_user = request.user
+
+        # Requesting student must have an active profile themselves
+        try:
+            current_profile = RoommateProfile.objects.get(user=current_user, is_active=True)
+        except RoommateProfile.DoesNotExist:
+            return Response(
+                {"error": "You need an active roommate profile to see matches."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # ── Hard Constraints (DB-level, fast) ─────────────────
+        compatible_profiles = RoommateProfile.objects.filter(
+            is_active=True,
+            user__gender=current_user.gender,       # gender lives on Users
+            university=current_profile.university,  # university on RoommateProfile
+            city=current_profile.city,              # city on RoommateProfile
+        )
+
+        # Only pull the columns the AI actually needs
+        profiles_data = compatible_profiles.values(
+            "user__username",
+            "sleeping_time",
+            "cleanliness",
+            "personality",
+            "smoking",
+            "guests_policy",
+            "budget_min",
+            "budget_max",
+        )
+
+        # ── Soft Matching (cosine similarity AI) ──────────────
+        matches = process_and_match(
+            current_user_username=current_user.username,
+            profiles_queryset=profiles_data,
+            top_n=5,
+        )
+
+        return Response(
+            {"status": "success", "matches": matches},
+            status=status.HTTP_200_OK,
+        )
