@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Heart, Bell, Settings, User, LogOut } from "lucide-react";
+import { CalendarCheck, Heart, Bell, Settings, User, LogOut } from "lucide-react";
 
 // ✅ استيراد اللوجو
 import logo from "../../brand/icons/logo.svg"; 
@@ -34,7 +34,7 @@ export default function NavbarOwner() {
     { name: "Home", path: "/home" },
     { name: "Find Room", path: "/find-room" },
     { name: "Community", path: "/community" },
-    { name: "Service", path: "/service" },
+    { name: "Service", path: "/services" },
     { name: "Roommate", path: "/roommate" },
   ];
 
@@ -88,13 +88,27 @@ export default function NavbarOwner() {
 
           {/* === اليمين: الأيقونات === */}
           <div className="flex items-center gap-5">
+            <Link
+              to="/bookings"
+              title="Bookings"
+              aria-label="Bookings"
+              className={`transition-colors p-2 rounded-full hover:bg-white/50 active:scale-90 duration-200 ${
+                currentPath === "/bookings" ? "text-[#155BC2]" : "text-gray-800 hover:text-[#155BC2]"
+              }`}
+            >
+              <CalendarCheck className="w-7 h-7 stroke-[1.5px]" />
+            </Link>
             
             {/* أيقونة القلب */}
-            <Link 
-              to="/favorites" 
-              className="text-gray-800 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-white/50 active:scale-90 duration-200"
+            <Link
+              to="/favorites"
+              title="Favorites"
+              aria-label="Favorites"
+              className={`transition-colors p-2 rounded-full hover:bg-white/50 active:scale-90 duration-200 ${
+                currentPath === "/favorites" || currentPath === "/likes" ? "text-red-500" : "text-gray-800 hover:text-red-500"
+              }`}
             >
-              <Heart className="w-7 h-7 stroke-[1.5px]" />
+              <Heart className="w-7 h-7 stroke-[1.5px]" fill={currentPath === "/favorites" || currentPath === "/likes" ? "currentColor" : "none"} />
             </Link>
 
             {/* أيقونة الجرس */}

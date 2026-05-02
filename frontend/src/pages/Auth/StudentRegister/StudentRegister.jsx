@@ -11,15 +11,15 @@ const InputField = ({ label, name, type = "text", placeholder, value, onChange, 
     <div className="flex flex-col gap-2 w-full">
         <label className="text-sm font-bold text-gray-700">{label}</label>
         <div className="relative">
-            <input
-                type={type}
-                name={name}
-                value={value}
-                onChange={onChange}
-                placeholder={placeholder}
+            <input 
+                type={type} 
+                name={name} 
+                value={value} 
+                onChange={onChange} 
+                placeholder={placeholder} 
                 maxLength={maxLength}
                 className={`w-full h-12 px-4 border rounded-lg outline-none transition text-gray-700 placeholder-gray-400
-                    ${error ? 'border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:border-[#1A56DB] focus:ring-1 focus:ring-[#1A56DB]'}`}
+                    ${error ? 'border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:border-[#1A56DB] focus:ring-1 focus:ring-[#1A56DB]'}`} 
             />
             {error && (
                 <div className="flex items-center gap-1 mt-1 text-red-500 text-xs animate-fadeIn">
@@ -36,10 +36,10 @@ const SelectField = ({ label, name, value, onChange, options, placeholder, disab
     <div className="flex flex-col gap-2 w-full">
         <label className="text-sm font-bold text-gray-700">{label}</label>
         <div className="relative w-full">
-            <select
-                name={name}
-                value={value}
-                onChange={onChange}
+            <select 
+                name={name} 
+                value={value} 
+                onChange={onChange} 
                 disabled={disabled}
                 className={`w-full h-12 px-4 border rounded-lg appearance-none outline-none cursor-pointer transition 
                     ${disabled ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700'}
@@ -78,22 +78,20 @@ const academicYears = ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Gradua
 const StudentRegister = () => {
     const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState(1);
-
+    
     const [formData, setFormData] = useState({
         firstName: '', lastName: '', gender: '', phone: '', dob: '', nationalId: '', governorate: '', city: '',
         university: '', academicYear: '', major: '',
-        email: '', password: '', confirmPassword: '', username: ''
+        email: '', password: '', confirmPassword: ''
     });
 
     const [errors, setErrors] = useState({});
     const [availableCities, setAvailableCities] = useState([]);
-    const [submitError, setSubmitError] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-
+        
         if (errors[name]) {
             setErrors(prev => ({ ...prev, [name]: '' }));
         }
@@ -127,12 +125,11 @@ const StudentRegister = () => {
         }
 
         if (step === 3) {
-            if (!formData.username.trim()) newErrors.username = "Username is required";
             if (!formData.email.trim()) newErrors.email = "Email is required";
             else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid email";
-
+            
             if (!formData.password) newErrors.password = "Password is required";
-            else if (formData.password.length < 8) newErrors.password = "Min 8 characters";
+            else if (formData.password.length < 6) newErrors.password = "Min 6 characters";
 
             if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords do not match";
         }
@@ -145,71 +142,27 @@ const StudentRegister = () => {
         return isValid;
     };
 
-    const handleNext = async () => {
-        if (!validateStep(currentStep)) return;
-        if (currentStep < 3) {
-            setCurrentStep(prev => prev + 1);
-            return;
-        }
-
-        setSubmitError('');
-        setIsSubmitting(true);
-
-        try {
-            const response = await fetch('http://localhost:8000/api/auth/register/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    username: formData.username,
-                    email: formData.email,
-                    first_name: formData.firstName,
-                    last_name: formData.lastName,
-                    password: formData.password,
-                    phone_number: formData.phone,
-                    gender: formData.gender === 'Male' ? 'M' : 'F',
-                    date_of_birth: formData.dob,
-                    city: formData.city,
-                    role: 'student'
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                navigate('/login');
-                return;
-            }
-
-            if (data && typeof data === 'object') {
-                setErrors(data);
-                setSubmitError(data.detail || "Registration failed. Please check your data.");
-            } else {
-                setSubmitError("Registration failed. Please try again.");
-            }
-        } catch (error) {
-            console.error("Connection Error:", error);
-            setSubmitError("Connection error. Make sure the backend is running.");
-        } finally {
-            setIsSubmitting(false);
+    const handleNext = () => { 
+        if (validateStep(currentStep)) {
+            if (currentStep < 3) setCurrentStep(prev => prev + 1); 
+            else console.log("Form Submitted:", formData);
         }
     };
 
-    const handleBack = () => {
-        setErrors({});
-        if (currentStep > 1) setCurrentStep(prev => prev - 1);
+    const handleBack = () => { 
+        setErrors({}); 
+        if (currentStep > 1) setCurrentStep(prev => prev - 1); 
     };
 
     return (
         <div className="flex h-screen w-full bg-white overflow-hidden font-sans">
-
+            
             {/* الجزء الأيسر: النموذج */}
             <div className="w-full lg:w-[60%] flex flex-col h-full relative">
-
+                
                 {/* زر العودة العلوي */}
                 <div className="px-12 md:px-20 pt-8 shrink-0">
-                    <button
+                     <button 
                         onClick={() => navigate(-1)}
                         className={`text-gray-500 hover:text-[#1A56DB] transition-colors ${currentStep === 1 ? 'block' : 'invisible'}`}
                     >
@@ -220,7 +173,7 @@ const StudentRegister = () => {
                 {/* المحتوى في المنتصف (justify-center) */}
                 <div className="flex-1 flex flex-col justify-center px-12 md:px-20 overflow-y-auto custom-scrollbar">
                     <div className="w-full max-w-4xl mx-auto">
-
+                        
                         {/* Step 1 */}
                         {currentStep === 1 && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
@@ -246,39 +199,29 @@ const StudentRegister = () => {
                             </div>
                         )}
 
-                        {/* Step 3 */}
+                        {/* Step 3 (Passwords Working Now) */}
                         {currentStep === 3 && (
                             <div className="flex flex-col gap-6 animate-fadeIn">
-                                <InputField label="Username" name="username" placeholder="Choose a username" value={formData.username} onChange={handleChange} error={errors.username} />
                                 <InputField label="Email" name="email" type="email" placeholder="Enter the Email" value={formData.email} onChange={handleChange} error={errors.email} />
                                 <InputField label="Password" name="password" type="password" placeholder="Enter the Password" value={formData.password} onChange={handleChange} error={errors.password} />
                                 <InputField label="Confirm password" name="confirmPassword" type="password" placeholder="Enter the Confirm password" value={formData.confirmPassword} onChange={handleChange} error={errors.confirmPassword} />
                             </div>
                         )}
 
-                        {submitError && currentStep === 3 && (
-                            <div className="flex items-center gap-2 mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
-                                <AlertCircle className="w-4 h-4 shrink-0" />
-                                <span>{submitError}</span>
-                            </div>
-                        )}
-
                         {/* الأزرار (قريبة من الحقول) */}
                         <div className="flex justify-between items-center mt-10 mb-2 w-full">
-                            <button
+                            <button 
                                 onClick={handleBack}
-                                disabled={isSubmitting}
-                                className={`flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-300 px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition disabled:opacity-50 ${currentStep === 1 ? 'invisible' : 'visible'}`}
+                                className={`flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-300 px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition ${currentStep === 1 ? 'invisible' : 'visible'}`}
                             >
                                 <ArrowLeft className="w-5 h-5" /> Back
                             </button>
 
-                            <button
+                            <button 
                                 onClick={handleNext}
-                                disabled={isSubmitting}
-                                className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+                                className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95"
                             >
-                                {currentStep === 3 ? (isSubmitting ? "Creating…" : "Create Account") : "NEXT"} <ChevronRight className="w-5 h-5" />
+                                {currentStep === 3 ? "Create Account" : "NEXT"} <ChevronRight className="w-5 h-5" />
                             </button>
                         </div>
                     </div>
@@ -287,7 +230,7 @@ const StudentRegister = () => {
                 {/* Footer: شريط التقدم فقط */}
                 <div className="px-12 md:px-20 pb-8 pt-2 bg-white shrink-0">
                     <div className="flex items-center justify-center w-full">
-                        <div className="flex items-center w-full max-lg: relative">
+                        <div className="flex items-center w-full max-w-lg relative">
                             {/* Steps Indicators (Same as before) */}
                             <div className="flex flex-col items-center relative z-10">
                                 <div className={`w-4 h-4 rounded-full flex items-center justify-center transition-all duration-300 ${currentStep > 1 ? 'bg-[#1A56DB]' : 'border-2 border-[#1A56DB] bg-white'}`}>
@@ -329,7 +272,7 @@ const StudentRegister = () => {
                         <p className="text-sm text-blue-100/80 leading-relaxed">Provide your details to find housing, match with roommates, and access student services.</p>
                     </div>
                     <div className="relative w-full h-full overflow-hidden rounded-[45px]">
-                        <img src="https://picsum.photos/seed/student-register/1500/900" alt="Student" className="w-full h-full object-cover object-top opacity-90" />
+                        <img src="https://images.unsplash.com/photo-1594744803329-e58f27611757?q=80&w=1500&auto=format&fit=crop" alt="Student" className="w-full h-full object-cover object-top opacity-90" />
                     </div>
                     <div className="absolute -left-8 bottom-24 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-2xl z-40">
                         <div className="w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center text-white">
