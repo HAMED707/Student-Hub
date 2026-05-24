@@ -34,6 +34,7 @@ class Property(models.Model):
         ("available", "Available"),
         ("rented", "Rented"),
         ("unavailable", "Unavailable"),
+        ("reserved", "Reserved"),
     ]
     TRANSPORT_CHOICES = [
         ("walk", "Walking"),

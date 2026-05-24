@@ -23,6 +23,10 @@ class BookingSerializer(serializers.ModelSerializer):
                     "move_in_date" ,
                     "duration_months" ,
                     "message" ,
+                    "total_amount_cents",        
+                    "deposit_amount_cents",      
+                    "remaining_amount_cents",    
+                    "expires_at", 
                     "created_at" ,
                     "updated_at",
                     ]
@@ -30,6 +34,10 @@ class BookingSerializer(serializers.ModelSerializer):
             "id",
             "tenant",
             "status",
+            "total_amount_cents",        
+            "deposit_amount_cents",      
+            "remaining_amount_cents",    
+            "expires_at", 
             "created_at",
             "updated_at",
         ]
@@ -50,18 +58,6 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         if prop.max_stay_months and duration_months > prop.max_stay_months:
             raise serializers.ValidationError(f"This property requires a maximum stay of {prop.max_stay_months} months.")
         
-        if prop.status != "available":
-            raise serializers.ValidationError("This property is not available for booking.")
-        
-        request = self.context.get("request")
-        if Booking.objects.filter(
-                tenant=request.user,
-                property=prop,
-                status__in=["pending", "approved"]
-            ).exists():
-                raise serializers.ValidationError("You already have an active booking for this property.")
-
-            
 
         return data
 

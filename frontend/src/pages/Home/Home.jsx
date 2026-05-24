@@ -20,7 +20,7 @@ import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-import Navbar from "../../assets/components/Navbar/navbar.jsx";
+import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
 import logoFull from "../../assets/brand/icons/logo.svg";
 import heroBanner from "../../assets/images/banners/hero_banner.png";
