@@ -3,7 +3,7 @@ from bookings.models import Booking
 
 
 
-class payment(models.Model):
+class Payment(models.Model):
 
 
     class Status(models.TextChoices):
