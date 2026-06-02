@@ -1,11 +1,9 @@
+## properties app ##
 
 
+# ────────────────────────Start URL─────────────────────────────────────
 
-
-
-
-##  urls ##
-
+```
 """
     Properties API URL configuration
 
@@ -42,13 +40,232 @@ urlpatterns = [
     path("landlord/properties/", LandlordPropertiesView.as_view(), name="landlord-properties"),
 ]
 
+        
+```
 
-##  end urls ##
+# ────────────────────────End URL───────────────────────────────────────
 
 
 
-##  views ##
+# ────────────────────────Start Serializer──────────────────────────────
 
+```
+"""
+    Properties API serializers.
+
+    Serializers:
+        - PropertyImageSerializer   → nested images list in PropertySerializer
+        - PropertySerializer        → full detail for GET /api/properties/<id>/
+        - PropertyListSerializer    → lightweight card view for GET /api/properties/
+        - PropertyCreateSerializer  → POST /api/properties/create/
+        - PropertyUpdateSerializer  → PATCH /api/properties/<id>/edit/
+
+"""
+from rest_framework import serializers
+from properties.models import Property, PropertyImage
+
+
+class PropertyImageSerializer(serializers.ModelSerializer):
+    """Nested inside PropertySerializer. Cover image floats first (model-level ordering)."""
+
+    class Meta:
+        model            = PropertyImage
+        fields           = ["id", "image", "is_cover", "uploaded_at"]
+        read_only_fields = ["id", "uploaded_at"]
+
+
+class PropertySerializer(serializers.ModelSerializer):
+    """
+    Full detail view — used on the property detail page.
+    Includes nested images, owner info, and computed rating fields.
+    """
+
+    # used many=True because one property has many images (reverse relation)
+    images = PropertyImageSerializer(many=True, read_only=True)
+
+    # Computed fields from model properties
+    average_rating = serializers.FloatField(read_only=True)
+    review_count   = serializers.IntegerField(read_only=True)
+
+    # Landlord info — needed when showing property (ForeignKey relation).
+    # Only expose specific fields to avoid exposing sensitive User data.
+    landlord_id           = serializers.IntegerField(source="landlord.id", read_only=True)
+    landlord_name         = serializers.CharField(source="landlord.get_full_name", read_only=True)
+    landlord_picture      = serializers.ImageField(source="landlord.profile_picture", read_only=True)
+    landlord_is_verified  = serializers.BooleanField(source="landlord.is_verified", read_only=True)
+    landlord_is_top_rated = serializers.BooleanField(source="landlord.is_top_rated", read_only=True)
+
+    class Meta:
+        model = Property
+        fields = [
+            "id",
+            # ── Ownership ────────────────────────────────────
+            "landlord_id", "landlord_name", "landlord_picture",
+            "landlord_is_verified", "landlord_is_top_rated",
+            # ── Basic Info ───────────────────────────────────
+            "title", "description", "property_type",
+            # ── Pricing ──────────────────────────────────────
+            "price",
+            # ── Location ─────────────────────────────────────
+            "city", "district", "address", "latitude", "longitude",
+            # ── University Proximity ─────────────────────────
+            "nearby_university", "distance_to_university", "transport_type",
+            # ── Room Details ─────────────────────────────────
+            "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
+            "floor", "area_sqm", "gender_preference",
+            # ── Amenities ────────────────────────────────────
+            "amenities",
+            # ── Stay Duration ────────────────────────────────
+            "min_stay_months", "max_stay_months",
+            # ── Status & Visibility ──────────────────────────
+            "status", "is_featured",
+            # ── Analytics ────────────────────────────────────
+            "view_count",
+            # ── Reviews (computed) ───────────────────────────
+            "average_rating", "review_count",
+            # ── Images ───────────────────────────────────────
+            "images",
+            # ── Timestamps ───────────────────────────────────
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "view_count", "is_featured", "created_at", "updated_at"]
+
+
+
+class PropertyListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight card view — used on FindRoom and Home page listing grids.
+    Only the fields needed to render a card. Keeps list responses fast.
+    """
+
+    cover_image          = serializers.SerializerMethodField()
+    average_rating       = serializers.FloatField(read_only=True)
+    review_count         = serializers.IntegerField(read_only=True)
+    landlord_name        = serializers.CharField(source="landlord.get_full_name", read_only=True)
+    landlord_is_verified = serializers.BooleanField(source="landlord.is_verified", read_only=True)
+
+    class Meta:
+        model  = Property
+        fields = [
+            "id", "title", "property_type", "price",
+            "city", "district",
+            "nearby_university", "distance_to_university", "transport_type",
+            "num_beds", "num_roommates", "gender_preference",
+            "amenities", "status", "is_featured",
+            "average_rating", "review_count",
+            "cover_image",
+            "landlord_name", "landlord_is_verified",
+            "created_at",
+        ]
+
+    def get_cover_image(self, obj):
+        """Returns the URL of the cover image, or None if no images uploaded."""
+        cover = obj.images.filter(is_cover=True).first() or obj.images.first()
+        if not cover:
+            return None
+        request = self.context.get("request")
+        # Build absolute URL so frontend doesn't need to prefix the media root
+        # request.build_absolute_uri() adds full domain (e.g., http://localhost:8000) to URL
+        # Without it, frontend only gets "/media/image.jpg" which may not work
+        return request.build_absolute_uri(cover.image.url) if request else cover.image.url
+
+
+
+class PropertyCreateSerializer(serializers.ModelSerializer):
+    """
+    POST /api/properties/create/ — landlord creates a new listing.
+    owner is injected in the view via save(owner=request.user), not sent by client.
+    
+    """
+
+    # Accept uploaded images at creation time (optional)
+    uploaded_images = serializers.ListField(child=serializers.ImageField(),write_only=True,required=False,)
+
+    class Meta:
+        model = Property
+        fields = [
+            "title", "description", "property_type",
+            "price",
+            "city", "district", "address", "latitude", "longitude",
+            "nearby_university", "distance_to_university", "transport_type",
+            "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
+            "floor", "area_sqm", "gender_preference",
+            "amenities",
+            "min_stay_months", "max_stay_months",
+            "status",
+            "uploaded_images",
+        ]
+
+    def validate_price(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Price must be greater than 0.")
+        return value
+
+    def validate(self, data):
+        min_stay = data.get("min_stay_months", 1)
+        max_stay = data.get("max_stay_months")
+        if max_stay and max_stay < min_stay:
+            raise serializers.ValidationError("max_stay_months cannot be less than min_stay_months.")
+        return data
+
+    def create(self, validated_data):
+        images = validated_data.pop("uploaded_images", [])
+        property_obj = Property.objects.create(**validated_data)
+
+        for index, image_file in enumerate(images):
+            PropertyImage.objects.create(
+                property=property_obj,
+                image=image_file,
+                is_cover=(index == 0),  # first uploaded image is the cover
+            )
+
+        return property_obj
+
+
+class PropertyUpdateSerializer(serializers.ModelSerializer):
+    """
+    PATCH /api/properties/<id>/edit/ — landlord edits their own listing.
+    All fields optional. Images managed separately via PropertyImageSerializer.
+    """
+
+    class Meta:
+        model = Property
+        fields = [
+            "title", "description", "property_type",
+            "price",
+            "city", "district", "address", "latitude", "longitude",
+            "nearby_university", "distance_to_university", "transport_type",
+            "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
+            "floor", "area_sqm", "gender_preference",
+            "amenities",
+            "min_stay_months", "max_stay_months",
+            "status",
+        ]
+
+    def validate_price(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Price must be greater than 0.")
+        return value
+
+    def validate(self, data):
+        # On partial update, pull existing values if not being changed
+        instance = self.instance
+        min_stay = data.get("min_stay_months", instance.min_stay_months)
+        max_stay = data.get("max_stay_months", instance.max_stay_months)
+        if max_stay and max_stay < min_stay:
+            raise serializers.ValidationError("max_stay_months cannot be less than min_stay_months.")
+        return data
+
+```
+
+# ────────────────────────End Serializer────────────────────────────────
+
+
+
+
+# ────────────────────────Start View────────────────────────────────────
+
+```
 """
 Properties API views.
 
@@ -356,224 +573,59 @@ class LandlordPropertiesView(APIView):
         serializer = PropertyListSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+```
 
-##  end views ##
+# ────────────────────────End View──────────────────────────────────────
 
 
-## serializers ##
 
+
+
+# ────────────────────────Start Permissions────────────────────────────────────
+```
 """
-    Properties API serializers.
-
-    Serializers:
-        - PropertyImageSerializer   → nested images list in PropertySerializer
-        - PropertySerializer        → full detail for GET /api/properties/<id>/
-        - PropertyListSerializer    → lightweight card view for GET /api/properties/
-        - PropertyCreateSerializer  → POST /api/properties/create/
-        - PropertyUpdateSerializer  → PATCH /api/properties/<id>/edit/
-
+Properties API permissions.
+Object-level permission so ownership checks don't live inside every view.
 """
-from rest_framework import serializers
-from properties.models import Property, PropertyImage
+from rest_framework.permissions import BasePermission, IsAuthenticated
 
 
-class PropertyImageSerializer(serializers.ModelSerializer):
-    """Nested inside PropertySerializer. Cover image floats first (model-level ordering)."""
-
-    class Meta:
-        model            = PropertyImage
-        fields           = ["id", "image", "is_cover", "uploaded_at"]
-        read_only_fields = ["id", "uploaded_at"]
-
-
-class PropertySerializer(serializers.ModelSerializer):
+class IsPropertyOwner(BasePermission):
     """
-    Full detail view — used on the property detail page.
-    Includes nested images, owner info, and computed rating fields.
+    Object-level permission — allows access only if the requesting user
+    owns the property being accessed.
+
+    Usage in views:
+        permission_classes = [IsPropertyOwner]
+
+        def patch(self, request, property_id):
+            prop = get_object_or_404(Property, id=property_id)
+            self.check_object_permissions(request, prop)   ← triggers has_object_permission
+            ...
     """
+    message = "You do not own this property."
 
-    # used many=True because one property has many images (reverse relation)
-    images = PropertyImageSerializer(many=True, read_only=True)
+    def has_permission(self, request, view):
+        """User must be authenticated and be a landlord."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.role == "landlord"
+        )
 
-    # Computed fields from model properties
-    average_rating = serializers.FloatField(read_only=True)
-    review_count   = serializers.IntegerField(read_only=True)
+    def has_object_permission(self, request, view, obj):
+        """obj is the Property instance. Checks landlord field directly."""
+        return obj.landlord == request.user
 
-    # Landlord info — needed when showing property (ForeignKey relation).
-    # Only expose specific fields to avoid exposing sensitive User data.
-    landlord_id           = serializers.IntegerField(source="landlord.id", read_only=True)
-    landlord_name         = serializers.CharField(source="landlord.get_full_name", read_only=True)
-    landlord_picture      = serializers.ImageField(source="landlord.profile_picture", read_only=True)
-    landlord_is_verified  = serializers.BooleanField(source="landlord.is_verified", read_only=True)
-    landlord_is_top_rated = serializers.BooleanField(source="landlord.is_top_rated", read_only=True)
 
-    class Meta:
-        model = Property
-        fields = [
-            "id",
-            # ── Ownership ────────────────────────────────────
-            "landlord_id", "landlord_name", "landlord_picture",
-            "landlord_is_verified", "landlord_is_top_rated",
-            # ── Basic Info ───────────────────────────────────
-            "title", "description", "property_type",
-            # ── Pricing ──────────────────────────────────────
-            "price",
-            # ── Location ─────────────────────────────────────
-            "city", "district", "address", "latitude", "longitude",
-            # ── University Proximity ─────────────────────────
-            "nearby_university", "distance_to_university", "transport_type",
-            # ── Room Details ─────────────────────────────────
-            "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
-            "floor", "area_sqm", "gender_preference",
-            # ── Amenities ────────────────────────────────────
-            "amenities",
-            # ── Stay Duration ────────────────────────────────
-            "min_stay_months", "max_stay_months",
-            # ── Status & Visibility ──────────────────────────
-            "status", "is_featured",
-            # ── Analytics ────────────────────────────────────
-            "view_count",
-            # ── Reviews (computed) ───────────────────────────
-            "average_rating", "review_count",
-            # ── Images ───────────────────────────────────────
-            "images",
-            # ── Timestamps ───────────────────────────────────
-            "created_at", "updated_at",
-        ]
-        read_only_fields = ["id", "view_count", "is_featured", "created_at", "updated_at"]
+```
+# ────────────────────────End Permissions────────────────────────────────────
 
 
 
-class PropertyListSerializer(serializers.ModelSerializer):
-    """
-    Lightweight card view — used on FindRoom and Home page listing grids.
-    Only the fields needed to render a card. Keeps list responses fast.
-    """
 
-    cover_image          = serializers.SerializerMethodField()
-    average_rating       = serializers.FloatField(read_only=True)
-    review_count         = serializers.IntegerField(read_only=True)
-    landlord_name        = serializers.CharField(source="landlord.get_full_name", read_only=True)
-    landlord_is_verified = serializers.BooleanField(source="landlord.is_verified", read_only=True)
-
-    class Meta:
-        model  = Property
-        fields = [
-            "id", "title", "property_type", "price",
-            "city", "district",
-            "nearby_university", "distance_to_university", "transport_type",
-            "num_beds", "num_roommates", "gender_preference",
-            "amenities", "status", "is_featured",
-            "average_rating", "review_count",
-            "cover_image",
-            "landlord_name", "landlord_is_verified",
-            "created_at",
-        ]
-
-    def get_cover_image(self, obj):
-        """Returns the URL of the cover image, or None if no images uploaded."""
-        cover = obj.images.filter(is_cover=True).first() or obj.images.first()
-        if not cover:
-            return None
-        request = self.context.get("request")
-        # Build absolute URL so frontend doesn't need to prefix the media root
-        # request.build_absolute_uri() adds full domain (e.g., http://localhost:8000) to URL
-        # Without it, frontend only gets "/media/image.jpg" which may not work
-        return request.build_absolute_uri(cover.image.url) if request else cover.image.url
-
-
-
-class PropertyCreateSerializer(serializers.ModelSerializer):
-    """
-    POST /api/properties/create/ — landlord creates a new listing.
-    owner is injected in the view via save(owner=request.user), not sent by client.
-    
-    """
-
-    # Accept uploaded images at creation time (optional)
-    uploaded_images = serializers.ListField(child=serializers.ImageField(),write_only=True,required=False,)
-
-    class Meta:
-        model = Property
-        fields = [
-            "title", "description", "property_type",
-            "price",
-            "city", "district", "address", "latitude", "longitude",
-            "nearby_university", "distance_to_university", "transport_type",
-            "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
-            "floor", "area_sqm", "gender_preference",
-            "amenities",
-            "min_stay_months", "max_stay_months",
-            "status",
-            "uploaded_images",
-        ]
-
-    def validate_price(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Price must be greater than 0.")
-        return value
-
-    def validate(self, data):
-        min_stay = data.get("min_stay_months", 1)
-        max_stay = data.get("max_stay_months")
-        if max_stay and max_stay < min_stay:
-            raise serializers.ValidationError("max_stay_months cannot be less than min_stay_months.")
-        return data
-
-    def create(self, validated_data):
-        images = validated_data.pop("uploaded_images", [])
-        property_obj = Property.objects.create(**validated_data)
-
-        for index, image_file in enumerate(images):
-            PropertyImage.objects.create(
-                property=property_obj,
-                image=image_file,
-                is_cover=(index == 0),  # first uploaded image is the cover
-            )
-
-        return property_obj
-
-
-class PropertyUpdateSerializer(serializers.ModelSerializer):
-    """
-    PATCH /api/properties/<id>/edit/ — landlord edits their own listing.
-    All fields optional. Images managed separately via PropertyImageSerializer.
-    """
-
-    class Meta:
-        model = Property
-        fields = [
-            "title", "description", "property_type",
-            "price",
-            "city", "district", "address", "latitude", "longitude",
-            "nearby_university", "distance_to_university", "transport_type",
-            "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
-            "floor", "area_sqm", "gender_preference",
-            "amenities",
-            "min_stay_months", "max_stay_months",
-            "status",
-        ]
-
-    def validate_price(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Price must be greater than 0.")
-        return value
-
-    def validate(self, data):
-        # On partial update, pull existing values if not being changed
-        instance = self.instance
-        min_stay = data.get("min_stay_months", instance.min_stay_months)
-        max_stay = data.get("max_stay_months", instance.max_stay_months)
-        if max_stay and max_stay < min_stay:
-            raise serializers.ValidationError("max_stay_months cannot be less than min_stay_months.")
-        return data
-
-## end serializers ##
-
-
-
-##  filters ##
-
+# ────────────────────────Start Filters────────────────────────────────────
+```
 """
 Properties API filters.
 Replaces the manual apply_filters() helper in views.py.
@@ -643,53 +695,37 @@ class PropertyFilter(django_filters.FilterSet):
             "is_featured", "amenity",
         ]
 
-##  end filters ##
+```
+# ────────────────────────End Filters────────────────────────────────────
 
 
 
-##  permissions ##
-
-"""
-Properties API permissions.
-Object-level permission so ownership checks don't live inside every view.
-"""
-from rest_framework.permissions import BasePermission, IsAuthenticated
+# ────────────────────────Start Signals────────────────────────────────────
+```
 
 
-class IsPropertyOwner(BasePermission):
-    """
-    Object-level permission — allows access only if the requesting user
-    owns the property being accessed.
-
-    Usage in views:
-        permission_classes = [IsPropertyOwner]
-
-        def patch(self, request, property_id):
-            prop = get_object_or_404(Property, id=property_id)
-            self.check_object_permissions(request, prop)   ← triggers has_object_permission
-            ...
-    """
-    message = "You do not own this property."
-
-    def has_permission(self, request, view):
-        """User must be authenticated and be a landlord."""
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.role == "landlord"
-        )
-
-    def has_object_permission(self, request, view, obj):
-        """obj is the Property instance. Checks landlord field directly."""
-        return obj.landlord == request.user
-
-
-##  end permissions ##
+```
+# ────────────────────────End Signals──────────────────────────────────────
 
 
 
-## models ##
 
+
+# ────────────────────────Start Apps────────────────────────────────────
+```
+
+
+```
+# ────────────────────────End Apps──────────────────────────────────────
+
+
+
+
+
+
+# ────────────────────────Start Model────────────────────────────────────
+
+```
 """
 Properties app models.
 Handles property listings and their images.
@@ -726,6 +762,7 @@ class Property(models.Model):
         ("available", "Available"),
         ("rented", "Rented"),
         ("unavailable", "Unavailable"),
+        ("reserved", "Reserved"),
     ]
     TRANSPORT_CHOICES = [
         ("walk", "Walking"),
@@ -835,5 +872,7 @@ class PropertyImage(models.Model):
 
     def __str__(self):
         return f"Image for {self.property.title} ({'Cover' if self.is_cover else 'Gallery'})"
+```
 
-## end models ##
+# ────────────────────────End Model──────────────────────────────────────
+

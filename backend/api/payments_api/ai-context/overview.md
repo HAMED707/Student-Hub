@@ -1,4 +1,4 @@
-
+## payment overview ##
 
 
 # ────────────────────────Start URL─────────────────────────────────────
@@ -376,8 +376,9 @@ class PaymobWebhookView(View):
         except Exception:
             return HttpResponse(status=400)
 
+        received_hmac = request.GET.get("hmac", "")
         # Step 1: verify this is really from Paymob
-        if not self._verify_hmac(data):
+        if not self._verify_hmac(data, received_hmac):
             return HttpResponse("Invalid HMAC", status=403)
 
         obj            = data.get("obj", {})
@@ -421,33 +422,40 @@ class PaymobWebhookView(View):
 
         return HttpResponse(status=200)
 
-    def _verify_hmac(self, data):
+    def _verify_hmac(self, data ,received_hmac):
         """Verify Paymob HMAC signature."""
-        received_hmac = data.get("hmac", "")
         obj           = data.get("obj", {})
 
+        def fmt(value):
+            """Convert Python booleans to lowercase — Paymob expects true/false not True/False"""
+            if isinstance(value, bool):
+                return "true" if value else "false"
+            if value is None:
+                return ""
+            return str(value)
         fields = [
-            str(obj.get("amount_cents",           "")),
-            str(obj.get("created_at",             "")),
-            str(obj.get("currency",               "")),
-            str(obj.get("error_occured",          "")),
-            str(obj.get("has_parent_transaction", "")),
-            str(obj.get("id",                     "")),
-            str(obj.get("integration_id",         "")),
-            str(obj.get("is_3d_secure",           "")),
-            str(obj.get("is_auth",                "")),
-            str(obj.get("is_capture",             "")),
-            str(obj.get("is_refunded",            "")),
-            str(obj.get("is_standalone_payment",  "")),
-            str(obj.get("is_voided",              "")),
-            str(obj.get("order", {}).get("id",    "")),
-            str(obj.get("owner",                  "")),
-            str(obj.get("pending",                "")),
-            str(obj.get("source_data", {}).get("pan",      "")),
-            str(obj.get("source_data", {}).get("sub_type", "")),
-            str(obj.get("source_data", {}).get("type",     "")),
-            str(obj.get("success",                "")),
+            fmt(obj.get("amount_cents",           "")),
+            fmt(obj.get("created_at",             "")),
+            fmt(obj.get("currency",               "")),
+            fmt(obj.get("error_occured",          "")),
+            fmt(obj.get("has_parent_transaction", "")),
+            fmt(obj.get("id",                     "")),
+            fmt(obj.get("integration_id",         "")),
+            fmt(obj.get("is_3d_secure",           "")),
+            fmt(obj.get("is_auth",                "")),
+            fmt(obj.get("is_capture",             "")),
+            fmt(obj.get("is_refunded",            "")),
+            fmt(obj.get("is_standalone_payment",  "")),
+            fmt(obj.get("is_voided",              "")),
+            fmt(obj.get("order", {}).get("id",    "")),
+            fmt(obj.get("owner",                  "")),
+            fmt(obj.get("pending",                "")),
+            fmt(obj.get("source_data", {}).get("pan",      "")),
+            fmt(obj.get("source_data", {}).get("sub_type", "")),
+            fmt(obj.get("source_data", {}).get("type",     "")),
+            fmt(obj.get("success",                "")),
         ]
+
 
         expected = hmac.new(
             settings.PAYMOB_HMAC_SECRET.encode(),
@@ -455,8 +463,8 @@ class PaymobWebhookView(View):
             hashlib.sha512
         ).hexdigest()
 
+        
         return hmac.compare_digest(expected, received_hmac)
-
 ```
 
 # ────────────────────────End View──────────────────────────────────────
@@ -535,7 +543,16 @@ class Payment(models.Model):
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
-
+    # Add this Meta class to your Payment model
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["booking", "payment_type"],
+                condition=models.Q(status="completed"),
+                name="unique_completed_payment_type_per_booking"
+            )
+        ]
+        
     def __str__(self):
         return f"{self.payment_type} | {self.booking} | {self.status}"
 ```
