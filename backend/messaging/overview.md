@@ -12,26 +12,26 @@ from messaging.consumers import ChatConsumer
 websocket_urlpatterns = [
     re_path(r"^ws/chat/(?P<conversation_id>\d+)/$", ChatConsumer.as_asgi()),
 ]
-
 ```
 # ────────────────────────End Routing──────────────────────────────────────
 
 # ────────────────────────Start Middleware────────────────────────────────────
 ```
-
 from urllib.parse import parse_qs
 
+
 from channels.middleware import BaseMiddleware
+
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.tokens import AccessToken
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.exceptions import InvalidToken , TokenError
 
 from accounts.models import Users
 
-
 @database_sync_to_async
 def get_user_from_token(token_key):
+
     """
     Validates the JWT access token and returns the matching User.
     Returns AnonymousUser if the token is missing, invalid, or expired.
@@ -44,6 +44,7 @@ def get_user_from_token(token_key):
 
 
 class JWTAuthMiddleware(BaseMiddleware):
+
     """
     Reads the JWT token from the WebSocket query string.
 
@@ -54,11 +55,10 @@ class JWTAuthMiddleware(BaseMiddleware):
     WebSocket connections — headers are not accessible the same way.
     Passing the token as a query param is the standard workaround.
     """
-
     async def __call__(self, scope, receive, send):
         query_string = scope.get("query_string", b"").decode()
         params       = parse_qs(query_string)
-        token_list   = params.get("token", [])
+        token_list   = params.get("token",[])
         token        = token_list[0] if token_list else None
 
         scope["user"] = (
@@ -84,7 +84,6 @@ from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 
-
 class ChatConsumer(AsyncWebsocketConsumer):
     """
     Handles one WebSocket connection for a single conversation room.
@@ -98,8 +97,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         receive()    → save message to DB → broadcast to group
         chat_message() → push event to this specific WebSocket client
         disconnect() → leave group
-    """
-
+    """    
     async def connect(self):
         self.conversation_id = self.scope["url_route"]["kwargs"]["conversation_id"]
         self.room_group_name = f"chat_{self.conversation_id}"
@@ -109,73 +107,70 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if isinstance(self.user, AnonymousUser):
             await self.close()
             return
-
         # Reject users who are not part of this conversation
         if not await self._user_in_conversation():
             await self.close()
             return
-
-        # Join the channel group for this conversation room
-        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        
+        await self.channel_layer.group_add(self.room_group_name,self.channel_name)
         await self.accept()
 
-    async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
+    # ─────── receive ───────────────────────────────────────────────────────────
+          
     async def receive(self, text_data):
         """
         Called when the connected client sends a message over the WebSocket.
         Saves it to the database then broadcasts it to the entire group.
         """
+
         try:
-            data = json.loads(text_data)
+            data=json.loads(text_data)
         except json.JSONDecodeError:
             return
-
-        body = data.get("body", "").strip()
+        
+        body= data.get("body","").strip()
         if not body:
             return
-
+        
         message = await self._save_message(body)
 
-        # group_send delivers the event to every consumer in the group.
-        # The "type" key maps directly to the method name below (chat_message).
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 "type":       "chat_message",
-                "id":         message.id,
-                "body":       message.body,
-                "sender_id":  self.user.id,
+                "id":          message.id,
+                "body":        message.body,
+                "sender_id":   self.user.id, 
                 "sender_name": await self._get_full_name(),
-                "created_at": str(message.created_at),
+                "created_at" : str(message.created_at), 
             },
         )
 
-    async def chat_message(self, event):
+    # ─────── send ───────────────────────────────────────────────────────────  
+    async def chat_message(self,event):
         """
         Called by the channel layer when group_send delivers an event
         with type="chat_message". Pushes the payload to the WebSocket client.
-        """
+        """ 
         await self.send(text_data=json.dumps(event))
 
+
     # ── Private DB helpers ────────────────────────────────────────────────────
-    # All DB access inside a consumer must go through database_sync_to_async
-    # because consumers run in an async context.
 
     @database_sync_to_async
     def _user_in_conversation(self):
-        from messaging.models import Conversation
+        from .models import Conversation
         return Conversation.objects.filter(
             Q(initiator=self.user) | Q(receiver=self.user),
             id=self.conversation_id,
         ).exists()
-
+    
     @database_sync_to_async
-    def _save_message(self, body):
-        from messaging.models import Conversation, Message
-        conversation = Conversation.objects.get(id=self.conversation_id)
-        return Message.objects.create(
+    def _save_message(self,body):
+        from .models import Conversation ,Message
+        conversation=Conversation.objects.get(id=self.conversation_id)
+        return Message.objects.create( 
             conversation=conversation,
             sender=self.user,
             body=body,
@@ -184,6 +179,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _get_full_name(self):
         return self.user.get_full_name()
+
+    # ─────── disconnect ───────────────────────────────────────────────────────────    
+    async def disconnect(self,close_code):
+        await self.channel_layer.group_discard(self.room_group_name,self.channel_name)
 ```
 # ────────────────────────End Consumers──────────────────────────────────────
 

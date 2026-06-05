@@ -1,0 +1,442 @@
+{
+  "info": {
+    "name": "StudentHub — Messaging",
+    "_postman_id": "studenthub-messaging-v1",
+    "description": "Full test suite for the messaging app.\n\nRun the requests in order:\n1. Register as Student\n2. Login as Student → token auto-saved\n3. Then run the rest",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",        "value": "http://localhost:8000" },
+    { "key": "token",           "value": "" },
+    { "key": "conversation_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0. Auth",
+      "item": [
+        {
+          "name": "1. Register as Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has username', () => pm.expect(json.username).to.be.a('string'));",
+                  "pm.test('Role is student', () => pm.expect(json.role).to.equal('student'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"student1\",\n  \"email\": \"student1@test.com\",\n  \"password\": \"testpass123\",\n  \"role\": \"student\"\n}"
+            }
+          }
+        },
+        {
+          "name": "2. Login as Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('token', json.access);",
+                  "pm.test('Got access token', () => pm.expect(json.access).to.be.a('string'));",
+                  "pm.test('Got refresh token', () => pm.expect(json.refresh).to.be.a('string'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/token/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "token", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"student1\",\n  \"password\": \"testpass123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Conversations",
+      "item": [
+        {
+          "name": "1. List my conversations (empty at start)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns empty array', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.be.an('array');",
+                  "  pm.expect(json.length).to.equal(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", ""]
+            }
+          }
+        },
+        {
+          "name": "2. Start a standalone DM",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('conversation_id', json.id);",
+                  "pm.test('Has conversation id', () => pm.expect(json.id).to.be.a('number'));",
+                  "pm.test('Has other_user', () => pm.expect(json.other_user).to.be.an('object'));",
+                  "pm.test('No booking linked', () => pm.expect(json.booking).to.be.null);",
+                  "pm.test('Has last_message preview', () => pm.expect(json.last_message).to.be.an('object'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiver_id\": 2,\n  \"message\": \"Hey, is the room still available?\"\n}",
+              "description": "Change receiver_id to a real user ID in your DB"
+            }
+          }
+        },
+        {
+          "name": "3. Start a booking-linked conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has booking linked', () => pm.expect(json.booking).to.be.a('number'));",
+                  "pm.test('Has property linked', () => pm.expect(json.property).to.be.a('number'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiver_id\": 2,\n  \"booking_id\": 1,\n  \"message\": \"Hi, I just paid the deposit. When can I move in?\"\n}",
+              "description": "Change receiver_id and booking_id to real IDs in your DB"
+            }
+          }
+        },
+        {
+          "name": "4. Start same DM again (must return existing)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "const saved = pm.collectionVariables.get('conversation_id');",
+                  "pm.test('Returns same conversation id', () => pm.expect(String(json.id)).to.equal(String(saved)));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiver_id\": 2,\n  \"message\": \"Just following up!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "5. List conversations (should have entries now)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has at least 1 conversation', () => pm.expect(json.length).to.be.above(0));",
+                  "pm.test('Each has other_user', () => json.forEach(c => pm.expect(c.other_user).to.be.an('object')));",
+                  "pm.test('Each has unread_count', () => json.forEach(c => pm.expect(c.unread_count).to.be.a('number')));",
+                  "pm.test('Each has last_message', () => json.forEach(c => pm.expect(c.last_message).to.not.equal(undefined)));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Messages",
+      "item": [
+        {
+          "name": "1. Load message history",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Returns array', () => pm.expect(json).to.be.an('array'));",
+                  "pm.test('Has at least 1 message', () => pm.expect(json.length).to.be.above(0));",
+                  "pm.test('Each message has body', () => json.forEach(m => pm.expect(m.body).to.be.a('string')));",
+                  "pm.test('Each message has sender', () => json.forEach(m => pm.expect(m.sender).to.be.a('number')));",
+                  "pm.test('Each message has is_read', () => json.forEach(m => pm.expect(m.is_read).to.be.a('boolean')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/{{conversation_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", "{{conversation_id}}", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Edge Cases",
+      "item": [
+        {
+          "name": "Message yourself (should fail 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error mentions yourself', () => {",
+                  "  pm.expect(JSON.stringify(pm.response.json())).to.include('yourself');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiver_id\": 1,\n  \"message\": \"Talking to myself\"\n}",
+              "description": "Set receiver_id to YOUR OWN user id"
+            }
+          }
+        },
+        {
+          "name": "Non-existent receiver (should fail 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiver_id\": 99999,\n  \"message\": \"Does this user exist?\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Empty message body (should fail 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiver_id\": 2,\n  \"message\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Access conversation you don't own (should fail 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/99999/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", "99999", ""]
+            }
+          }
+        },
+        {
+          "name": "No auth token (should fail 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messaging", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. WebSocket (manual)",
+      "item": [
+        {
+          "name": "Instructions — read me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/messaging/",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Postman WebSocket test (manual steps):\n\n1. Open Postman → New → WebSocket Request\n2. URL: ws://localhost:8000/ws/chat/{{conversation_id}}/?token={{token}}\n   (copy the actual values from collection variables)\n3. Click Connect\n4. In the message box send:\n   {\"body\": \"Hello from WebSocket!\"}\n5. Open a second Postman WS tab as the other user with their token\n6. Both tabs should instantly receive:\n\n{\n  \"type\": \"chat_message\",\n  \"id\": 1,\n  \"body\": \"Hello from WebSocket!\",\n  \"sender_id\": 1,\n  \"sender_name\": \"Ahmed Ali\",\n  \"created_at\": \"2025-01-01T12:00:00Z\"\n}\n\nIf you connect with a bad token you should get disconnected immediately."
+          }
+        }
+      ]
+    }
+  ]
+}
