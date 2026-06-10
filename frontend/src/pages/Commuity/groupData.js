@@ -16,9 +16,24 @@ export const initialGroups = [
     recentPostsCount: 5,
     latestActivity: "Ahmed posted 15 minutes ago",
     activityFeed: [
-      { id: 1, user: "Ahmed", action: "posted an apartment update", time: "15 min ago" },
-      { id: 2, user: "Mariam", action: "asked about room share", time: "1 hr ago" },
-      { id: 3, user: "Saeed", action: "shared a study group event", time: "3 hrs ago" },
+      {
+        id: 1,
+        user: "Ahmed",
+        action: "posted an apartment update",
+        time: "15 min ago",
+      },
+      {
+        id: 2,
+        user: "Mariam",
+        action: "asked about room share",
+        time: "1 hr ago",
+      },
+      {
+        id: 3,
+        user: "Saeed",
+        action: "shared a study group event",
+        time: "3 hrs ago",
+      },
     ],
     image:
       "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=900&q=80",
@@ -43,9 +58,24 @@ export const initialGroups = [
     recentPostsCount: 18,
     latestActivity: "Nour shared a new housing lead",
     activityFeed: [
-      { id: 1, user: "Nour", action: "shared a new housing lead", time: "28 min ago" },
-      { id: 2, user: "Karim", action: "commented on a landlord review", time: "2 hrs ago" },
-      { id: 3, user: "Laila", action: "posted a weekend meetup", time: "4 hrs ago" },
+      {
+        id: 1,
+        user: "Nour",
+        action: "shared a new housing lead",
+        time: "28 min ago",
+      },
+      {
+        id: 2,
+        user: "Karim",
+        action: "commented on a landlord review",
+        time: "2 hrs ago",
+      },
+      {
+        id: 3,
+        user: "Laila",
+        action: "posted a weekend meetup",
+        time: "4 hrs ago",
+      },
     ],
     image:
       "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=900&q=80",
@@ -70,9 +100,24 @@ export const initialGroups = [
     recentPostsCount: 9,
     latestActivity: "Reem posted a study guide",
     activityFeed: [
-      { id: 1, user: "Reem", action: "posted a study guide", time: "40 min ago" },
-      { id: 2, user: "Omar", action: "requested roommate tips", time: "6 hrs ago" },
-      { id: 3, user: "Salma", action: "shared a transport update", time: "Yesterday" },
+      {
+        id: 1,
+        user: "Reem",
+        action: "posted a study guide",
+        time: "40 min ago",
+      },
+      {
+        id: 2,
+        user: "Omar",
+        action: "requested roommate tips",
+        time: "6 hrs ago",
+      },
+      {
+        id: 3,
+        user: "Salma",
+        action: "shared a transport update",
+        time: "Yesterday",
+      },
     ],
     image:
       "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=900&q=80",
@@ -97,9 +142,19 @@ export const initialGroups = [
     recentPostsCount: 12,
     latestActivity: "Hana asked about compound fees",
     activityFeed: [
-      { id: 1, user: "Hana", action: "asked about compound fees", time: "12 min ago" },
+      {
+        id: 1,
+        user: "Hana",
+        action: "asked about compound fees",
+        time: "12 min ago",
+      },
       { id: 2, user: "Adam", action: "posted a new sublet", time: "1 hr ago" },
-      { id: 3, user: "Mona", action: "shared a nearby cafe review", time: "5 hrs ago" },
+      {
+        id: 3,
+        user: "Mona",
+        action: "shared a nearby cafe review",
+        time: "5 hrs ago",
+      },
     ],
     image:
       "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=900&q=80",
@@ -124,9 +179,24 @@ export const initialGroups = [
     recentPostsCount: 6,
     latestActivity: "Tamer posted a roommate match",
     activityFeed: [
-      { id: 1, user: "Tamer", action: "posted a roommate match", time: "1 hr ago" },
-      { id: 2, user: "Aya", action: "asked about rent splitting", time: "3 hrs ago" },
-      { id: 3, user: "Mazen", action: "shared a new flat visit", time: "Yesterday" },
+      {
+        id: 1,
+        user: "Tamer",
+        action: "posted a roommate match",
+        time: "1 hr ago",
+      },
+      {
+        id: 2,
+        user: "Aya",
+        action: "asked about rent splitting",
+        time: "3 hrs ago",
+      },
+      {
+        id: 3,
+        user: "Mazen",
+        action: "shared a new flat visit",
+        time: "Yesterday",
+      },
     ],
     image:
       "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=900&q=80",
@@ -151,9 +221,19 @@ export const initialGroups = [
     recentPostsCount: 15,
     latestActivity: "Sara shared a new internship post",
     activityFeed: [
-      { id: 1, user: "Sara", action: "shared a new internship post", time: "15 min ago" },
+      {
+        id: 1,
+        user: "Sara",
+        action: "shared a new internship post",
+        time: "15 min ago",
+      },
       { id: 2, user: "Omar", action: "posted a job alert", time: "2 hrs ago" },
-      { id: 3, user: "Lina", action: "asked about part-time help", time: "Yesterday" },
+      {
+        id: 3,
+        user: "Lina",
+        action: "asked about part-time help",
+        time: "Yesterday",
+      },
     ],
     image:
       "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=900&q=80",

@@ -172,7 +172,6 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 font-sans">
       <Routes>
         <Route index element={<Navigate to="/home" replace />} />
-        
 
         {/* Auth */}
         <Route path="/join" element={<JoinPage />} />
@@ -215,7 +214,10 @@ export default function App() {
         {/* ✅ Owner */}
         <Route path="/owner" element={<OwnerLayout />}>
           <Route index element={<Navigate to="/owner/overview" replace />} />
-          <Route path="dashboard" element={<Navigate to="/owner/overview" replace />} />
+          <Route
+            path="dashboard"
+            element={<Navigate to="/owner/overview" replace />}
+          />
           <Route path="overview" element={<Overview />} />
           <Route path="properties" element={<OwnerProperties />} />
           <Route path="payments" element={<OwnerPayments />} />

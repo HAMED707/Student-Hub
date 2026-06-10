@@ -125,7 +125,10 @@ const GroupDetails = () => {
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   {Array.from({ length: 4 }).map((_, index) => (
-                    <div key={index} className="h-24 animate-pulse rounded-3xl bg-gray-200" />
+                    <div
+                      key={index}
+                      className="h-24 animate-pulse rounded-3xl bg-gray-200"
+                    />
                   ))}
                 </div>
                 <div className="h-32 animate-pulse rounded-3xl bg-gray-200" />
@@ -141,8 +144,12 @@ const GroupDetails = () => {
     return (
       <div className="mx-auto max-w-4xl p-4 sm:p-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-8 text-center shadow-sm">
-          <p className="text-sm font-black uppercase tracking-[0.2em] text-[#155BC2]">Group not found</p>
-          <h1 className="mt-4 text-3xl font-black text-[#091E42]">This group does not exist.</h1>
+          <p className="text-sm font-black uppercase tracking-[0.2em] text-[#155BC2]">
+            Group not found
+          </p>
+          <h1 className="mt-4 text-3xl font-black text-[#091E42]">
+            This group does not exist.
+          </h1>
           <p className="mt-2 text-sm text-gray-500">
             The group link may be invalid or the group has been removed.
           </p>
@@ -214,8 +221,12 @@ const GroupDetails = () => {
             {group.category}
           </div>
           <div className="absolute bottom-4 left-4 right-4">
-            <p className="text-sm font-bold text-white/70">{group.city} · {group.university}</p>
-            <h1 className="mt-2 text-3xl font-black text-white md:text-4xl">{group.name}</h1>
+            <p className="text-sm font-bold text-white/70">
+              {group.city} · {group.university}
+            </p>
+            <h1 className="mt-2 text-3xl font-black text-white md:text-4xl">
+              {group.name}
+            </h1>
           </div>
         </div>
 
@@ -237,29 +248,47 @@ const GroupDetails = () => {
             </div>
 
             <div className="rounded-3xl border border-gray-100 bg-[#F8FAFC] p-5">
-              <p className="text-sm font-black text-[#091E42]">About this group</p>
-              <p className="mt-3 text-sm leading-7 text-gray-600">{group.desc}</p>
+              <p className="text-sm font-black text-[#091E42]">
+                About this group
+              </p>
+              <p className="mt-3 text-sm leading-7 text-gray-600">
+                {group.desc}
+              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-400">Latest activity</p>
-                <p className="mt-3 text-sm font-black text-[#091E42]">{group.latestActivity}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-400">
+                  Latest activity
+                </p>
+                <p className="mt-3 text-sm font-black text-[#091E42]">
+                  {group.latestActivity}
+                </p>
               </div>
               <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-400">Last post</p>
-                <p className="mt-3 text-sm font-black text-[#091E42]">{group.lastPostTime}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-400">
+                  Last post
+                </p>
+                <p className="mt-3 text-sm font-black text-[#091E42]">
+                  {group.lastPostTime}
+                </p>
               </div>
               <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-400">Last active</p>
-                <p className="mt-3 text-sm font-black text-[#091E42]">{group.lastActiveMember}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-400">
+                  Last active
+                </p>
+                <p className="mt-3 text-sm font-black text-[#091E42]">
+                  {group.lastActiveMember}
+                </p>
               </div>
             </div>
           </div>
 
           <aside className="space-y-4 rounded-3xl border border-gray-100 bg-[#F8FAFC] p-5">
             <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-400">Group actions</p>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-400">
+                Group actions
+              </p>
               <div className="flex flex-wrap gap-3">
                 {group.isMyGroup ? (
                   <button
@@ -293,7 +322,9 @@ const GroupDetails = () => {
 
             <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-4 text-sm text-gray-600">
               <p className="font-black text-[#091E42]">Community highlights</p>
-              <p className="mt-2">{group.recentPostsCount} recent posts · {group.lastActivity}</p>
+              <p className="mt-2">
+                {group.recentPostsCount} recent posts · {group.lastActivity}
+              </p>
             </div>
           </aside>
         </div>
@@ -302,20 +333,33 @@ const GroupDetails = () => {
       <div className="mt-6 overflow-hidden rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#155BC2]">Recent activity feed</p>
-            <h2 className="mt-2 text-xl font-black text-[#091E42]">What’s happening in the group</h2>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#155BC2]">
+              Recent activity feed
+            </p>
+            <h2 className="mt-2 text-xl font-black text-[#091E42]">
+              What’s happening in the group
+            </h2>
           </div>
-          <p className="text-sm text-gray-500">{group.activityFeed.length} recent updates</p>
+          <p className="text-sm text-gray-500">
+            {group.activityFeed.length} recent updates
+          </p>
         </div>
 
         <div className="mt-6 space-y-3">
           {group.activityFeed.map((item) => (
-            <div key={item.id} className="rounded-3xl border border-gray-100 bg-[#F8FAFC] p-4">
+            <div
+              key={item.id}
+              className="rounded-3xl border border-gray-100 bg-[#F8FAFC] p-4"
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm font-black text-[#091E42]">{item.user}</p>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-400">{item.time}</span>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-400">
+                  {item.time}
+                </span>
               </div>
-              <p className="mt-2 text-sm leading-6 text-gray-600">{item.action}</p>
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                {item.action}
+              </p>
             </div>
           ))}
         </div>
