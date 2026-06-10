@@ -296,6 +296,8 @@ function CameraModal({ open, onClose, onCapture, disabled }) {
 
   useEffect(() => {
     if (!open) {
+      // Camera stream cleanup intentionally updates local camera state on open/close.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       stopStream();
       setErr("");
       return;
@@ -325,7 +327,7 @@ function CameraModal({ open, onClose, onCapture, disabled }) {
           await videoRef.current.play();
         }
         setReady(true);
-      } catch (e) {
+      } catch {
         setErr("Unable to access camera. Please allow camera permission.");
       }
     })();
@@ -334,7 +336,6 @@ function CameraModal({ open, onClose, onCapture, disabled }) {
       cancelled = true;
       stopStream();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, disabled]);
 
   const capture = async () => {
@@ -440,8 +441,8 @@ function CameraModal({ open, onClose, onCapture, disabled }) {
    Page
 ========================= */
 export default function Messages() {
-  const navigate = useNavigate();
   const { state } = useLocation();
+  const navigate = useNavigate();
 
   const [threads, setThreads] = useState(() => demoThreads);
   const [activeId, setActiveId] = useState(() => demoThreads[0]?.id || null);
@@ -450,6 +451,7 @@ export default function Messages() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const [text, setText] = useState("");
+  const [notice, setNotice] = useState("");
 
   // auto-resize textarea
   const textareaRef = useRef(null);
@@ -504,8 +506,10 @@ export default function Messages() {
 
     try {
       window.history.replaceState({}, document.title);
-    } catch (e) {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    } catch {
+      // History cleanup is best-effort only.
+    }
+     
   }, [state]);
 
   // بعد إضافة شات جديد: افتحه
@@ -542,12 +546,12 @@ export default function Messages() {
 
   useEffect(() => {
     resizeTextarea();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   useEffect(() => {
     resizeTextarea();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [text]);
 
   // filtered threads
@@ -570,7 +574,12 @@ export default function Messages() {
 
   // actions
   function viewProfile() {
-    alert("View Profile (connect later)");
+    if (!activeThread) return;
+    navigate(`/profile/${activeThread.studentId}`);
+  }
+  function showNotice(message) {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 2200);
   }
   function togglePin() {
     if (!activeThread) return;
@@ -774,6 +783,11 @@ export default function Messages() {
 
   return (
     <div className="h-screen w-full bg-[#F3F5F8]">
+      {notice && (
+        <div className="fixed right-6 top-6 z-[1000] rounded-xl bg-[#091E42] px-4 py-3 text-sm font-bold text-white shadow-lg">
+          {notice}
+        </div>
+      )}
       {/* full width, no side gaps */}
       <div className="h-full w-full grid grid-cols-[420px_1fr]">
         {/* Left: Threads */}
@@ -892,7 +906,7 @@ export default function Messages() {
               <button
                 type="button"
                 className="h-11 w-11 rounded-full bg-white border border-slate-200 text-[#1E4FD8] hover:bg-slate-50 active:scale-[0.98] transition flex items-center justify-center"
-                onClick={() => alert("Call action (connect later)")}
+                onClick={() => activeThread && showNotice(`Call request prepared for ${activeThread.name}. Connect this to your calling API.`)}
                 aria-label="Call"
               >
                 <Phone className="h-5 w-5" />

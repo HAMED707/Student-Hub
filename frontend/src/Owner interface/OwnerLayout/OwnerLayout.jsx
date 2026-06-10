@@ -19,15 +19,22 @@ export default function OwnerLayout() {
     []
   );
 
-  const profile = useMemo(() => ({ name: "Owner", email: "", avatarUrl: "" }), []);
+  const profile = useMemo(
+    () => ({
+      name: "Mohamed Ahmed",
+      email: "owner@studenthub.com",
+      avatarUrl: "https://randomuser.me/api/portraits/men/32.jpg",
+    }),
+    []
+  );
 
   const profileMenuItems = useMemo(
     () => [
       { id: "profile", label: "Profile", icon: <User size={16} />, to: "/owner/profile" },
       { id: "settings", label: "Settings", icon: <Settings size={16} />, to: "/owner/settings" },
-      { id: "logout", label: "Logout", icon: <LogOut size={16} />, onClick: () => console.log("logout") },
+      { id: "logout", label: "Logout", icon: <LogOut size={16} />, onClick: () => navigate("/login") },
     ],
-    []
+    [navigate]
   );
 
   return (

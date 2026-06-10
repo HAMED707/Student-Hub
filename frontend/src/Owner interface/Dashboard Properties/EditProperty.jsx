@@ -528,6 +528,14 @@ function FileBadge({ name, onRemove }) {
  * - بدون فراغات يمين/يسار كبيرة (full width)
  */
 export default function EditProperty({ onBack, initialProperty }) {
+  const [notice, setNotice] = useState("");
+  const [draftPayload, setDraftPayload] = useState(null);
+
+  const showNotice = (message) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 2200);
+  };
+
   const handleBack = () => {
     if (typeof onBack === "function") return onBack();
     if (window.history.length > 1) return window.history.back();
@@ -772,8 +780,8 @@ export default function EditProperty({ onBack, initialProperty }) {
       newFiles: { coverImage, propertyPhotos, videoTour, leaseAgreement, titleDeed },
     };
 
-    console.log("EDIT PROPERTY PAYLOAD:", payload);
-    alert("Updated. Check console payload.");
+    setDraftPayload(payload);
+    showNotice("Property update is ready for backend submission.");
   };
 
   if (!property) {
@@ -800,6 +808,11 @@ export default function EditProperty({ onBack, initialProperty }) {
 
   return (
     <div className="min-h-screen bg-[#F3F5F8] text-slate-900">
+      {notice && (
+        <div className="fixed right-6 top-6 z-[1000] rounded-xl bg-[#091E42] px-4 py-3 text-sm font-bold text-white shadow-lg">
+          {notice}
+        </div>
+      )}
       {/* Header (no top edit button) */}
       <div className=" border-b border-slate-200">
         <div className="w-full px-6 py-4">
@@ -1075,7 +1088,7 @@ export default function EditProperty({ onBack, initialProperty }) {
             <button
               type="button"
               className="rounded-[6px] bg-[#2563EB] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#1D4ED8]"
-              onClick={() => alert("Connect upload to your API")}
+              onClick={() => showNotice(coverImage || propertyPhotos.length || existingCoverName || existingPhotos.length ? "Photos are ready for backend upload." : "Choose photos first.")}
             >
               Upload
             </button>
@@ -1105,7 +1118,7 @@ export default function EditProperty({ onBack, initialProperty }) {
             <button
               type="button"
               className="rounded-[6px] bg-[#2563EB] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#1D4ED8]"
-              onClick={() => alert("Connect upload to your API")}
+              onClick={() => showNotice(videoTour || existingVideoName ? "Video is ready for backend upload." : "Choose a video first.")}
             >
               Upload
             </button>
@@ -1153,7 +1166,7 @@ export default function EditProperty({ onBack, initialProperty }) {
             <button
               type="button"
               className="rounded-[6px] bg-[#2563EB] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#1D4ED8]"
-              onClick={() => alert("Connect upload to your API")}
+              onClick={() => showNotice(leaseAgreement || titleDeed || existingLeaseName || existingDeedName ? "Legal files are ready for backend upload." : "Choose legal documents first.")}
             >
               Upload
             </button>
@@ -1163,8 +1176,13 @@ export default function EditProperty({ onBack, initialProperty }) {
         {/* زر Edit (فقط تحت) */}
         <div className="pt-1">
           <button type="submit" className="rounded-[6px] bg-[#2563EB] px-5 py-2.5 text-[12px] font-semibold text-white hover:bg-[#1D4ED8]">
-            Edit
+            Save Changes
           </button>
+          {draftPayload && (
+            <p className="mt-2 text-[12px] font-medium text-emerald-700">
+              Update payload prepared. Connect this submit handler to PATCH /owner/properties/:id.
+            </p>
+          )}
         </div>
       </form>
     </div>

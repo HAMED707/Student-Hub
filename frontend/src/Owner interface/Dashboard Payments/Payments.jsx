@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { 
   ChevronDown, CheckCircle2, XCircle, AlertCircle, Clock3, X, 
   Wallet, Hourglass, RotateCcw, TrendingUp, Download, Search, CalendarDays 
@@ -25,18 +25,6 @@ const Wave = ({ opacity = 0.12 }) => (
     />
   </svg>
 );
-
-const useOutside = (refs, onOutside, enabled = true) => {
-  useEffect(() => {
-    if (!enabled) return;
-    const handler = (e) => {
-      const inside = refs.some((r) => r.current && r.current.contains(e.target));
-      if (!inside) onOutside?.();
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [refs, onOutside, enabled]);
-};
 
 const formatEGP = (n) => `EGP ${Number(n || 0).toLocaleString("en-US")}`;
 
@@ -243,14 +231,7 @@ const WithdrawModal = ({ open, onClose, availableBalance = 0, onSubmit }) => {
   const [bankName, setBankName] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
-  const [iban, setIban] = useState("");
-  const [swift, setSwift] = useState("");
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    setError(""); setAmount(""); setMethod("instapay"); setInstapayId(""); setWalletProvider("vodafone_cash"); setWalletNumber(""); setBankName(""); setAccountName(""); setAccountNumber(""); setIban(""); setSwift("");
-  }, [open]);
 
   const handleSubmit = () => {
     // Basic validation
@@ -322,6 +303,7 @@ export default function OwnerPayments() {
   
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [notice, setNotice] = useState("");
 
   const stats = useMemo(() => ({ totalIncome: 16000, pendingPayments: 4000, refundedAmounts: 1200, yourEarnings: 15000 }), []);
 
@@ -352,16 +334,34 @@ export default function OwnerPayments() {
   const availableBalance = stats.yourEarnings;
 
   const onWithdrawSubmit = (payload) => {
-    console.log("Withdraw payload:", payload);
-    alert(`Withdraw request submitted: ${payload.method} - ${formatEGP(payload.amount)}`);
+    setNotice(`Withdraw request submitted: ${payload.method} - ${formatEGP(payload.amount)}`);
+    window.setTimeout(() => setNotice(""), 2200);
   };
 
   const handleExport = () => {
-    alert("Exporting data to CSV...");
+    const header = ["Transaction ID", "Property", "Date", "Amount", "Tenant", "Status"];
+    const rows = filtered.map((t) => [t.id, t.property, t.date, t.amount, t.tenant, t.status]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "owner-payments.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    setNotice("CSV export downloaded");
+    window.setTimeout(() => setNotice(""), 2200);
   };
 
   return (
     <div className="min-h-screen bg-[#F6F8FC] text-slate-800">
+      {notice && (
+        <div className="fixed right-6 top-6 z-[1000] rounded-xl bg-[#091E42] px-4 py-3 text-sm font-bold text-white shadow-lg">
+          {notice}
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-10 py-10">
         
         {/* Header */}
@@ -521,6 +521,7 @@ export default function OwnerPayments() {
 
         {/* Modals */}
         <WithdrawModal
+          key={withdrawOpen ? "withdraw-open" : "withdraw-closed"}
           open={withdrawOpen}
           onClose={() => setWithdrawOpen(false)}
           availableBalance={availableBalance}

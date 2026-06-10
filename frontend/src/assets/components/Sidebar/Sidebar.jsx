@@ -22,6 +22,7 @@ export default function Sidebar({
   logoutTo = "/login",
 
   // Actions
+  profile: profileProp = null,
   onLogout = null,
 
   // localStorage keys
@@ -85,11 +86,12 @@ export default function Sidebar({
 
   const profile = useMemo(() => {
     const u = user || {};
-    const name = u.fullName || u.name || u.userName || u.username || "";
-    const email = u.email || "";
-    const avatarUrl = u.avatarUrl || u.avatar || u.photoUrl || "";
+    const fallback = profileProp || {};
+    const name = u.fullName || u.name || u.userName || u.username || fallback.name || "";
+    const email = u.email || fallback.email || "";
+    const avatarUrl = u.avatarUrl || u.avatar || u.photoUrl || fallback.avatarUrl || fallback.avatar || "";
     return { name, email, avatarUrl };
-  }, [user]);
+  }, [user, profileProp]);
 
   // ------------------ DROPDOWN ------------------
   const [open, setOpen] = useState(false);
@@ -234,7 +236,7 @@ export default function Sidebar({
             )}
 
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-900 truncate">{profile.name || "—"}</p>
+              <p className="text-sm font-semibold text-slate-900 truncate">{profile.name || "Owner"}</p>
               <p className="text-xs text-slate-400 truncate">{profile.email}</p>
             </div>
 

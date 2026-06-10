@@ -22,6 +22,7 @@ import "leaflet/dist/leaflet.css";
 
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
+import ChatbotWidget from "../../assets/components/ChatbotWidget/ChatbotWidget.jsx";
 import logoFull from "../../assets/brand/icons/logo.svg";
 import heroBanner from "../../assets/images/banners/hero_banner.png";
 import studentsGroupImage from "../../assets/images/banners/image.png";
@@ -475,7 +476,7 @@ const Home = () => {
             subtitle="Move around the map or zoom in to discover more available housing places."
           />
           <div className="mt-6">
-            <div className="home-map h-[440px] overflow-hidden rounded-2xl border border-slate-200 shadow-sm md:h-[600px]">
+            <div className="home-map h-[440px] overflow-hidden rounded-2xl border border-slate-200 shadow-sm md:h-[450px]">
               <MapContainer
                 center={[30.0444, 31.2357]}
                 zoom={7}
@@ -651,6 +652,7 @@ const Home = () => {
         </section>
       </main>
 
+      {Boolean(import.meta.env.VITE_SHOW_LEGACY_FOOTER) && (
       <footer className="bg-[#091E42] px-4 py-12 text-white">
         <div className="mx-auto grid w-full max-w-[1500px] gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -698,6 +700,9 @@ const Home = () => {
           </div>
         </div>
       </footer>
+      )}
+
+      <ChatbotWidget />
     </div>
   );
 };

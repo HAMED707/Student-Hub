@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -486,6 +486,14 @@ function LocationPicker({ position, setPosition }) {
 
 /* ===================== Page ===================== */
 export default function AddNewProperty({ onBack }) {
+  const [notice, setNotice] = useState("");
+  const [draftPayload, setDraftPayload] = useState(null);
+
+  const showNotice = (message) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 2200);
+  };
+
   const handleBack = () => {
     if (typeof onBack === "function") return onBack();
     if (window.history.length > 1) window.history.back();
@@ -504,9 +512,12 @@ export default function AddNewProperty({ onBack }) {
   const [governorate, setGovernorate] = useState("Dakahlia");
   const citiesForGov = useMemo(() => EGYPT.find((x) => x.gov === governorate)?.cities ?? [], [governorate]);
   const [city, setCity] = useState("Mansoura");
-  useEffect(() => {
-    if (!citiesForGov.includes(city)) setCity(citiesForGov[0] ?? "");
-  }, [citiesForGov, city]);
+  const handleGovernorateChange = (nextGovernorate) => {
+    const safeGovernorate = typeof nextGovernorate === "string" ? nextGovernorate : "";
+    const nextCities = EGYPT.find((x) => x.gov === safeGovernorate)?.cities ?? [];
+    setGovernorate(safeGovernorate);
+    setCity(nextCities[0] ?? "");
+  };
 
   const [street, setStreet] = useState("El-Samaa Area");
   const [landmark, setLandmark] = useState("Mansoura University");
@@ -584,14 +595,17 @@ export default function AddNewProperty({ onBack }) {
     init[0] = ["bed", "desk", "wardrobe", "wifi_room", "private_bath", "study_lamp"];
     return init;
   });
-  useEffect(() => {
+
+  const handleRoomsCountChange = (value) => {
+    setRoomsCount(value);
+    const nextRoomsCount = Math.max(1, Math.min(20, parseInt(value || "1", 10) || 1));
     setRoomAmenities((prev) => {
       const next = [...prev];
-      if (next.length < roomsN) while (next.length < roomsN) next.push(["bed", "wardrobe"]);
-      if (next.length > roomsN) next.length = roomsN;
+      if (next.length < nextRoomsCount) while (next.length < nextRoomsCount) next.push(["bed", "wardrobe"]);
+      if (next.length > nextRoomsCount) next.length = nextRoomsCount;
       return next;
     });
-  }, [roomsN]);
+  };
 
   // Distance to University
   const [distanceKm, setDistanceKm] = useState("2.5");
@@ -635,12 +649,17 @@ export default function AddNewProperty({ onBack }) {
       },
       files: { coverImage, propertyPhotos, videoTour, leaseAgreement, titleDeed },
     };
-    console.log("ADD PROPERTY PAYLOAD:", payload);
-    alert("Ready. Check console payload.");
+    setDraftPayload(payload);
+    showNotice("Property draft is ready for backend submission.");
   };
 
   return (
     <div className="min-h-screen bg-[#F3F5F8] text-slate-900">
+      {notice && (
+        <div className="fixed right-6 top-6 z-[1000] rounded-xl bg-[#091E42] px-4 py-3 text-sm font-bold text-white shadow-lg">
+          {notice}
+        </div>
+      )}
       {/* Header */}
       <div className=" border-b border-slate-200">
   <div className="w-full px-6 py-4">
@@ -698,7 +717,7 @@ export default function AddNewProperty({ onBack }) {
 
               <div>
                 <Label required>Number of Rooms</Label>
-                <NumberInput value={roomsCount} onChange={setRoomsCount} min={1} max={20} placeholder="3" />
+                <NumberInput value={roomsCount} onChange={handleRoomsCountChange} min={1} max={20} placeholder="3" />
               </div>
 
               <div>
@@ -719,7 +738,7 @@ export default function AddNewProperty({ onBack }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label required>Governorate</Label>
-              <SelectInput value={governorate} onChange={setGovernororateSafe(setGovernorate)} options={governorates.map((g) => ({ value: g, label: g }))} />
+              <SelectInput value={governorate} onChange={handleGovernorateChange} options={governorates.map((g) => ({ value: g, label: g }))} />
             </div>
 
             <div>
@@ -910,7 +929,7 @@ export default function AddNewProperty({ onBack }) {
             <button
               type="button"
               className="rounded-[6px] bg-[#2563EB] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#1D4ED8]"
-              onClick={() => alert("Connect upload to your API")}
+              onClick={() => showNotice(coverImage || propertyPhotos.length ? "Selected photos are ready to upload." : "Choose photos first.")}
             >
               Upload
             </button>
@@ -933,7 +952,7 @@ export default function AddNewProperty({ onBack }) {
             <button
               type="button"
               className="rounded-[6px] bg-[#2563EB] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#1D4ED8]"
-              onClick={() => alert("Connect upload to your API")}
+              onClick={() => showNotice(videoTour ? "Selected video is ready to upload." : "Choose a video first.")}
             >
               Upload
             </button>
@@ -966,7 +985,7 @@ export default function AddNewProperty({ onBack }) {
             <button
               type="button"
               className="rounded-[6px] bg-[#2563EB] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#1D4ED8]"
-              onClick={() => alert("Connect upload to your API")}
+              onClick={() => showNotice(leaseAgreement || titleDeed ? "Legal documents are ready to upload." : "Choose legal documents first.")}
             >
               Upload
             </button>
@@ -976,15 +995,15 @@ export default function AddNewProperty({ onBack }) {
         {/* Submit */}
         <div className="pt-1">
           <button type="submit" className="rounded-[6px] bg-[#2563EB] px-5 py-2.5 text-[12px] font-semibold text-white hover:bg-[#1D4ED8]">
-            Add Property
+            {draftPayload ? "Update Draft" : "Add Property"}
           </button>
+          {draftPayload && (
+            <p className="mt-2 text-[12px] font-medium text-emerald-700">
+              Draft payload prepared. Connect this submit handler to POST /owner/properties.
+            </p>
+          )}
         </div>
       </form>
     </div>
   );
-}
-
-/* tiny helper to avoid accidental passing non-string */
-function setGovernororateSafe(setter) {
-  return (val) => setter(typeof val === "string" ? val : "");
 }

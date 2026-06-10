@@ -1,5 +1,12 @@
 import React, { useMemo } from "react";
-import { Routes, Route, Navigate, Outlet, useNavigate, useLocation } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 
 import JoinPage from "./pages/Auth/JoinPage.jsx";
 import Login from "./pages/Auth/Login/login.jsx";
@@ -12,17 +19,20 @@ import FindRoom from "./pages/FindRoom/FindRoom.jsx";
 import PropertyDetails from "./pages/FindRoom/PropertyDetails.jsx";
 import Community from "./pages/Commuity/Community.jsx";
 import Groups from "./pages/Commuity/Groups.jsx";
+import GroupDetails from "./pages/Commuity/GroupDetails.jsx";
 import CommunityMessages from "./pages/Commuity/Messages.jsx";
 import Posts from "./pages/Commuity/Posts.jsx";
 
 import Like from "./pages/Like/Like.jsx";
-import Booking from "./pages/Booking/Booking.jsx";
+import MyBookings from "./pages/MyBookings/MyBookings.jsx";
+import Notifications from "./pages/Notifications/Notifications.jsx";
 import Roommate from "./pages/Roommate/Roommate.jsx";
 import Service from "./pages/Service/Service.jsx";
 
 import Profile from "./pages/Profile/Profile.jsx";
 import EditProfile from "./pages/Profile/EditProfile.jsx";
 import PublicProfile from "./pages/Profile/PublicProfile.jsx";
+import Settings from "./pages/Profile/Settings.jsx";
 
 // ✅ Owner pages
 import Overview from "./Owner interface/Dashboard Overview/Overview.jsx";
@@ -31,14 +41,25 @@ import OwnerProperties from "./Owner interface/Dashboard Properties/Properties.j
 import OwnerMessages from "./Owner interface/Dashboard Messages/Messages.jsx";
 import AddNewProperty from "./Owner interface/Dashboard Properties/AddNewProperty.jsx";
 import EditProperty from "./Owner interface/Dashboard Properties/EditProperty.jsx";
+import OwnerBookings from "./Owner interface/Dashboard Bookings/Bookings.jsx";
+import OwnerNotifications from "./Owner interface/Dashboard Notifications/Notifications.jsx";
 import OwnerProfile from "./Owner interface/OwnerProfile/OwnerProfile.jsx";
 import OwnerSettings from "./Owner interface/OwnerProfile/Setting-Profile.jsx";
 
 // ✅ Sidebar + logo
 import Sidebar from "./assets/components/Sidebar/Sidebar.jsx";
+import Footer from "./assets/components/Footer/Footer.jsx";
 import logo from "./assets/brand/icons/logo.svg";
 
-import { LayoutDashboard, Building2, CreditCard, MessageSquare, User, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  Building2,
+  CreditCard,
+  MessageSquare,
+  User,
+  Settings as SettingsIcon,
+  LogOut,
+} from "lucide-react";
 
 const NotFound = () => (
   <div className="flex flex-col items-center justify-center h-screen text-center">
@@ -57,23 +78,66 @@ function OwnerLayout() {
 
   const menuItems = useMemo(
     () => [
-      { id: "overview", label: "Dashboard", icon: <LayoutDashboard size={18} />, to: "/owner/overview" },
-      { id: "properties", label: "Properties", icon: <Building2 size={18} />, to: "/owner/properties" },
-      { id: "payments", label: "Payments", icon: <CreditCard size={18} />, to: "/owner/payments" },
-      { id: "messages", label: "Messages", icon: <MessageSquare size={18} />, to: "/owner/messages" },
+      {
+        id: "overview",
+        label: "Dashboard",
+        icon: <LayoutDashboard size={18} />,
+        to: "/owner/overview",
+      },
+      {
+        id: "properties",
+        label: "Properties",
+        icon: <Building2 size={18} />,
+        to: "/owner/properties",
+      },
+      {
+        id: "payments",
+        label: "Payments",
+        icon: <CreditCard size={18} />,
+        to: "/owner/payments",
+      },
+      {
+        id: "messages",
+        label: "Messages",
+        icon: <MessageSquare size={18} />,
+        to: "/owner/messages",
+      },
     ],
-    []
+    [],
   );
 
-  const profile = useMemo(() => ({ name: "Owner", email: "", avatarUrl: "" }), []);
+  const profile = useMemo(
+    () => ({
+      name: "Mohamed Ahmed",
+      email: "owner@studenthub.com",
+      avatarUrl: "https://randomuser.me/api/portraits/men/32.jpg",
+    }),
+    [],
+  );
 
   // ✅ Dropdown (3 dots) — لازم يكون Route URL
   const profileMenuItems = useMemo(
     () => [
-      { id: "profile", label: "Profile", icon: <User size={16} />, to: "/owner/profile" }, // ✅ الصح
-      { id: "logout", label: "Logout", icon: <LogOut size={16} />, onClick: () => console.log("logout") },
+      {
+        id: "profile",
+        label: "Profile",
+        icon: <User size={16} />,
+        to: "/owner/profile",
+      }, // ✅ الصح
+      {
+        id: "settings",
+        label: "Settings",
+        icon: <SettingsIcon size={16} />,
+        to: "/owner/settings",
+      },
+      {
+        id: "logout",
+        label: "Logout",
+        icon: <LogOut size={16} />,
+        onClick: () => navigate("/login"),
+      },
     ],
-    []
+    [navigate],
   );
 
   return (
@@ -94,11 +158,20 @@ function OwnerLayout() {
   );
 }
 
+function StudentLayout() {
+  return (
+    <>
+      <Outlet />
+      <Footer />
+    </>
+  );
+}
+
 export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       <Routes>
-        <Route index element={<Navigate to="/Home" replace />} />
+        <Route index element={<Navigate to="/home" replace />} />
 
         {/* Auth */}
         <Route path="/join" element={<JoinPage />} />
@@ -108,36 +181,52 @@ export default function App() {
         <Route path="/forgot-password" element={<PasswordRecovery />} />
 
         {/* Main */}
-        <Route path="/home" element={<Home />} />
-        <Route path="/find-room" element={<FindRoom />} />
-        <Route path="/property/:id" element={<PropertyDetails />} />
-        <Route path="/find-room/:id" element={<PropertyDetails />} />
+        <Route element={<StudentLayout />}>
+          <Route path="/home" element={<Home />} />
+          <Route path="/find-room" element={<FindRoom />} />
+          <Route path="/property/:id" element={<PropertyDetails />} />
+          <Route path="/find-room/:id" element={<PropertyDetails />} />
 
-        <Route path="/community" element={<Community />} />
-        <Route path="/groups" element={<Groups />} />
-        <Route path="/messages" element={<CommunityMessages />} />
-        <Route path="/posts" element={<Posts />} />
+          <Route path="/community" element={<Community />} />
+          <Route path="/community/groups/:id" element={<GroupDetails />} />
+          <Route path="/groups" element={<Groups />} />
+          <Route path="/messages" element={<CommunityMessages />} />
+          <Route path="/chat/:id" element={<CommunityMessages />} />
+          <Route path="/posts" element={<Posts />} />
 
-        <Route path="/services" element={<Service />} />
-        <Route path="/roommate" element={<Roommate />} />
-        <Route path="/likes" element={<Like />} />
-        <Route path="/favorites" element={<Like />} />
-        <Route path="/bookings" element={<Booking />} />
+          <Route path="/services" element={<Service />} />
+          <Route path="/roommate" element={<Roommate />} />
+          <Route path="/likes" element={<Like />} />
+          <Route path="/favorites" element={<Like />} />
+          <Route path="/bookings" element={<MyBookings />} />
+          <Route path="/my-bookings" element={<MyBookings />} />
+          <Route path="/booking/:id" element={<MyBookings />} />
+          <Route path="/payments" element={<MyBookings />} />
+          <Route path="/notifications" element={<Notifications />} />
 
-        {/* Profile */}
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/edit-profile" element={<EditProfile />} />
-        <Route path="/profile/:id" element={<PublicProfile />} />
+          {/* Profile */}
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/edit-profile" element={<EditProfile />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/profile/:id" element={<PublicProfile />} />
+        </Route>
 
         {/* ✅ Owner */}
         <Route path="/owner" element={<OwnerLayout />}>
           <Route index element={<Navigate to="/owner/overview" replace />} />
+          <Route
+            path="dashboard"
+            element={<Navigate to="/owner/overview" replace />}
+          />
           <Route path="overview" element={<Overview />} />
           <Route path="properties" element={<OwnerProperties />} />
           <Route path="payments" element={<OwnerPayments />} />
           <Route path="messages" element={<OwnerMessages />} />
+          <Route path="bookings" element={<OwnerBookings />} />
+          <Route path="notifications" element={<OwnerNotifications />} />
           <Route path="properties/new" element={<AddNewProperty />} />
           <Route path="properties/edit" element={<EditProperty />} />
+          <Route path="properties/edit/:id" element={<EditProperty />} />
 
           {/* ✅ بروفايل المالك */}
           <Route path="settings" element={<OwnerSettings />} />

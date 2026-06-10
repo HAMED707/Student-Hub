@@ -490,8 +490,6 @@ function PropertyDetailsModal({ open, onClose, property, onEditClick }) {
 }
 
 function EditProfileModal({ open, onClose, owner, onSave }) {
-  if (!open) return null;
-
   const [name, setName] = useState(owner?.name || "");
   const [email, setEmail] = useState(owner?.email || "");
   const [about, setAbout] = useState(owner?.about || "");
@@ -500,15 +498,7 @@ function EditProfileModal({ open, onClose, owner, onSave }) {
   const [location, setLocation] = useState(owner?.contact?.location || "");
   const [responseTime, setResponseTime] = useState(owner?.contact?.responseTime || "");
 
-  useEffect(() => {
-    setName(owner?.name || "");
-    setEmail(owner?.email || "");
-    setAbout(owner?.about || "");
-    setContactEmail(owner?.contact?.email || "");
-    setPhone(owner?.contact?.phone || "");
-    setLocation(owner?.contact?.location || "");
-    setResponseTime(owner?.contact?.responseTime || "");
-  }, [owner]);
+  if (!open) return null;
 
   const handleSubmit = () => {
     onSave({
@@ -819,11 +809,6 @@ export default function OwnerProfile() {
   const handleLogout = () => {
     setMoreOpen(false);
     navigate("/login");
-  };
-
-  const handleViewDetails = (p) => {
-    setSelectedProperty(p);
-    setDetailsOpen(true);
   };
 
   const handleEditProperty = (id) => {
@@ -1217,7 +1202,7 @@ export default function OwnerProfile() {
       )}
 
       {/* Edit Profile Modal (same page) */}
-      <EditProfileModal open={editProfileOpen} onClose={() => setEditProfileOpen(false)} owner={owner} onSave={(updated) => setOwner(updated)} />
+      <EditProfileModal key={`${editProfileOpen}-${owner.email}`} open={editProfileOpen} onClose={() => setEditProfileOpen(false)} owner={owner} onSave={(updated) => setOwner(updated)} />
 
       {/* Property Details Modal */}
       <PropertyDetailsModal

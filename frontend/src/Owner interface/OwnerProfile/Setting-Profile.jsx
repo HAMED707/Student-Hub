@@ -514,17 +514,16 @@ export default function OwnerSettings() {
   const [uploadType, setUploadType] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
-  const [uploadPreviewUrl, setUploadPreviewUrl] = useState(null);
+  const uploadPreviewUrl = useMemo(
+    () => (uploadFile ? URL.createObjectURL(uploadFile) : null),
+    [uploadFile],
+  );
 
   useEffect(() => {
-    if (!uploadFile) {
-      setUploadPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(uploadFile);
-    setUploadPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [uploadFile]);
+    return () => {
+      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+    };
+  }, [uploadPreviewUrl]);
 
   const handleUpload = () => {
     if (!uploadFile) return push({ type: "error", title: "Missing file", message: "Please choose a file first." });
@@ -571,17 +570,16 @@ export default function OwnerSettings() {
   // Support: report issue modal
   const [supportOpen, setSupportOpen] = useState(false);
   const [issue, setIssue] = useState({ type: "bug", desc: "", attachment: null });
-  const [issuePreview, setIssuePreview] = useState(null);
+  const issuePreview = useMemo(
+    () => (issue.attachment ? URL.createObjectURL(issue.attachment) : null),
+    [issue.attachment],
+  );
 
   useEffect(() => {
-    if (!issue.attachment) {
-      setIssuePreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(issue.attachment);
-    setIssuePreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [issue.attachment]);
+    return () => {
+      if (issuePreview) URL.revokeObjectURL(issuePreview);
+    };
+  }, [issuePreview]);
 
   const submitIssue = () => {
     if (!issue.desc.trim()) {
