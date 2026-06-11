@@ -28,6 +28,7 @@ class NotificationListView(APIView):
 
     def get(self, request):
         qs = Notification.objects.filter(recipient=request.user)
+        unread_count = qs.filter(is_read=False).count()
 
         if request.query_params.get("unread") == "true":
             qs = qs.filter(is_read=False)
@@ -35,7 +36,7 @@ class NotificationListView(APIView):
         serializer = NotificationSerializer(qs, many=True, context={"request": request})
         return Response(
             {
-                "unread_count":    qs.filter(is_read=False).count(),
+                "unread_count":    unread_count,
                 "notifications":   serializer.data,
             },
             status=status.HTTP_200_OK,

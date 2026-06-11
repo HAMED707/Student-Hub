@@ -1,0 +1,762 @@
+{
+  "info": {
+    "name": "StudentHub API",
+    "_postman_id": "studenthub-api-collection",
+    "description": "Full API collection for StudentHub — accounts, properties, bookings, payments, messaging, notifications, reviews, favorites, community, and services.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000/api", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "refresh_token", "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/register/", "host": ["{{base_url}}"], "path": ["auth", "register", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"ahmed_student\",\n  \"email\": \"ahmed@example.com\",\n  \"first_name\": \"Ahmed\",\n  \"last_name\": \"Hassan\",\n  \"password\": \"strongpass123\",\n  \"phone_number\": \"+201001234567\",\n  \"gender\": \"M\",\n  \"date_of_birth\": \"2000-05-15\",\n  \"role\": \"student\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.access) pm.collectionVariables.set('access_token', res.access);",
+                  "if (res.refresh) pm.collectionVariables.set('refresh_token', res.refresh);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register (Landlord)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/register/", "host": ["{{base_url}}"], "path": ["auth", "register", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"landlord_ali\",\n  \"email\": \"ali@example.com\",\n  \"first_name\": \"Ali\",\n  \"last_name\": \"Mohamed\",\n  \"password\": \"strongpass123\",\n  \"phone_number\": \"+201009876543\",\n  \"gender\": \"M\",\n  \"date_of_birth\": \"1985-03-20\",\n  \"role\": \"landlord\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login/", "host": ["{{base_url}}"], "path": ["auth", "login", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"ahmed_student\",\n  \"password\": \"strongpass123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.access) pm.collectionVariables.set('access_token', res.access);",
+                  "if (res.refresh) pm.collectionVariables.set('refresh_token', res.refresh);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/token/refresh/", "host": ["{{base_url}}"], "path": ["auth", "token", "refresh", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.access) pm.collectionVariables.set('access_token', res.access);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/profile/", "host": ["{{base_url}}"], "path": ["profile", ""] }
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/profile/", "host": ["{{base_url}}"], "path": ["profile", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Ahmed\",\n  \"last_name\": \"Hassan\",\n  \"city\": \"Cairo\",\n  \"student_profile\": {\n    \"bio\": \"3rd year engineering student looking for a quiet room.\",\n    \"university\": \"Cairo University\",\n    \"faculty\": \"Engineering\",\n    \"year_of_study\": \"3rd\",\n    \"sleeping_time\": \"late\",\n    \"personality\": \"quiet\",\n    \"cleanliness\": \"high\",\n    \"smoking\": \"non_smoker\",\n    \"budget_min\": 1500,\n    \"budget_max\": 3000,\n    \"is_looking_for_room\": true\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Public Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/profile/1/", "host": ["{{base_url}}"], "path": ["profile", "1", ""] }
+          }
+        },
+        {
+          "name": "Upload Verification Document",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/verify/documents/", "host": ["{{base_url}}"], "path": ["verify", "documents", ""] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "doc_type", "value": "national_id", "type": "text" },
+                { "key": "file", "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Verification Documents",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/verify/documents/", "host": ["{{base_url}}"], "path": ["verify", "documents", ""] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Properties",
+      "item": [
+        {
+          "name": "List Properties",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/properties/?city=Cairo&price_min=1000&price_max=5000",
+              "host": ["{{base_url}}"],
+              "path": ["properties", ""],
+              "query": [
+                { "key": "city", "value": "Cairo" },
+                { "key": "price_min", "value": "1000" },
+                { "key": "price_max", "value": "5000" },
+                { "key": "type", "value": "studio", "disabled": true },
+                { "key": "num_beds", "value": "1", "disabled": true },
+                { "key": "gender", "value": "male", "disabled": true },
+                { "key": "university", "value": "Cairo University", "disabled": true },
+                { "key": "amenity", "value": "WiFi", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Featured Properties",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/properties/featured/", "host": ["{{base_url}}"], "path": ["properties", "featured", ""] }
+          }
+        },
+        {
+          "name": "University Properties",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/properties/university/?university=Cairo University",
+              "host": ["{{base_url}}"],
+              "path": ["properties", "university", ""],
+              "query": [{ "key": "university", "value": "Cairo University" }]
+            }
+          }
+        },
+        {
+          "name": "Property Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/properties/1/", "host": ["{{base_url}}"], "path": ["properties", "1", ""] }
+          }
+        },
+        {
+          "name": "Create Property (Landlord)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/properties/create/", "host": ["{{base_url}}"], "path": ["properties", "create", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Cozy Studio Near Cairo University\",\n  \"description\": \"Fully furnished studio, 10 min walk to campus.\",\n  \"property_type\": \"studio\",\n  \"price\": 2500,\n  \"city\": \"Giza\",\n  \"district\": \"Dokki\",\n  \"address\": \"15 Tahrir Square, Dokki, Giza\",\n  \"nearby_university\": \"Cairo University\",\n  \"distance_to_university\": \"10 min\",\n  \"transport_type\": \"walk\",\n  \"num_rooms\": 1,\n  \"num_beds\": 1,\n  \"num_bathrooms\": 1,\n  \"num_roommates\": 0,\n  \"floor\": 3,\n  \"area_sqm\": 35,\n  \"gender_preference\": \"male\",\n  \"amenities\": [\"WiFi\", \"AC\", \"Washing Machine\"],\n  \"min_stay_months\": 3,\n  \"max_stay_months\": 12,\n  \"status\": \"available\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Edit Property (Landlord)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/properties/1/edit/", "host": ["{{base_url}}"], "path": ["properties", "1", "edit", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 2800,\n  \"description\": \"Updated description.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Upload Property Images",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/properties/1/images/", "host": ["{{base_url}}"], "path": ["properties", "1", "images", ""] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "images", "type": "file", "src": "" },
+                { "key": "images", "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Property Image",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/properties/1/images/1/", "host": ["{{base_url}}"], "path": ["properties", "1", "images", "1", ""] }
+          }
+        },
+        {
+          "name": "My Properties (Landlord)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/properties/landlord/properties/", "host": ["{{base_url}}"], "path": ["properties", "landlord", "properties", ""] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Bookings",
+      "item": [
+        {
+          "name": "Create Booking (Student)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/bookings/", "host": ["{{base_url}}"], "path": ["bookings", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property\": 1,\n  \"move_in_date\": \"2026-07-01\",\n  \"duration_months\": 6,\n  \"message\": \"Hi, I am a 3rd year student at Cairo University. Very interested in your listing.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "My Bookings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/bookings/my/", "host": ["{{base_url}}"], "path": ["bookings", "my", ""] }
+          }
+        },
+        {
+          "name": "Update Booking Status — Landlord Confirm",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/bookings/1/status/", "host": ["{{base_url}}"], "path": ["bookings", "1", "status", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Booking Status — Student Cancel",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/bookings/1/status/", "host": ["{{base_url}}"], "path": ["bookings", "1", "status", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"cancelled\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Booking Status — Landlord Complete",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/bookings/1/status/", "host": ["{{base_url}}"], "path": ["bookings", "1", "status", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"completed\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Initiate Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/payments/deposit/", "host": ["{{base_url}}"], "path": ["payments", "deposit", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"booking_id\": 1,\n  \"phone\": \"+201001234567\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Pay Remaining Online",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/payments/remaining/online/", "host": ["{{base_url}}"], "path": ["payments", "remaining", "online", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"booking_id\": 1,\n  \"phone\": \"+201001234567\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Mark Remaining Offline / Cash (Landlord)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/payments/remaining/offline/", "host": ["{{base_url}}"], "path": ["payments", "remaining", "offline", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"booking_id\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "My Payments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/payments/my/", "host": ["{{base_url}}"], "path": ["payments", "my", ""] }
+          }
+        },
+        {
+          "name": "Paymob Webhook (Simulation)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/payments/webhook/?hmac=YOUR_HMAC_HERE",
+              "host": ["{{base_url}}"],
+              "path": ["payments", "webhook", ""],
+              "query": [{ "key": "hmac", "value": "YOUR_HMAC_HERE" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"obj\": {\n    \"id\": 123456,\n    \"success\": true,\n    \"amount_cents\": 50000,\n    \"currency\": \"EGP\",\n    \"order\": { \"id\": 1 },\n    \"owner\": 1,\n    \"pending\": false,\n    \"is_auth\": false,\n    \"is_capture\": false,\n    \"is_standalone_payment\": true,\n    \"is_voided\": false,\n    \"is_refunded\": false,\n    \"is_3d_secure\": false,\n    \"has_parent_transaction\": false,\n    \"error_occured\": false,\n    \"created_at\": \"2026-06-12T10:00:00Z\",\n    \"integration_id\": 1,\n    \"source_data\": { \"pan\": \"1234\", \"sub_type\": \"Visa\", \"type\": \"card\" }\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Messaging",
+      "item": [
+        {
+          "name": "List Conversations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/messages/", "host": ["{{base_url}}"], "path": ["messages", ""] }
+          }
+        },
+        {
+          "name": "Start Conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/messages/", "host": ["{{base_url}}"], "path": ["messages", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiver_id\": 2,\n  \"booking_id\": 1,\n  \"message\": \"Hi, I wanted to ask about the property.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Messages in Conversation",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/messages/1/", "host": ["{{base_url}}"], "path": ["messages", "1", ""] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get Notifications (Bell Feed)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/notifications/", "host": ["{{base_url}}"], "path": ["notifications", ""] }
+          }
+        },
+        {
+          "name": "Get Unread Notifications Only",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications/?unread=true",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", ""],
+              "query": [{ "key": "unread", "value": "true" }]
+            }
+          }
+        },
+        {
+          "name": "Mark All Notifications Read",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/notifications/read/", "host": ["{{base_url}}"], "path": ["notifications", "read", ""] }
+          }
+        },
+        {
+          "name": "Mark One Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/notifications/1/read/", "host": ["{{base_url}}"], "path": ["notifications", "1", "read", ""] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Reviews",
+      "item": [
+        {
+          "name": "Get Property Reviews",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/reviews/property/1/", "host": ["{{base_url}}"], "path": ["reviews", "property", "1", ""] }
+          }
+        },
+        {
+          "name": "Post Property Review (Student)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/reviews/property/1/", "host": ["{{base_url}}"], "path": ["reviews", "property", "1", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"booking_id\": 1,\n  \"rating\": 5,\n  \"comment\": \"Great place, very clean and close to university.\",\n  \"reviewer_role\": \"roommate\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get User Reviews",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/reviews/user/1/", "host": ["{{base_url}}"], "path": ["reviews", "user", "1", ""] }
+          }
+        },
+        {
+          "name": "Post User Review",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/reviews/user/2/", "host": ["{{base_url}}"], "path": ["reviews", "user", "2", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 4,\n  \"comment\": \"Great landlord, very responsive.\",\n  \"reviewer_role\": \"landlord\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Favorites",
+      "item": [
+        {
+          "name": "Get My Favorites",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/favorites/", "host": ["{{base_url}}"], "path": ["favorites", ""] }
+          }
+        },
+        {
+          "name": "Add to Favorites",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/favorites/", "host": ["{{base_url}}"], "path": ["favorites", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Remove from Favorites",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/favorites/1/", "host": ["{{base_url}}"], "path": ["favorites", "1", ""] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Community",
+      "item": [
+        {
+          "name": "List Groups",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/community/groups/",
+              "host": ["{{base_url}}"],
+              "path": ["community", "groups", ""],
+              "query": [
+                { "key": "category", "value": "university", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "My Groups",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/community/groups/my/", "host": ["{{base_url}}"], "path": ["community", "groups", "my", ""] }
+          }
+        },
+        {
+          "name": "Group Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/community/groups/1/", "host": ["{{base_url}}"], "path": ["community", "groups", "1", ""] }
+          }
+        },
+        {
+          "name": "Create Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/community/groups/create/", "host": ["{{base_url}}"], "path": ["community", "groups", "create", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cairo University 2025\",\n  \"description\": \"Group for CU students finding rooms.\",\n  \"category\": \"university\",\n  \"is_private\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Join Group",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/community/groups/1/join/", "host": ["{{base_url}}"], "path": ["community", "groups", "1", "join", ""] }
+          }
+        },
+        {
+          "name": "Leave Group",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/community/groups/1/leave/", "host": ["{{base_url}}"], "path": ["community", "groups", "1", "leave", ""] }
+          }
+        },
+        {
+          "name": "Get Group Posts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/community/posts/?group=1",
+              "host": ["{{base_url}}"],
+              "path": ["community", "posts", ""],
+              "query": [{ "key": "group", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "Create Post",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/community/posts/create/", "host": ["{{base_url}}"], "path": ["community", "posts", "create", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"group\": 1,\n  \"content\": \"Anyone looking for a roommate in Dokki area?\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Services",
+      "item": [
+        {
+          "name": "Nearby Places (by GPS)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/services/nearby/?lat=30.0262&lng=31.2132&type=supermarket&radius=1500",
+              "host": ["{{base_url}}"],
+              "path": ["services", "nearby", ""],
+              "query": [
+                { "key": "lat", "value": "30.0262" },
+                { "key": "lng", "value": "31.2132" },
+                { "key": "type", "value": "supermarket" },
+                { "key": "radius", "value": "1500" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Nearby Places (by University)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/services/university/?name=Cairo University&type=pharmacy&radius=1000",
+              "host": ["{{base_url}}"],
+              "path": ["services", "university", ""],
+              "query": [
+                { "key": "name", "value": "Cairo University" },
+                { "key": "type", "value": "pharmacy" },
+                { "key": "radius", "value": "1000" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Supported Universities",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/services/universities/", "host": ["{{base_url}}"], "path": ["services", "universities", ""] }
+          }
+        },
+        {
+          "name": "Property Distance to University",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/services/distance/?property_id=1&mode=walking",
+              "host": ["{{base_url}}"],
+              "path": ["services", "distance", ""],
+              "query": [
+                { "key": "property_id", "value": "1" },
+                { "key": "mode", "value": "walking" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+
+  ]
+}

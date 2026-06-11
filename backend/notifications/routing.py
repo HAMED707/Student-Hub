@@ -1,0 +1,11 @@
+"""
+notifications/routing.py
+ws://localhost:8000/ws/notifications/?token=<jwt>
+"""
+
+from django.urls import re_path
+from notifications.consumers import NotificationConsumer
+
+websocket_urlpatterns = [
+    re_path(r"^ws/notifications/$", NotificationConsumer.as_asgi()),
+]

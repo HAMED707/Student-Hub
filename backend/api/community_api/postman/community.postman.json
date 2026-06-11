@@ -1,0 +1,151 @@
+{
+	"info": {
+		"_postman_id": "studenthub-community-testing",
+		"name": "StudentHub - Community App Testing",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "base_url", "value": "http://127.0.0.1:8000" },
+		{ "key": "user_token", "value": "" },
+		{ "key": "group_id", "value": "" },
+		{ "key": "other_group_id", "value": "99" }
+	],
+	"item": [
+		{
+			"name": "🔑 1. LOGIN (Get Token)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 200) {",
+							"    var json = pm.response.json();",
+							"    pm.environment.set(\"user_token\", json.access);",
+							"    console.log(\"✅ Token saved\");",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": { "type": "noauth" },
+				"method": "POST",
+				"header": [{ "key": "Content-Type", "value": "application/json" }],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"student_user\",\n    \"password\": \"Testuser123\"\n}"
+				},
+				"url": { "raw": "{{base_url}}/api/auth/login/", "host": ["{{base_url}}"], "path": ["api", "auth", "login", ""] }
+			}
+		},
+		{
+			"name": "📦 2. CREATE GROUP (Auto-joins creator as admin)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 201) {",
+							"    var json = pm.response.json();",
+							"    pm.environment.set(\"group_id\", json.id);",
+							"    console.log(\"✅ Group created with ID:\", json.id);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{user_token}}", "type": "string" }] },
+				"method": "POST",
+				"header": [{ "key": "Content-Type", "value": "application/json" }],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Cairo University 2026 Freshmen\",\n    \"description\": \"A space for new students to share tips and find roommates.\",\n    \"category\": \"university\",\n    \"is_private\": false\n}"
+				},
+				"url": { "raw": "{{base_url}}/api/community/groups/create/", "host": ["{{base_url}}"], "path": ["api", "community", "groups", "create", ""] }
+			}
+		},
+		{
+			"name": "📋 3. GET ALL GROUPS (Browse List)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{user_token}}", "type": "string" }] },
+				"method": "GET",
+				"header": [],
+				"url": { "raw": "{{base_url}}/api/community/groups/", "host": ["{{base_url}}"], "path": ["api", "community", "groups", ""] }
+			}
+		},
+		{
+			"name": "👤 4. GET MY GROUPS",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{user_token}}", "type": "string" }] },
+				"method": "GET",
+				"header": [],
+				"url": { "raw": "{{base_url}}/api/community/groups/my/", "host": ["{{base_url}}"], "path": ["api", "community", "groups", "my", ""] }
+			}
+		},
+		{
+			"name": "📝 5. CREATE POST IN GROUP",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{user_token}}", "type": "string" }] },
+				"method": "POST",
+				"header": [{ "key": "Content-Type", "value": "application/json" }],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"group\": {{group_id}},\n    \"content\": \"Hey everyone! Does anyone know good cafes near campus?\",\n    \"image\": null\n}"
+				},
+				"url": { "raw": "{{base_url}}/api/community/posts/create/", "host": ["{{base_url}}"], "path": ["api", "community", "posts", "create", ""] }
+			}
+		},
+		{
+			"name": "📖 6. GET POSTS FOR GROUP",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{user_token}}", "type": "string" }] },
+				"method": "GET",
+				"header": [],
+				"url": { "raw": "{{base_url}}/api/community/posts/?group={{group_id}}", "host": ["{{base_url}}"], "path": ["api", "community", "posts", ""], "query": [{ "key": "group", "value": "{{group_id}}" }] }
+			}
+		},
+		{
+			"name": "⚠️ 7. TEST: JOIN OWN GROUP (Expect 400 - Already Member)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{user_token}}", "type": "string" }] },
+				"method": "POST",
+				"header": [],
+				"url": { "raw": "{{base_url}}/api/community/groups/{{group_id}}/join/", "host": ["{{base_url}}"], "path": ["api", "community", "groups", "{{group_id}}", "join", ""] }
+			}
+		},
+		{
+			"name": "🚪 8. LEAVE GROUP",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{user_token}}", "type": "string" }] },
+				"method": "POST",
+				"header": [],
+				"url": { "raw": "{{base_url}}/api/community/groups/{{group_id}}/leave/", "host": ["{{base_url}}"], "path": ["api", "community", "groups", "{{group_id}}", "leave", ""] }
+			}
+		},
+		{
+			"name": "⚠️ 9. TEST: LEAVE AGAIN (Expect 400 - Not Member)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{user_token}}", "type": "string" }] },
+				"method": "POST",
+				"header": [],
+				"url": { "raw": "{{base_url}}/api/community/groups/{{group_id}}/leave/", "host": ["{{base_url}}"], "path": ["api", "community", "groups", "{{group_id}}", "leave", ""] }
+			}
+		},
+		{
+			"name": "⚠️ 10. TEST: POST WITHOUT JOINING (Expect 403)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{user_token}}", "type": "string" }] },
+				"method": "POST",
+				"header": [{ "key": "Content-Type", "value": "application/json" }],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"group\": {{group_id}},\n    \"content\": \"I shouldn't be able to post this anymore.\"\n}"
+				},
+				"url": { "raw": "{{base_url}}/api/community/posts/create/", "host": ["{{base_url}}"], "path": ["api", "community", "posts", "create", ""] }
+			}
+		}
+	]
+}

@@ -10,7 +10,7 @@ GroupLeaveView         POST /api/community/groups/<id>/leave/
 PostListView           GET  /api/community/posts/?group=<id>
 PostCreateView         POST /api/community/posts/
 """
-
+from django.db.models import Exists, OuterRef 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -42,6 +42,12 @@ class GroupListView(APIView):
         category = request.query_params.get("category")
         if category:
             queryset = queryset.filter(category=category)
+
+        queryset = queryset.annotate(
+            is_member=Exists(
+                GroupMembership.objects.filter(group=OuterRef('pk'), user=request.user)
+            )
+        )
 
         serializer = GroupListSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -180,7 +186,7 @@ class PostListView(APIView):
             )
 
         posts = Post.objects.filter(group=group).select_related("author")
-        serializer = PostSerializer(posts, many=True)
+        serializer = PostSerializer(posts, many=True,context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -216,4 +222,7 @@ class PostCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         post = serializer.save(author=request.user, group=group)
-        return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
+        return Response(
+            PostSerializer(post,context={"request": request}).data
+                        , status=status.HTTP_201_CREATED
+                        )

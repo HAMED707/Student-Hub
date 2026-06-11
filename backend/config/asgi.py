@@ -23,7 +23,8 @@ django_asgi_app = get_asgi_application()
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.security.websocket import AllowedHostsOriginValidator
 from messaging.middleware import JWTAuthMiddleware
-from messaging.routing import websocket_urlpatterns
+from messaging.routing      import websocket_urlpatterns as chat_patterns
+from notifications.routing  import websocket_urlpatterns as notification_patterns
 
 application = ProtocolTypeRouter({
     # All normal HTTP traffic goes through Django as usual
@@ -32,7 +33,9 @@ application = ProtocolTypeRouter({
     # WebSocket connections are authenticated first, then routed to consumers
     "websocket":# AllowedHostsOriginValidator(
         JWTAuthMiddleware(
-            URLRouter(websocket_urlpatterns)
+            URLRouter(
+                chat_patterns + notification_patterns   
+            )
         )
     #),
 })

@@ -28,7 +28,7 @@ class GroupListSerializer(serializers.ModelSerializer):
     Lightweight serializer for the group browse list.
     Adds `is_member` so the frontend can show Join / Leave immediately.
     """
-    is_member = serializers.SerializerMethodField()
+    is_member = serializers.BooleanField(read_only=True)
 
     class Meta:
         model  = Group
@@ -37,11 +37,7 @@ class GroupListSerializer(serializers.ModelSerializer):
             "member_count", "is_private", "is_member", "created_at",
         ]
 
-    def get_is_member(self, obj):
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False
-        return obj.memberships.filter(user=request.user).exists()
+    
 
 
 class GroupSerializer(serializers.ModelSerializer):

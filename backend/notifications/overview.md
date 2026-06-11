@@ -1,16 +1,18 @@
-## messaging Websocket setup ##
+## notifications Websocket setup ##
 
 
 # ────────────────────────Start Routing────────────────────────────────────
 ```
+"""
+notifications/routing.py
+ws://localhost:8000/ws/notifications/?token=<jwt>
+"""
+
 from django.urls import re_path
-from messaging.consumers import ChatConsumer
-
-
-# The client connects to: ws://localhost:8000/ws/chat/<conversation_id>/?token=<jwt>
+from notifications.consumers import NotificationConsumer
 
 websocket_urlpatterns = [
-    re_path(r"^ws/chat/(?P<conversation_id>\d+)/$", ChatConsumer.as_asgi()),
+    re_path(r"^ws/notifications/$", NotificationConsumer.as_asgi()),
 ]
 ```
 # ────────────────────────End Routing──────────────────────────────────────
@@ -77,112 +79,51 @@ class JWTAuthMiddleware(BaseMiddleware):
 
 # ────────────────────────Start Consumers────────────────────────────────────
 ```
+"""
+notifications/consumers.py
+
+One-way personal channel — server pushes, client only connects/disconnects.
+Connection URL:  ws://localhost:8000/ws/notifications/?token=<jwt>
+Group name:      notifications_<user_id>
+"""
+
 import json
-
 from channels.generic.websocket import AsyncWebsocketConsumer
-from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
-from django.db.models import Q
 
-class ChatConsumer(AsyncWebsocketConsumer):
+
+class NotificationConsumer(AsyncWebsocketConsumer):
     """
-    Handles one WebSocket connection for a single conversation room.
-
-    Channel group name: "chat_<conversation_id>"
-    All members connected to the same conversation share this group.
-    When any member sends a message, every member in the group receives it.
-
-    Flow:
-        connect()    → verify JWT user → verify membership → join group → accept
-        receive()    → save message to DB → broadcast to group
-        chat_message() → push event to this specific WebSocket client
+    Much simpler than ChatConsumer — no receive() logic needed.
+    The only job is:
+        connect()    → authenticate → join personal group → accept
+        notify()     → forward group_send event to this WebSocket client
         disconnect() → leave group
-    """    
-    async def connect(self):
-        self.conversation_id = self.scope["url_route"]["kwargs"]["conversation_id"]
-        self.room_group_name = f"chat_{self.conversation_id}"
-        self.user            = self.scope["user"]
+    """
 
-        # Reject anonymous connections immediately
+    async def connect(self):
+        self.user = self.scope["user"]
+
         if isinstance(self.user, AnonymousUser):
             await self.close()
             return
-        # Reject users who are not part of this conversation
-        if not await self._user_in_conversation():
-            await self.close()
-            return
-        
-        await self.channel_layer.group_add(self.room_group_name,self.channel_name)
+
+        # Personal group — only this user's notifications land here
+        self.group_name = f"notifications_{self.user.id}"
+
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
+    async def disconnect(self, close_code):
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
-    # ─────── receive ───────────────────────────────────────────────────────────
-          
-    async def receive(self, text_data):
-        """
-        Called when the connected client sends a message over the WebSocket.
-        Saves it to the database then broadcasts it to the entire group.
-        """
+    # ── Event handler ─────────────────────────────────────────────────────────
+    # Called by channel layer when _broadcast() does group_send(type="notify")
 
-        try:
-            data=json.loads(text_data)
-        except json.JSONDecodeError:
-            return
-        
-        body= data.get("body","").strip()
-        if not body:
-            return
-        
-        message = await self._save_message(body)
-
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                "type":       "chat_message",
-                "id":          message.id,
-                "body":        message.body,
-                "sender_id":   self.user.id, 
-                "sender_name": await self._get_full_name(),
-                "created_at" : str(message.created_at), 
-            },
-        )
-
-    # ─────── send ───────────────────────────────────────────────────────────  
-    async def chat_message(self,event):
-        """
-        Called by the channel layer when group_send delivers an event
-        with type="chat_message". Pushes the payload to the WebSocket client.
-        """ 
+    async def notify(self, event):
+        """Push the notification payload to the connected WebSocket client."""
         await self.send(text_data=json.dumps(event))
-
-
-    # ── Private DB helpers ────────────────────────────────────────────────────
-
-    @database_sync_to_async
-    def _user_in_conversation(self):
-        from .models import Conversation
-        return Conversation.objects.filter(
-            Q(initiator=self.user) | Q(receiver=self.user),
-            id=self.conversation_id,
-        ).exists()
-    
-    @database_sync_to_async
-    def _save_message(self,body):
-        from .models import Conversation ,Message
-        conversation=Conversation.objects.get(id=self.conversation_id)
-        return Message.objects.create( 
-            conversation=conversation,
-            sender=self.user,
-            body=body,
-        )
-
-    @database_sync_to_async
-    def _get_full_name(self):
-        return self.user.get_full_name()
-
-    # ─────── disconnect ───────────────────────────────────────────────────────────    
-    async def disconnect(self,close_code):
-        await self.channel_layer.group_discard(self.room_group_name,self.channel_name)
 ```
 # ────────────────────────End Consumers──────────────────────────────────────
 
@@ -247,13 +188,17 @@ application = ProtocolTypeRouter({
 
 # ────────────────────────Start Apps────────────────────────────────────
 ```
+"""Notifications app config — wires signals on startup."""
+
 from django.apps import AppConfig
 
 
-class MessagingConfig(AppConfig):
+class NotificationsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "messaging"
+    name = "notifications"
 
+    def ready(self):
+        import notifications.signals  # noqa: F401 — registers all signal handlers
 ```
 # ────────────────────────End Apps──────────────────────────────────────
 
