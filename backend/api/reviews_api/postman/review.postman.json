@@ -1,0 +1,293 @@
+{
+	"info": {
+		"_postman_id": "studenthub-reviews-testing",
+		"name": "StudentHub - Reviews App Testing",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "base_url", "value": "http://127.0.0.1:8000" },
+		{ "key": "student_token", "value": "" },
+		{ "key": "landlord_token", "value": "" },
+		{ "key": "property_id", "value": "" },
+		{ "key": "booking_id", "value": "" },
+		{ "key": "landlord_id", "value": "" },
+		{ "key": "review_id", "value": "" }
+	],
+	"item": [
+		{
+			"name": "🛠️ 1. SETUP: Login as Student",
+			"request": {
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/auth/login/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "auth", "login", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"student_user\",\n    \"password\": \"password123\"\n}"
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = pm.response.json();",
+							"if (jsonData.access) { pm.environment.set(\"student_token\", jsonData.access); }"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "🛠️ 2. SETUP: Login as Landlord",
+			"request": {
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/auth/login/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "auth", "login", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"landlord_user\",\n    \"password\": \"password123\"\n}"
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = pm.response.json();",
+							"if (jsonData.access) { pm.environment.set(\"landlord_token\", jsonData.access); }",
+							"if (jsonData.user && jsonData.user.id) { pm.environment.set(\"landlord_id\", jsonData.user.id); }"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "🛠️ 3. SETUP: Landlord Creates Property",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{landlord_token}}", "type": "string" } ] },
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/properties/create/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "properties", "create", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"Test Apartment for Review\",\n    \"description\": \"Great place for testing reviews\",\n    \"property_type\": \"apartment\",\n    \"price\": 5000,\n    \"city\": \"Cairo\",\n    \"district\": \"Maadi\",\n    \"address\": \"15 Test Street\",\n    \"num_rooms\": 2,\n    \"num_beds\": 2,\n    \"num_bathrooms\": 1,\n    \"gender_preference\": \"male\",\n    \"min_stay_months\": 1,\n    \"max_stay_months\": 12\n}"
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = pm.response.json();",
+							"if (jsonData.id) { pm.environment.set(\"property_id\", jsonData.id); }"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "🛠️ 4. SETUP: Student Creates Booking",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{student_token}}", "type": "string" } ] },
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/bookings/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "bookings", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"property\": {{property_id}},\n    \"move_in_date\": \"2024-02-01\",\n    \"duration_months\": 3,\n    \"message\": \"I would like to book this.\"\n}"
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = pm.response.json();",
+							"if (jsonData.id) { pm.environment.set(\"booking_id\", jsonData.id); }"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "🛠️ 5. SETUP: Landlord Confirms Booking (Required for Review)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{landlord_token}}", "type": "string" } ] },
+				"method": "PATCH",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/bookings/{{booking_id}}/status/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "bookings", "{{booking_id}}", "status", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"status\": \"confirmed\"\n}"
+				}
+			}
+		},
+		{
+			"name": "✅ 6. TEST: GET Property Reviews (Empty)",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{base_url}}/api/reviews/property/{{property_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "reviews", "property", "{{property_id}}", ""]
+				}
+			}
+		},
+		{
+			"name": "✅ 7. TEST: POST Property Review (Student)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{student_token}}", "type": "string" } ] },
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/reviews/property/{{property_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "reviews", "property", "{{property_id}}", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"booking_id\": {{booking_id}},\n    \"rating\": 5,\n    \"comment\": \"Amazing place, exactly as described!\",\n    \"reviewer_role\": \"tenant\"\n}"
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = pm.response.json();",
+							"if (jsonData.id) { pm.environment.set(\"review_id\", jsonData.id); }"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "✅ 8. TEST: GET Property Reviews (With Data)",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{base_url}}/api/reviews/property/{{property_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "reviews", "property", "{{property_id}}", ""]
+				}
+			}
+		},
+		{
+			"name": "✅ 9. TEST: PATCH Property Review (Update Own Review)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{student_token}}", "type": "string" } ] },
+				"method": "PATCH",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/reviews/{{review_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "reviews", "{{review_id}}", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"rating\": 4,\n    \"comment\": \"Updated: Great place, but a bit noisy at night.\"\n}"
+				}
+			}
+		},
+		{
+			"name": "✅ 10. TEST: POST User Review (Student reviews Landlord)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{student_token}}", "type": "string" } ] },
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/reviews/user/{{landlord_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "reviews", "user", "{{landlord_id}}", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"rating\": 5,\n    \"comment\": \"Very responsive and helpful landlord.\",\n    \"reviewer_role\": \"tenant\"\n}"
+				}
+			}
+		},
+		{
+			"name": "✅ 11. TEST: GET User Reviews (Landlord's Reviews)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{landlord_token}}", "type": "string" } ] },
+				"method": "GET",
+				"url": {
+					"raw": "{{base_url}}/api/reviews/user/{{landlord_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "reviews", "user", "{{landlord_id}}", ""]
+				}
+			}
+		},
+		{
+			"name": "✅ 12. TEST: DELETE Property Review (Student deletes own)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{student_token}}", "type": "string" } ] },
+				"method": "DELETE",
+				"url": {
+					"raw": "{{base_url}}/api/reviews/{{review_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "reviews", "{{review_id}}", ""]
+				}
+			}
+		},
+		{
+			"name": "🚫 13. TEST: FAIL - POST Review with Fake Booking ID",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{student_token}}", "type": "string" } ] },
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/reviews/property/{{property_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "reviews", "property", "{{property_id}}", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"booking_id\": 99999,\n    \"rating\": 5,\n    \"comment\": \"This should fail.\",\n    \"reviewer_role\": \"tenant\"\n}"
+				}
+			}
+		},
+		{
+			"name": "🚫 14. TEST: FAIL - Landlord tries to review Property (Forbidden)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{landlord_token}}", "type": "string" } ] },
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/reviews/property/{{property_id}}/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "reviews", "property", "{{property_id}}", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"booking_id\": {{booking_id}},\n    \"rating\": 5,\n    \"comment\": \"Landlords cannot review properties.\",\n    \"reviewer_role\": \"landlord\"\n}"
+				}
+			}
+		}
+	]
+}

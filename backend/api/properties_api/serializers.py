@@ -60,7 +60,7 @@ class PropertySerializer(serializers.ModelSerializer):
             # ── Location ─────────────────────────────────────
             "city", "district", "address", "latitude", "longitude",
             # ── University Proximity ─────────────────────────
-            "nearby_university", "distance_to_university", "transport_type",
+            "nearby_university", "distance_to_university", "transport_type","university_distance",
             # ── Room Details ─────────────────────────────────
             "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
             "floor", "area_sqm", "gender_preference",

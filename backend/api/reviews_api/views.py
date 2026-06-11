@@ -11,11 +11,12 @@ Endpoints:
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated , AllowAny
 
 from reviews.models import Review
 from properties.models import Property
 from accounts.models import Users
+from bookings.models import Booking
 from api.reviews_api.serializers import (
     ReviewSerializer,
     PropertyReviewCreateSerializer,
@@ -34,7 +35,7 @@ class PropertyReviewListView(APIView):
         """GET is open to anyone authenticated. POST is students only."""
         if self.request.method == "POST":
             return [IsStudent()]
-        return [IsAuthenticated()]
+        return [AllowAny()]
 
     def get(self, request, property_id):
         try:
@@ -44,7 +45,13 @@ class PropertyReviewListView(APIView):
 
         reviews = Review.objects.filter(property=prop).select_related("reviewer")
         serializer = ReviewSerializer(reviews, many=True, context={"request": request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response({
+            "property_id": prop.id,
+            "average_rating": prop.average_rating,  # ADD THIS
+            "review_count": prop.review_count,      # ADD THIS
+            "reviews": serializer.data
+        }, status=status.HTTP_200_OK)
 
     def post(self, request, property_id):
         try:
@@ -59,7 +66,16 @@ class PropertyReviewListView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        review = serializer.save(reviewer=request.user, property=prop)
+        booking_id = request.data.get("booking_id")
+        if booking_id:
+            try:
+                booking = Booking.objects.get(id=booking_id)
+                if booking.property.id != prop.id:
+                    return Response({"error": "This booking is not for the specified property."}, status=status.HTTP_400_BAD_REQUEST)
+            except Booking.DoesNotExist:
+                pass # Handled by serializer validation
+
+        review = serializer.save()
         return Response(ReviewSerializer(review).data, status=status.HTTP_201_CREATED)
 
 

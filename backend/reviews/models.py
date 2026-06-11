@@ -10,7 +10,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from accounts.models import Users
 from properties.models import Property
-
+from bookings.models import Booking 
 
 
 class Review(models.Model):
@@ -59,6 +59,14 @@ class Review(models.Model):
         null=True,
     )
 
+    booking = models.OneToOneField(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="review",
+        null=True,
+        blank=True,
+        help_text="Links property review to a specific booking. Null for user-to-user reviews."
+    )
     # ── Review Content ────────────────────────────────────────────────────────
     rating  = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)]

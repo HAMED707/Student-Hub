@@ -9,7 +9,7 @@ Serializers:
 
 from rest_framework import serializers
 from reviews.models import Review
-
+from bookings.models import Booking
 
 class ReviewSerializer(serializers.ModelSerializer):
     """
@@ -45,10 +45,29 @@ class PropertyReviewCreateSerializer(serializers.ModelSerializer):
       - reviewer_role for property reviews is restricted to landlord (i.e. they are reviewing as a past tenant)
         — actually the role describes the reviewer's relationship, so we limit to sensible choices.
     """
-
+    booking_id = serializers.IntegerField(write_only=True)
     class Meta:
         model  = Review
-        fields = ["rating", "comment", "reviewer_role"]
+        fields = ["rating", "comment", "reviewer_role","booking_id"]
+
+    
+    def validate_booking_id(self, value):
+        request = self.context.get("request")
+        try:
+            # Ensure booking exists AND belongs to the requesting student
+            booking = Booking.objects.get(id=value, tenant=request.user)
+        except Booking.DoesNotExist:
+            raise serializers.ValidationError("Booking not found or you are not the tenant.")
+        
+        # Students can only review after the stay is confirmed or completed
+        if booking.status not in ["confirmed", "completed"]:
+            raise serializers.ValidationError("You can only review a property after your booking is confirmed or completed.")
+        
+        # Prevent duplicate reviews for the exact same booking
+        if Review.objects.filter(booking=booking).exists():
+            raise serializers.ValidationError("You have already submitted a review for this booking.")
+        
+        return value
 
     def validate_reviewer_role(self, value):
         # For property reviews, the student is reviewing as a past tenant.
@@ -74,7 +93,14 @@ class PropertyReviewCreateSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        # reviewer and property injected from the view
+        booking_id = validated_data.pop("booking_id")
+        booking = Booking.objects.get(id=booking_id)
+        
+        # Auto-inject fields securely
+        validated_data["booking"] = booking
+        validated_data["property"] = booking.property
+        validated_data["reviewer"] = self.context["request"].user
+        
         return Review.objects.create(**validated_data)
 
 
