@@ -4,10 +4,12 @@ from api.services_api.views import (
     NearbyView,
     NearbyUniversityView,
     UniversityListView,
+    PropertyDistanceView,
 )
 
 urlpatterns = [
-    path("nearby/",        NearbyView.as_view(),           name="services-nearby"),
-    path("university/",    NearbyUniversityView.as_view(), name="services-university"),
-    path("universities/",  UniversityListView.as_view(),   name="services-universities-list"),
+    path("nearby/",       NearbyView.as_view(),          name="services-nearby"),
+    path("university/",   NearbyUniversityView.as_view(), name="services-university"),
+    path("universities/", UniversityListView.as_view(),   name="services-universities-list"),
+    path("distance/",     PropertyDistanceView.as_view(), name="services-distance"),
 ]

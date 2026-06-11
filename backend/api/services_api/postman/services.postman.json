@@ -1,0 +1,458 @@
+{
+	"info": {
+		"name": "StudentHub — Services API (Google Maps)",
+		"description": "Full test collection for nearby places, university distance, and geocoding.\n\n**Setup:**\n1. Set `base_url` (default: http://127.0.0.1:8000)\n2. Run request 0 — token saves automatically\n3. Set `property_id` variable to a real property ID from your DB",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "base_url",    "value": "http://127.0.0.1:8000", "type": "string" },
+		{ "key": "token",       "value": "",                       "type": "string" },
+		{ "key": "property_id", "value": "1",                      "type": "string" }
+	],
+	"item": [
+		{
+			"name": "0. Auth — Get Token",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"const res = pm.response.json();",
+							"if (res.access) {",
+							"    pm.collectionVariables.set(\"token\", res.access);",
+							"    console.log(\"Token saved automatically.\");",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [{ "key": "Content-Type", "value": "application/json" }],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"your_username\",\n    \"password\": \"your_password\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/auth/login/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "auth", "login", ""]
+				}
+			}
+		},
+		{
+			"name": "── NEARBY PLACES ─────────────────",
+			"item": [
+				{
+					"name": "1. Universities List (Public)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/services/universities/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "universities", ""]
+						},
+						"description": "No auth required. Returns all ~35 university names for dropdowns."
+					}
+				},
+				{
+					"name": "2. Nearby — Pharmacy (GPS)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?lat=30.026&lng=31.213&type=pharmacy&radius=1500",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [
+								{ "key": "lat",    "value": "30.026" },
+								{ "key": "lng",    "value": "31.213" },
+								{ "key": "type",   "value": "pharmacy" },
+								{ "key": "radius", "value": "1500" }
+							]
+						},
+						"description": "Google Places result. First call hits API and caches for 24h.\nNow includes rating and open_now from Google."
+					}
+				},
+				{
+					"name": "3. Nearby — Supermarket (GPS)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?lat=30.026&lng=31.213&type=supermarket&radius=1500",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [
+								{ "key": "lat",    "value": "30.026" },
+								{ "key": "lng",    "value": "31.213" },
+								{ "key": "type",   "value": "supermarket" },
+								{ "key": "radius", "value": "1500" }
+							]
+						}
+					}
+				},
+				{
+					"name": "4. Nearby — Restaurant (GPS)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?lat=30.026&lng=31.213&type=restaurant&radius=2000",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [
+								{ "key": "lat",    "value": "30.026" },
+								{ "key": "lng",    "value": "31.213" },
+								{ "key": "type",   "value": "restaurant" },
+								{ "key": "radius", "value": "2000" }
+							]
+						}
+					}
+				},
+				{
+					"name": "5. Nearby — Café (GPS)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?lat=30.026&lng=31.213&type=cafe&radius=1500",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [
+								{ "key": "lat",    "value": "30.026" },
+								{ "key": "lng",    "value": "31.213" },
+								{ "key": "type",   "value": "cafe" },
+								{ "key": "radius", "value": "1500" }
+							]
+						}
+					}
+				},
+				{
+					"name": "6. Nearby — Mosque (GPS)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?lat=30.026&lng=31.213&type=mosque&radius=1500",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [
+								{ "key": "lat",    "value": "30.026" },
+								{ "key": "lng",    "value": "31.213" },
+								{ "key": "type",   "value": "mosque" },
+								{ "key": "radius", "value": "1500" }
+							]
+						}
+					}
+				},
+				{
+					"name": "7. Nearby — Bus Station (GPS)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?lat=30.026&lng=31.213&type=bus_station&radius=1500",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [
+								{ "key": "lat",    "value": "30.026" },
+								{ "key": "lng",    "value": "31.213" },
+								{ "key": "type",   "value": "bus_station" },
+								{ "key": "radius", "value": "1500" }
+							]
+						}
+					}
+				},
+				{
+					"name": "8. Nearby — Gym (GPS)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?lat=30.026&lng=31.213&type=gym&radius=2000",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [
+								{ "key": "lat",    "value": "30.026" },
+								{ "key": "lng",    "value": "31.213" },
+								{ "key": "type",   "value": "gym" },
+								{ "key": "radius", "value": "2000" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "── NEARBY BY UNIVERSITY ──────────",
+			"item": [
+				{
+					"name": "9. University — Supermarket near Cairo University",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/university/?name=Cairo University&type=supermarket&radius=1500",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "university", ""],
+							"query": [
+								{ "key": "name",   "value": "Cairo University" },
+								{ "key": "type",   "value": "supermarket" },
+								{ "key": "radius", "value": "1500" }
+							]
+						}
+					}
+				},
+				{
+					"name": "10. University — Pharmacy near Ain Shams",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/university/?name=Ain Shams University&type=pharmacy&radius=1500",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "university", ""],
+							"query": [
+								{ "key": "name",   "value": "Ain Shams University" },
+								{ "key": "type",   "value": "pharmacy" },
+								{ "key": "radius", "value": "1500" }
+							]
+						}
+					}
+				},
+				{
+					"name": "11. University — Café near Alexandria University",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/university/?name=Alexandria University&type=cafe&radius=2000",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "university", ""],
+							"query": [
+								{ "key": "name",   "value": "Alexandria University" },
+								{ "key": "type",   "value": "cafe" },
+								{ "key": "radius", "value": "2000" }
+							]
+						}
+					}
+				},
+				{
+					"name": "12. University — Gym near Mansoura University",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/university/?name=Mansoura University&type=gym&radius=2000",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "university", ""],
+							"query": [
+								{ "key": "name",   "value": "Mansoura University" },
+								{ "key": "type",   "value": "gym" },
+								{ "key": "radius", "value": "2000" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "── DISTANCE MATRIX ───────────────",
+			"item": [
+				{
+					"name": "13. Distance — Property to University (Walking)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/distance/?property_id={{property_id}}&mode=walking",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "distance", ""],
+							"query": [
+								{ "key": "property_id", "value": "{{property_id}}" },
+								{ "key": "mode",        "value": "walking" }
+							]
+						},
+						"description": "Returns real walking distance + time from property to its nearby_university.\nSet the `property_id` collection variable to a real ID from your DB."
+					}
+				},
+				{
+					"name": "14. Distance — Property to University (Transit)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/distance/?property_id={{property_id}}&mode=transit",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "distance", ""],
+							"query": [
+								{ "key": "property_id", "value": "{{property_id}}" },
+								{ "key": "mode",        "value": "transit" }
+							]
+						}
+					}
+				},
+				{
+					"name": "15. Distance — Property to University (Driving)",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/distance/?property_id={{property_id}}&mode=driving",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "distance", ""],
+							"query": [
+								{ "key": "property_id", "value": "{{property_id}}" },
+								{ "key": "mode",        "value": "driving" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "── GEOCODING (via property create) ──",
+			"item": [
+				{
+					"name": "16. Create Property — Geocoding fires automatically",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" },
+							{ "key": "Content-Type",  "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Test Property Geocoding\",\n    \"property_type\": \"apartment\",\n    \"price\": 3000,\n    \"city\": \"Cairo\",\n    \"address\": \"15 Tahrir Square, Cairo, Egypt\",\n    \"nearby_university\": \"Cairo University\",\n    \"transport_type\": \"walk\",\n    \"num_rooms\": 2,\n    \"num_beds\": 2,\n    \"num_bathrooms\": 1,\n    \"gender_preference\": \"male\",\n    \"status\": \"available\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/properties/create/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "properties", "create", ""]
+						},
+						"description": "Create a property with an address but NO lat/lng.\nThe geocoding signal fires automatically and fills latitude/longitude.\nCheck the response — latitude and longitude should be populated."
+					}
+				},
+				{
+					"name": "17. Property Detail — Distance injected in response",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/properties/{{property_id}}/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "properties", "{{property_id}}", ""]
+						},
+						"description": "Property detail response now includes `university_distance` field:\n{\n  \"university_distance\": {\n    \"distance_text\": \"1.2 km\",\n    \"distance_value\": 1200,\n    \"duration_text\": \"15 mins\",\n    \"duration_value\": 900,\n    \"mode\": \"walking\"\n  }\n}\nIf property has no lat/lng or no nearby_university, university_distance will be null."
+					}
+				}
+			]
+		},
+		{
+			"name": "── ERROR CASES ───────────────────",
+			"item": [
+				{
+					"name": "ERR — Missing lat/lng",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?type=pharmacy",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [{ "key": "type", "value": "pharmacy" }]
+						},
+						"description": "Expected: 400"
+					}
+				},
+				{
+					"name": "ERR — Invalid type",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?lat=30.026&lng=31.213&type=pizza",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [
+								{ "key": "lat",  "value": "30.026" },
+								{ "key": "lng",  "value": "31.213" },
+								{ "key": "type", "value": "pizza" }
+							]
+						},
+						"description": "Expected: 400"
+					}
+				},
+				{
+					"name": "ERR — University not found",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/university/?name=Hogwarts University&type=cafe",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "university", ""],
+							"query": [
+								{ "key": "name", "value": "Hogwarts University" },
+								{ "key": "type", "value": "cafe" }
+							]
+						},
+						"description": "Expected: 404"
+					}
+				},
+				{
+					"name": "ERR — Distance: missing property_id",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/distance/?mode=walking",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "distance", ""],
+							"query": [{ "key": "mode", "value": "walking" }]
+						},
+						"description": "Expected: 400"
+					}
+				},
+				{
+					"name": "ERR — Distance: invalid mode",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+						"url": {
+							"raw": "{{base_url}}/api/services/distance/?property_id={{property_id}}&mode=teleport",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "distance", ""],
+							"query": [
+								{ "key": "property_id", "value": "{{property_id}}" },
+								{ "key": "mode",        "value": "teleport" }
+							]
+						},
+						"description": "Expected: 400"
+					}
+				},
+				{
+					"name": "ERR — No auth token",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/services/nearby/?lat=30.026&lng=31.213&type=pharmacy",
+							"host": ["{{base_url}}"],
+							"path": ["api", "services", "nearby", ""],
+							"query": [
+								{ "key": "lat",  "value": "30.026" },
+								{ "key": "lng",  "value": "31.213" },
+								{ "key": "type", "value": "pharmacy" }
+							]
+						},
+						"description": "Expected: 401"
+					}
+				}
+			]
+		}
+	]
+}

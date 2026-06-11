@@ -42,6 +42,9 @@ class PropertySerializer(serializers.ModelSerializer):
     landlord_picture      = serializers.ImageField(source="landlord.profile_picture", read_only=True)
     landlord_is_verified  = serializers.BooleanField(source="landlord.is_verified", read_only=True)
     landlord_is_top_rated = serializers.BooleanField(source="landlord.is_top_rated", read_only=True)
+   
+    # Computed at request time by PropertyDetailView — not stored in DB
+    university_distance = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -78,6 +81,15 @@ class PropertySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "view_count", "is_featured", "created_at", "updated_at"]
 
+    def get_university_distance(self, obj):
+        """
+        Returns Google Distance Matrix result if injected by the view.
+        Falls back to None gracefully so serializer never crashes.
+
+        The view injects it via:
+            PropertySerializer(prop, context={"request": req, "university_distance": result})
+        """
+        return self.context.get("university_distance", None)
 
 
 class PropertyListSerializer(serializers.ModelSerializer):

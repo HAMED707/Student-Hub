@@ -94,6 +94,9 @@ class PropertySerializer(serializers.ModelSerializer):
     landlord_picture      = serializers.ImageField(source="landlord.profile_picture", read_only=True)
     landlord_is_verified  = serializers.BooleanField(source="landlord.is_verified", read_only=True)
     landlord_is_top_rated = serializers.BooleanField(source="landlord.is_top_rated", read_only=True)
+   
+    # Computed at request time by PropertyDetailView — not stored in DB
+    university_distance = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -130,6 +133,15 @@ class PropertySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "view_count", "is_featured", "created_at", "updated_at"]
 
+    def get_university_distance(self, obj):
+        """
+        Returns Google Distance Matrix result if injected by the view.
+        Falls back to None gracefully so serializer never crashes.
+
+        The view injects it via:
+            PropertySerializer(prop, context={"request": req, "university_distance": result})
+        """
+        return self.context.get("university_distance", None)
 
 
 class PropertyListSerializer(serializers.ModelSerializer):
@@ -256,6 +268,7 @@ class PropertyUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("max_stay_months cannot be less than min_stay_months.")
         return data
 
+
 ```
 
 # ────────────────────────End Serializer────────────────────────────────
@@ -292,6 +305,20 @@ from api.properties_api.serializers import (
     PropertyImageSerializer,
 )
 
+import logging
+
+from services.google_maps import (
+    get_distance_to_university,
+    GoogleMapsError,
+)
+
+logger = logging.getLogger(__name__)
+
+TRANSPORT_TO_MODE = {
+    "walk": "walking",
+    "metro": "transit",
+    "transport": "transit",
+}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -432,7 +459,35 @@ class PropertyDetailView(APIView):
         Property.objects.filter(id=property_id).update(view_count=F("view_count") + 1)
         prop.refresh_from_db(fields=["view_count"])
 
-        serializer = PropertySerializer(prop, context={"request": request})
+        university_distance = None
+
+        if prop.latitude and prop.longitude and prop.nearby_university:
+            mode = TRANSPORT_TO_MODE.get(
+                prop.transport_type,
+                "walking"
+            )
+
+            try:
+                university_distance = get_distance_to_university(
+                    origin_lat=float(prop.latitude),
+                    origin_lng=float(prop.longitude),
+                    destination=prop.nearby_university,
+                    mode=mode,
+                )
+            except GoogleMapsError as exc:
+                logger.warning(
+                    "Distance Matrix failed for property %s: %s",
+                    property_id,
+                    exc,
+                )
+
+        serializer = PropertySerializer(
+            prop,
+            context={
+                "request": request,
+                "university_distance": university_distance,
+            },
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -578,6 +633,89 @@ class LandlordPropertiesView(APIView):
 # ────────────────────────End View──────────────────────────────────────
 
 
+# ────────────────────────Start Signals────────────────────────────────────
+```
+
+"""
+properties/signals.py
+
+Auto-geocodes a property's address to lat/lng whenever:
+  - A new property is created with an address
+  - An existing property's address is changed
+
+Uses Google Geocoding API via services.google_maps.geocode_address().
+Fails silently — if geocoding fails the property is still saved,
+just without coordinates. The landlord can retry by re-saving.
+"""
+
+import logging
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
+from properties.models import Property
+from services.google_maps import geocode_address, GoogleMapsError
+
+logger = logging.getLogger(__name__)
+
+
+@receiver(pre_save, sender=Property)
+def auto_geocode_address(sender, instance, **kwargs):
+    """
+    Fires before every Property save.
+
+    Triggers geocoding when:
+        1. New property (no pk yet) and has an address
+        2. Existing property and address has changed
+
+    Skips geocoding when:
+        - No address provided
+        - Address hasn't changed
+        - lat/lng were manually provided by the landlord (we respect manual coords)
+    """
+    if not instance.address:
+        return
+
+    # Check if address changed (skip for new instances — they have no pk yet)
+    address_changed = False
+    if instance.pk:
+        try:
+            old = Property.objects.get(pk=instance.pk)
+            address_changed = old.address != instance.address
+        except Property.DoesNotExist:
+            address_changed = True
+    else:
+        # New property
+        address_changed = True
+
+    if not address_changed:
+        return
+
+    # If landlord manually supplied lat/lng alongside a new address, respect them
+    if instance.pk is None and instance.latitude and instance.longitude:
+        return
+
+    try:
+        result = geocode_address(instance.address)
+        instance.latitude  = result["lat"]
+        instance.longitude = result["lng"]
+        logger.info(
+            "Geocoded property '%s': lat=%s, lng=%s",
+            instance.title,
+            result["lat"],
+            result["lng"],
+        )
+    except GoogleMapsError as exc:
+        # Log but don't block the save
+        logger.warning(
+            "Geocoding failed for property '%s' (address: %s): %s",
+            instance.title,
+            instance.address,
+            exc,
+        )
+```
+# ────────────────────────End Signals──────────────────────────────────────
+
+
+
 
 
 
@@ -700,12 +838,6 @@ class PropertyFilter(django_filters.FilterSet):
 
 
 
-# ────────────────────────Start Signals────────────────────────────────────
-```
-
-
-```
-# ────────────────────────End Signals──────────────────────────────────────
 
 
 
@@ -713,7 +845,19 @@ class PropertyFilter(django_filters.FilterSet):
 
 # ────────────────────────Start Apps────────────────────────────────────
 ```
+"""
+properties/apps.py
+Registers the auto-geocode signal so it fires on every Property save.
+"""
+from django.apps import AppConfig
 
+
+class PropertiesConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name               = "properties"
+
+    def ready(self):
+        import properties.signals  # noqa: F401 — registers geocoding signal
 
 ```
 # ────────────────────────End Apps──────────────────────────────────────

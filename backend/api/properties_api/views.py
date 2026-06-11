@@ -24,6 +24,20 @@ from api.properties_api.serializers import (
     PropertyImageSerializer,
 )
 
+import logging
+
+from services.google_maps import (
+    get_distance_to_university,
+    GoogleMapsError,
+)
+
+logger = logging.getLogger(__name__)
+
+TRANSPORT_TO_MODE = {
+    "walk": "walking",
+    "metro": "transit",
+    "transport": "transit",
+}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -164,7 +178,35 @@ class PropertyDetailView(APIView):
         Property.objects.filter(id=property_id).update(view_count=F("view_count") + 1)
         prop.refresh_from_db(fields=["view_count"])
 
-        serializer = PropertySerializer(prop, context={"request": request})
+        university_distance = None
+
+        if prop.latitude and prop.longitude and prop.nearby_university:
+            mode = TRANSPORT_TO_MODE.get(
+                prop.transport_type,
+                "walking"
+            )
+
+            try:
+                university_distance = get_distance_to_university(
+                    origin_lat=float(prop.latitude),
+                    origin_lng=float(prop.longitude),
+                    destination=prop.nearby_university,
+                    mode=mode,
+                )
+            except GoogleMapsError as exc:
+                logger.warning(
+                    "Distance Matrix failed for property %s: %s",
+                    property_id,
+                    exc,
+                )
+
+        serializer = PropertySerializer(
+            prop,
+            context={
+                "request": request,
+                "university_distance": university_distance,
+            },
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

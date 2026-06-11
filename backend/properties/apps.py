@@ -1,19 +1,13 @@
 """
-Properties app configuration.
-ready() is already wired for when signals are added later
-(e.g. auto-update landlord stats when a property gets reviewed or booked).
+properties/apps.py
+Registers the auto-geocode signal so it fires on every Property save.
 """
 from django.apps import AppConfig
 
 
 class PropertiesConfig(AppConfig):
-    """Configuration class for the properties app."""
     default_auto_field = "django.db.models.BigAutoField"
-    name = "properties"
+    name               = "properties"
 
     def ready(self):
-        """
-        Import signals when the app loads so they connect to the dispatcher.
-        NOTE: uncomment the line below when properties/signals.py is created.
-        """
-        pass  # import properties.signals  # noqa: F401
+        import properties.signals  # noqa: F401 — registers geocoding signal
