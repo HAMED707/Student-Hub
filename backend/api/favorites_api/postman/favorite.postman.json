@@ -1,0 +1,555 @@
+{
+	"info": {
+		"_postman_id": "studenthub-favorites-testing",
+		"name": "StudentHub - Favorites App Testing",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000",
+			"type": "default"
+		},
+		{
+			"key": "student_token",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "landlord_token",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "property_id",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "favorite_id",
+			"value": "",
+			"type": "default"
+		}
+	],
+	"item": [
+		{
+			"name": "🛠️ SETUP - Login as Student",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 200) {",
+							"    var jsonData = pm.response.json();",
+							"    pm.environment.set(\"student_token\", jsonData.access);",
+							"    console.log(\"Student token saved:\", jsonData.access.substring(0, 20) + \"...\");",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"student_user\",\n    \"password\": \"Testuser123\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/auth/login/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"login",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "🛠️ SETUP - Login as Landlord",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 200) {",
+							"    var jsonData = pm.response.json();",
+							"    pm.environment.set(\"landlord_token\", jsonData.access);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"landlord_user\",\n    \"password\": \"Testuser123\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/auth/login/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"login",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "🛠️ SETUP - Get Available Property ID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 200) {",
+							"    var jsonData = pm.response.json();",
+							"    if (jsonData.length > 0) {",
+							"        pm.environment.set(\"property_id\", jsonData[0].id);",
+							"        console.log(\"Using property ID:\", jsonData[0].id);",
+							"    }",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/properties/?status=available",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"properties",
+						""
+					],
+					"query": [
+						{
+							"key": "status",
+							"value": "available"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "✅ TEST - GET Favorites (Empty List)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{student_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/favorites/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "✅ TEST - POST Add to Favorites",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 201) {",
+							"    var jsonData = pm.response.json();",
+							"    pm.environment.set(\"favorite_id\", jsonData.id);",
+							"    console.log(\"Favorite created with ID:\", jsonData.id);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{student_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"property\": {{property_id}}\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/favorites/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "✅ TEST - GET Favorites (With Data)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{student_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/favorites/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "🚫 TEST - POST Duplicate Favorite (Should Fail)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{student_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"property\": {{property_id}}\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/favorites/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "🚫 TEST - POST Favorite as Landlord (Should Fail 403)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{landlord_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"property\": {{property_id}}\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/favorites/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "🚫 TEST - POST Favorite Non-Existent Property (Should Fail)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{student_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"property\": 99999\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/favorites/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "🚫 TEST - POST Favorite Rented Property (Should Fail)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{student_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"property\": {{property_id}}\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/favorites/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						""
+					],
+					"query": [
+						{
+							"key": "",
+							"value": "",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "✅ TEST - DELETE Favorite by Property ID",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{student_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/favorites/{{property_id}}/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						"{{property_id}}",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "✅ TEST - GET Favorites (After Delete - Should Be Empty)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{student_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/favorites/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "🚫 TEST - DELETE Non-Existent Favorite (Should Fail 404)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{student_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/favorites/99999/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						"99999",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "🚫 TEST - GET Favorites Without Auth (Should Fail 401)",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/favorites/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"favorites",
+						""
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

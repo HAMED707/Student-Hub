@@ -26,57 +26,50 @@ urlpatterns = [
 # ────────────────────────Start Serializer──────────────────────────────
 
 ```
-"""
-Favorites API serializers.
-
-Serializers:
-    - FavoriteSerializer       → GET /api/favorites/ (full read with nested property)
-    - FavoriteCreateSerializer → POST /api/favorites/ (write — accepts property id only)
-"""
-
+"""Favorites API serializers."""
+from django.db import IntegrityError
 from rest_framework import serializers
 from favorites.models import Favorite
 from api.properties_api.serializers import PropertyListSerializer
 
 
 class FavoriteSerializer(serializers.ModelSerializer):
-    """
-    Full read serializer. Used in all GET responses.
-    Nests lightweight property card so the frontend can render the shortlist grid.
-    """
-
     property_detail = PropertyListSerializer(source="property", read_only=True)
 
     class Meta:
-        model  = Favorite
+        model = Favorite
         fields = ["id", "property", "property_detail", "created_at"]
         read_only_fields = ["id", "created_at"]
 
 
 class FavoriteCreateSerializer(serializers.ModelSerializer):
-    """
-    Write serializer for adding a property to the shortlist.
-    User is injected from request.user in the view — not accepted from input.
-    Raises a 400 if the student has already hearted this property.
-    """
-
     class Meta:
-        model  = Favorite
+        model = Favorite
         fields = ["property"]
 
     def validate(self, data):
-        user     = self.context["request"].user
-        property = data.get("property")
+        user = self.context["request"].user
+        prop = data.get("property")
 
-        # unique_together is enforced at DB level, but we surface a clear error here
-        if Favorite.objects.filter(user=user, property=property).exists():
+        # 1. Prevent favoriting rented/unavailable properties
+        if prop.status != "available":
+            raise serializers.ValidationError("You can only save available properties.")
+
+        # 2. Prevent duplicates
+        if Favorite.objects.filter(user=user, property=prop).exists():
             raise serializers.ValidationError("You have already saved this property.")
 
         return data
 
-    def create(self, validated_data):
-        # User is passed from the view via serializer.save(user=request.user)
-        return Favorite.objects.create(**validated_data)
+    def create(self, validated_data, **extra_kwargs):
+        """
+        extra_kwargs captures the `user=request.user` passed from the view.
+        IntegrityError catches rare race conditions (e.g., double-clicking the heart button).
+        """
+        try:
+            return Favorite.objects.create(**validated_data, **extra_kwargs)
+        except IntegrityError:
+            raise serializers.ValidationError("You have already saved this property.")
 
 ```
 
@@ -88,15 +81,7 @@ class FavoriteCreateSerializer(serializers.ModelSerializer):
 # ────────────────────────Start View────────────────────────────────────
 
 ```
-"""
-Favorites API views.
-
-Endpoints:
-    GET    /api/favorites/                  → FavoritesListView    (student's shortlist)
-    POST   /api/favorites/                  → FavoritesListView    (heart a property)
-    DELETE /api/favorites/<property_id>/    → FavoriteDeleteView   (unheart a property)
-"""
-
+"""Favorites API views."""
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -107,17 +92,13 @@ from api.accounts_api.permissions import IsStudent
 
 
 class FavoritesListView(APIView):
-    """
-    GET  /api/favorites/ → returns the logged-in student's full shortlist
-    POST /api/favorites/ → adds a property to the shortlist
-    """
     permission_classes = [IsStudent]
 
     def get(self, request):
         queryset = (
             Favorite.objects
             .filter(user=request.user)
-            .select_related("property", "property__owner")
+            .select_related("property", "property__landlord")  
             .prefetch_related("property__images")
         )
         serializer = FavoriteSerializer(queryset, many=True, context={"request": request})
@@ -128,7 +109,7 @@ class FavoritesListView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Inject the authenticated student as the owner of this favorite
+        # Inject the authenticated student
         favorite = serializer.save(user=request.user)
         return Response(
             FavoriteSerializer(favorite, context={"request": request}).data,
@@ -137,11 +118,6 @@ class FavoritesListView(APIView):
 
 
 class FavoriteDeleteView(APIView):
-    """
-    DELETE /api/favorites/<property_id>/
-    Removes a property from the student's shortlist.
-    Uses property_id (not favorite id) so the frontend doesn't need to store favorite PKs.
-    """
     permission_classes = [IsStudent]
 
     def delete(self, request, property_id):

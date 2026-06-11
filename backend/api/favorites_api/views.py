@@ -1,12 +1,4 @@
-"""
-Favorites API views.
-
-Endpoints:
-    GET    /api/favorites/                  → FavoritesListView    (student's shortlist)
-    POST   /api/favorites/                  → FavoritesListView    (heart a property)
-    DELETE /api/favorites/<property_id>/    → FavoriteDeleteView   (unheart a property)
-"""
-
+"""Favorites API views."""
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -17,17 +9,13 @@ from api.accounts_api.permissions import IsStudent
 
 
 class FavoritesListView(APIView):
-    """
-    GET  /api/favorites/ → returns the logged-in student's full shortlist
-    POST /api/favorites/ → adds a property to the shortlist
-    """
     permission_classes = [IsStudent]
 
     def get(self, request):
         queryset = (
             Favorite.objects
             .filter(user=request.user)
-            .select_related("property", "property__owner")
+            .select_related("property", "property__landlord")  
             .prefetch_related("property__images")
         )
         serializer = FavoriteSerializer(queryset, many=True, context={"request": request})
@@ -38,7 +26,7 @@ class FavoritesListView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Inject the authenticated student as the owner of this favorite
+        # Inject the authenticated student
         favorite = serializer.save(user=request.user)
         return Response(
             FavoriteSerializer(favorite, context={"request": request}).data,
@@ -47,11 +35,6 @@ class FavoritesListView(APIView):
 
 
 class FavoriteDeleteView(APIView):
-    """
-    DELETE /api/favorites/<property_id>/
-    Removes a property from the student's shortlist.
-    Uses property_id (not favorite id) so the frontend doesn't need to store favorite PKs.
-    """
     permission_classes = [IsStudent]
 
     def delete(self, request, property_id):
