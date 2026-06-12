@@ -108,7 +108,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
         model  = Property
         fields = [
             "id", "title", "property_type", "price",
-            "city", "district",
+            "city", "district", "latitude", "longitude",
             "nearby_university", "distance_to_university", "transport_type",
             "num_beds", "num_roommates", "gender_preference",
             "amenities", "status", "is_featured",

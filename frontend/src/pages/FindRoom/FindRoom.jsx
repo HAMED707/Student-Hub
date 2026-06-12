@@ -13,6 +13,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { fetchProperties } from "../../api/properties.js";
+import { normalizePropertyCard } from "../../utils/properties.js";
 
 const generateData = () => {
   const images = [
@@ -203,49 +204,46 @@ const FindRoom = () => {
   const gridRef = useRef(null);
   const didPageMount = useRef(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 650);
-    return () => clearTimeout(timer);
-  }, []);
+  const backendQueryParams = useMemo(() => {
+    const params = {};
+    if (searchQuery.trim()) params.q = searchQuery.trim();
+    if (filters.types.length > 0) {
+      params.type = filters.types
+        .map((type) => {
+          if (type === "Private Room") return "room";
+          if (type === "Shared Room") return "shared";
+          return type.toLowerCase();
+        })
+        .join(",");
+    }
+    if (filters.amenities.length > 0) params.amenity = filters.amenities.join(",");
+    if (filters.maxPrice < DEFAULT_FILTERS.maxPrice) params.price_max = filters.maxPrice;
+    if (filters.cairoOnly) params.city = "Cairo";
+    if (filters.availableOnly) params.status = "available";
+    return params;
+  }, [searchQuery, filters]);
 
   useEffect(() => {
     let cancelled = false;
     const loadProperties = async () => {
+      setIsLoading(true);
       try {
-        const data = await fetchProperties();
-        if (cancelled || !Array.isArray(data) || data.length === 0) return;
-        setProperties(
-          data.map((property) => ({
-            id: property.id,
-            title: property.title,
-            type: property.property_type,
-            location: `${property.city}${property.district ? ` - ${property.district}` : ""}`,
-            universityDistance: property.university_distance || property.distance_to_university || "",
-            campusMinutes: Number.parseInt(property.distance_to_university) || 15,
-            price: property.price,
-            rating: property.average_rating || 0,
-            reviews: property.review_count || 0,
-            roommates: property.num_roommates || 0,
-            image: property.cover_image || property.images?.[0]?.image || "",
-            availabilityStatus: property.status,
-            isAvailable: property.status === "available",
-            amenities: Array.isArray(property.amenities) ? property.amenities : [],
-            city: property.city,
-            area: property.district || property.city,
-            lat: property.latitude,
-            lng: property.longitude,
-            createdAt: new Date(property.created_at).getTime(),
-            description: property.description || "",
-            images: property.images?.map((image) => image.image) || [],
-          })),
-        );
+        const data = await fetchProperties(backendQueryParams);
+        if (cancelled || !Array.isArray(data)) return;
+        setProperties(data.map(normalizePropertyCard));
       } catch {
-        // keep mock data fallback
+        if (!cancelled) {
+          setProperties(generateData());
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
     loadProperties();
     return () => { cancelled = true; };
-  }, []);
+  }, [backendQueryParams]);
 
   useEffect(() => {
     const params = {};

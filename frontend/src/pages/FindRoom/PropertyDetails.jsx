@@ -43,6 +43,12 @@ import "leaflet/dist/leaflet.css";
 
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
+import { fetchProperties, fetchPropertyDetail } from "../../api/properties.js";
+import { fetchPropertyReviews } from "../../api/reviews.js";
+import {
+  normalizePropertyCard,
+  normalizePropertyDetail,
+} from "../../utils/properties.js";
 
 const propertyData = {
   id: 1,
@@ -223,6 +229,20 @@ const ratingBreakdown = [
   { label: "Value", value: 84, score: 4.2 },
 ];
 
+const DETAIL_ICON_MAP = {
+  wifi: Wifi,
+  snowflake: Snowflake,
+  utensils: Utensils,
+  shield: ShieldCheck,
+  wind: Wind,
+  home: Home,
+  droplet: Droplet,
+  monitor: Monitor,
+  check: CheckCircle,
+  zap: Zap,
+  flame: Flame,
+};
+
 const generateProperties = () => {
   const images = [
     "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80",
@@ -331,6 +351,7 @@ const PropertyDetails = () => {
   const { id } = useParams();
   const [isLoading, setIsLoading] = useState(true);
   const [dynamicProperty, setDynamicProperty] = useState(null);
+  const [liveSimilarProperties, setLiveSimilarProperties] = useState(similarProperties);
   const [notFound, setNotFound] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isVideoOpen, setIsVideoOpen] = useState(false);
@@ -361,36 +382,79 @@ const PropertyDetails = () => {
   });
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (id) {
-        const numericId = parseInt(id, 10);
-        const found = generateProperties().find((property) => property.id === numericId);
-        if (found) {
-          setDynamicProperty(found);
-          setNotFound(false);
-        } else {
+    let cancelled = false;
+
+    const loadProperty = async () => {
+      setIsLoading(true);
+      setNotFound(false);
+
+      try {
+        const detail = await fetchPropertyDetail(id);
+        const reviewsPayload = await fetchPropertyReviews(id).catch(() => null);
+
+        if (cancelled) return;
+
+        setDynamicProperty(normalizePropertyDetail(detail, reviewsPayload));
+
+        const similar = await fetchProperties({
+          city: detail.city,
+          university: detail.nearby_university,
+          status: "available",
+        }).catch(() => []);
+
+        if (!cancelled && Array.isArray(similar)) {
+          const normalized = similar
+            .filter((property) => property.id !== detail.id)
+            .slice(0, 4)
+            .map(normalizePropertyCard);
+
+          if (normalized.length > 0) {
+            setLiveSimilarProperties(normalized);
+          }
+        }
+      } catch (error) {
+        if (cancelled) return;
+
+        if (error?.response?.status === 404) {
           setNotFound(true);
+        } else {
+          const numericId = parseInt(id, 10);
+          const fallback = generateProperties().find((property) => property.id === numericId);
+
+          if (fallback) {
+            setDynamicProperty({
+              ...propertyData,
+              id: fallback.id,
+              title: fallback.title,
+              price: fallback.price,
+              rating: fallback.rating,
+              reviewCount: fallback.reviews,
+              address: fallback.location,
+              distance: fallback.universityDistance,
+              images: fallback.image ? [fallback.image, ...propertyData.images.slice(1)] : propertyData.images,
+            });
+          } else {
+            setNotFound(true);
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
         }
       }
-      setIsLoading(false);
-    }, 400);
-    return () => clearTimeout(timer);
+    };
+
+    loadProperty();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
-  const currentProperty = useMemo(() => {
-    if (!dynamicProperty) return propertyData;
-    return {
-      ...propertyData,
-      id: dynamicProperty.id,
-      title: dynamicProperty.title,
-      price: dynamicProperty.price,
-      rating: dynamicProperty.rating,
-      reviewCount: dynamicProperty.reviews,
-      address: dynamicProperty.location || propertyData.address,
-      images: dynamicProperty.image ? [dynamicProperty.image, ...propertyData.images.slice(1)] : propertyData.images,
-      distance: dynamicProperty.universityDistance || propertyData.distance,
-    };
-  }, [dynamicProperty]);
+  const currentProperty = useMemo(
+    () => (dynamicProperty ? { ...propertyData, ...dynamicProperty } : propertyData),
+    [dynamicProperty],
+  );
 
   const nearbyMarkers = useMemo(
     () =>
@@ -567,25 +631,25 @@ const PropertyDetails = () => {
   }, [showNotice]);
 
   const handleContactOwner = useCallback(() => {
-    navigate("/owner/messages", {
+    navigate("/messages", {
       state: {
         ownerName: currentProperty.landlord.name,
         ownerAvatar: currentProperty.landlord.image,
+        ownerId: currentProperty.landlord.id,
         propertyId: currentProperty.id,
         propertyTitle: currentProperty.title,
       },
     });
-  }, [currentProperty.id, currentProperty.landlord.image, currentProperty.landlord.name, currentProperty.title, navigate]);
+  }, [currentProperty.id, currentProperty.landlord.id, currentProperty.landlord.image, currentProperty.landlord.name, currentProperty.title, navigate]);
 
   const openOwnerProfile = useCallback(() => {
-    navigate("/owner/profile", {
-      state: {
-        ownerName: currentProperty.landlord.name,
-        ownerAvatar: currentProperty.landlord.image,
-        propertyId: currentProperty.id,
-      },
-    });
-  }, [currentProperty.id, currentProperty.landlord.image, currentProperty.landlord.name, navigate]);
+    if (currentProperty.landlord.id) {
+      navigate(`/profile/${currentProperty.landlord.id}`);
+      return;
+    }
+
+    showNotice("Owner profile is unavailable");
+  }, [currentProperty.landlord.id, navigate, showNotice]);
 
   const openGoogleMaps = useCallback(() => {
     window.open(`https://www.google.com/maps?q=${currentProperty.lat},${currentProperty.lng}`, "_blank", "noreferrer");
@@ -758,7 +822,7 @@ const PropertyDetails = () => {
                 <h3 className="mb-4 text-xl font-bold text-[#091E42]">Property Facilities</h3>
                 <div className="flex flex-wrap gap-3 border-b border-slate-400/70 pb-5">
                   {currentProperty.services.map((service) => {
-                    const Icon = service.icon;
+                    const Icon = service.icon || DETAIL_ICON_MAP[service.iconKey] || CheckCircle;
                     return (
                       <span key={service.name} className="inline-flex items-center gap-2 rounded-full bg-[#155BC2] px-4 py-2 text-xs font-bold text-white shadow-sm">
                         <Icon className="h-4 w-4" /> {service.name}
@@ -782,7 +846,7 @@ const PropertyDetails = () => {
               <div className="rounded-lg bg-slate-100 p-6 shadow-sm ring-1 ring-slate-200">
                 <div className="flex flex-wrap gap-3">
                 {currentProperty.bills.map((bill) => {
-                  const Icon = bill.icon;
+                  const Icon = bill.icon || DETAIL_ICON_MAP[bill.iconKey] || Zap;
                   return (
                     <span key={bill.name} className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white shadow-sm ${bill.included ? "bg-[#155BC2]" : "bg-[#F59E0B]"}`}>
                       <Icon className="h-4 w-4" /> {bill.name}
@@ -929,7 +993,7 @@ const PropertyDetails = () => {
             </div>
           </div>
           <div ref={similarScrollRef} className="scrollbar-hide flex gap-6 overflow-x-auto pb-6 scroll-smooth">
-            {similarProperties.map((item) => (
+            {liveSimilarProperties.map((item) => (
               <div key={item.id} className="w-[320px] shrink-0 sm:w-[360px]">
                 <PropertyCard property={item} />
               </div>
@@ -982,7 +1046,7 @@ const PropertyDetails = () => {
               </button>
             </div>
             <div className="relative aspect-video bg-slate-900">
-              <img src={currentProperty.images[4]} alt="Video preview" className="h-full w-full object-cover opacity-70" />
+              <img src={currentProperty.images[4] || currentProperty.images[0]} alt="Video preview" className="h-full w-full object-cover opacity-70" />
               <div className="absolute inset-0 grid place-items-center">
                 {isVideoPlaying ? (
                   <div className="rounded-full bg-white/90 px-6 py-3 text-sm font-black text-[#155BC2] shadow-lg">
