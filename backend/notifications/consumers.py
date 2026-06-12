@@ -42,4 +42,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     async def notify(self, event):
         """Push the notification payload to the connected WebSocket client."""
-        await self.send(text_data=json.dumps(event))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    **event,
+                    "type": "notification",
+                }
+            )
+        )

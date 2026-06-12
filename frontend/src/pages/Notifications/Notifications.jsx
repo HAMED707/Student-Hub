@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -8,84 +8,28 @@ import {
   Clock,
   MessageSquare,
   ShieldCheck,
-  Trash2,
 } from "lucide-react";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
-import { useEffect } from "react";
-import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "../../api/notifications.js";
-import { buildConversationRouteState } from "../../utils/messaging.js";
+import { useNotifications } from "../../context/notificationsContext.js";
+import {
+  getNotificationActionLabel,
+  resolveNotificationDestination,
+} from "../../utils/notifications.js";
 
 const FILTER_TABS = ["All", "Unread", "Bookings", "Messages"];
 
-const MOCK_NOTIFICATIONS = [
-  {
-    id: 1,
-    type: "booking_approved",
-    category: "Bookings",
-    title: "Booking approved",
-    message:
-      "Your reservation for Modern Studio - Nasr City has been approved by the landlord.",
-    timestamp: "2 hours ago",
-    unread: true,
-    actionLabel: "Pay EGP 2,500",
-  },
-  {
-    id: 2,
-    type: "message",
-    category: "Messages",
-    title: "New message from Ahmed",
-    message:
-      "Ahmed sent more details about the move-in time and building access.",
-    timestamp: "4 hours ago",
-    unread: true,
-    actionLabel: "Reply",
-  },
-  {
-    id: 3,
-    type: "reminder",
-    category: "Bookings",
-    title: "Payment reminder",
-    message:
-      "Your booking deposit is due tomorrow to keep Cozy Room - Dokki reserved.",
-    timestamp: "Yesterday",
-    unread: false,
-    actionLabel: "View booking",
-  },
-  {
-    id: 4,
-    type: "system",
-    category: "System",
-    title: "Profile verified",
-    message:
-      "Your student profile was verified. You can now contact landlords faster.",
-    timestamp: "3 days ago",
-    unread: false,
-  },
-  {
-    id: 5,
-    type: "message",
-    category: "Messages",
-    title: "Landlord replied",
-    message:
-      "Mona answered your question about monthly utilities for the shared apartment.",
-    timestamp: "1 week ago",
-    unread: false,
-    actionLabel: "Open chat",
-  },
-];
-
 const notificationStyles = {
-  booking_approved: {
+  warning: {
     icon: CheckCircle,
     wrapper: "bg-emerald-50 text-emerald-600 ring-emerald-100",
   },
-  message: {
+  info: {
     icon: MessageSquare,
     wrapper: "bg-blue-50 text-blue-600 ring-blue-100",
   },
-  reminder: {
-    icon: Clock,
-    wrapper: "bg-amber-50 text-amber-600 ring-amber-100",
+  success: {
+    icon: CheckCircle,
+    wrapper: "bg-emerald-50 text-emerald-600 ring-emerald-100",
   },
   system: {
     icon: ShieldCheck,
@@ -100,7 +44,7 @@ const EmptyState = ({ activeTab }) => (
       <span className="absolute right-5 top-5 h-3 w-3 rounded-full bg-emerald-400" />
     </div>
     <h2 className="text-2xl font-extrabold text-[#0A2647]">
-      You're all caught up!
+      You&apos;re all caught up!
     </h2>
     <p className="mt-3 text-sm leading-6 text-slate-500">
       {activeTab === "All"
@@ -110,20 +54,20 @@ const EmptyState = ({ activeTab }) => (
   </div>
 );
 
-const NotificationItem = ({ notification, onDelete, onOpen }) => {
+const NotificationItem = ({ notification, onMarkRead, onOpen }) => {
   const config =
-    notificationStyles[notification.type] || notificationStyles.system;
+    notificationStyles[notification.tone] || notificationStyles.system;
   const Icon = config.icon;
 
   return (
     <article
       className={`group relative flex gap-4 rounded-xl border p-4 transition duration-200 sm:p-5 ${
-        notification.unread
+        !notification.read
           ? "border-blue-100 bg-blue-50/70 shadow-sm"
           : "border-slate-200 bg-white hover:border-blue-100 hover:bg-slate-50"
       }`}
     >
-      {notification.unread && (
+      {!notification.read && (
         <span className="absolute left-3 top-3 h-2.5 w-2.5 rounded-full bg-blue-500 shadow-[0_0_0_4px_rgba(59,130,246,0.14)] motion-safe:animate-pulse" />
       )}
 
@@ -138,7 +82,7 @@ const NotificationItem = ({ notification, onDelete, onOpen }) => {
           <h3 className="text-base font-extrabold text-[#0A2647]">
             {notification.title}
           </h3>
-          {notification.unread && (
+          {!notification.read && (
             <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">
               New
             </span>
@@ -152,43 +96,32 @@ const NotificationItem = ({ notification, onDelete, onOpen }) => {
         <div className="mt-3 flex flex-wrap items-center gap-4">
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400">
             <Clock className="h-3.5 w-3.5" />
-            {notification.timestamp}
+            {notification.time}
           </span>
 
-          {notification.actionLabel && (
-            <button
-              type="button"
-              onClick={() => onOpen(notification)}
-              className="text-sm font-bold text-blue-600 transition hover:text-blue-700"
-            >
-              {notification.actionLabel}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="absolute right-4 top-4 flex translate-y-1 gap-2 opacity-100 transition sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100">
-        {notification.unread && (
           <button
             type="button"
             onClick={() => onOpen(notification)}
+            className="text-sm font-bold text-blue-600 transition hover:text-blue-700"
+          >
+            {getNotificationActionLabel(notification)}
+          </button>
+        </div>
+      </div>
+
+      {!notification.read && (
+        <div className="absolute right-4 top-4 flex translate-y-1 gap-2 opacity-100 transition sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={() => onMarkRead(notification.id)}
             className="grid h-9 w-9 place-items-center rounded-full border border-blue-100 bg-white text-blue-600 shadow-sm transition hover:bg-blue-600 hover:text-white"
             aria-label="Mark as read"
             title="Mark as read"
           >
             <Check className="h-4 w-4" />
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => onDelete(notification.id)}
-          className="grid h-9 w-9 place-items-center rounded-full border border-red-100 bg-white text-red-500 shadow-sm transition hover:bg-red-500 hover:text-white"
-          aria-label="Delete notification"
-          title="Delete"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
+        </div>
+      )}
     </article>
   );
 };
@@ -196,25 +129,15 @@ const NotificationItem = ({ notification, onDelete, onOpen }) => {
 export default function Notifications() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("All");
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
-
-  useEffect(() => {
-    fetchNotifications()
-      .then((data) => setNotifications((data?.notifications || []).map((item) => ({
-        id: item.id,
-        type: item.notification_type,
-        category: item.notification_type.includes("message") ? "Messages" : "Bookings",
-        title: item.title,
-        message: item.message,
-        timestamp: new Date(item.created_at).toLocaleString(),
-        unread: !item.is_read,
-        actionLabel: item.notification_type.includes("message") ? "Open chat" : "",
-        data: item.data || {},
-      }))))
-      .catch(() => {});
-  }, []);
-
-  const unreadCount = notifications.filter((item) => item.unread).length;
+  const {
+    role,
+    notifications,
+    unreadCount,
+    loading,
+    connectionState,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+  } = useNotifications();
 
   const tabCounts = useMemo(
     () => ({
@@ -231,42 +154,26 @@ export default function Notifications() {
   const filteredNotifications = useMemo(() => {
     if (activeTab === "All") return notifications;
     if (activeTab === "Unread") {
-      return notifications.filter((item) => item.unread);
+      return notifications.filter((item) => !item.read);
     }
     return notifications.filter((item) => item.category === activeTab);
   }, [activeTab, notifications]);
 
-  const markAsRead = (id) => {
-    markNotificationRead(id).catch(() => {});
-    setNotifications((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, unread: false } : item,
-      ),
-    );
-  };
+  const openNotification = useCallback(
+    async (notification) => {
+      if (!notification) return;
+      if (!notification.read) {
+        await markNotificationAsRead(notification.id);
+      }
 
-  const markAllAsRead = () => {
-    markAllNotificationsRead().catch(() => {});
-    setNotifications((current) =>
-      current.map((item) => ({ ...item, unread: false })),
-    );
-  };
-
-  const deleteNotification = (id) => {
-    setNotifications((current) => current.filter((item) => item.id !== id));
-  };
-
-  const openNotification = (notification) => {
-    if (notification.unread) {
-      markAsRead(notification.id);
-    }
-
-    if (notification.type.includes("message") && notification.data?.conversation_id) {
-      navigate("/messages", {
-        state: buildConversationRouteState(notification.data.conversation_id),
-      });
-    }
-  };
+      const destination = resolveNotificationDestination(notification, role);
+      navigate(
+        destination.path,
+        destination.state ? { state: destination.state } : undefined,
+      );
+    },
+    [markNotificationAsRead, navigate, role],
+  );
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-[#0A2647]">
@@ -288,11 +195,18 @@ export default function Notifications() {
                 Booking updates, landlord messages, and account alerts in one
                 place.
               </p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                {connectionState === "connected"
+                  ? "Live sync connected"
+                  : connectionState === "reconnecting"
+                    ? "Reconnecting live sync..."
+                    : "Notifications stay synced from your account feed"}
+              </p>
             </div>
 
             <button
               type="button"
-              onClick={markAllAsRead}
+              onClick={() => markAllNotificationsAsRead()}
               disabled={unreadCount === 0}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
             >
@@ -335,13 +249,17 @@ export default function Notifications() {
           </div>
 
           <div className="p-5 sm:p-7">
-            {filteredNotifications.length > 0 ? (
+            {loading && notifications.length === 0 ? (
+              <div className="py-12 text-center text-sm text-slate-500">
+                Loading notifications...
+              </div>
+            ) : filteredNotifications.length > 0 ? (
               <div className="space-y-3">
                 {filteredNotifications.map((notification) => (
                   <NotificationItem
                     key={notification.id}
                     notification={notification}
-                    onDelete={deleteNotification}
+                    onMarkRead={markNotificationAsRead}
                     onOpen={openNotification}
                   />
                 ))}

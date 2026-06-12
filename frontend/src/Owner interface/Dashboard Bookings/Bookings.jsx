@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
   Check,
@@ -69,12 +69,23 @@ const formatDate = (value) => {
 };
 
 export default function OwnerBookings() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const highlightedBookingId = location.state?.bookingId
+    ? String(location.state.bookingId)
+    : "";
+
+  useEffect(() => {
+    if (highlightedBookingId) {
+      setStatusFilter("All");
+      setQuery("");
+    }
+  }, [highlightedBookingId]);
 
   useEffect(() => {
     const loadBookings = async () => {
@@ -162,6 +173,15 @@ export default function OwnerBookings() {
       return matchesSearch && matchesStatus;
     });
   }, [bookings, query, statusFilter]);
+
+  useEffect(() => {
+    if (!highlightedBookingId || loading) return;
+
+    const element = document.getElementById(
+      `owner-booking-${highlightedBookingId}`,
+    );
+    element?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [filteredBookings.length, highlightedBookingId, loading]);
 
   const handleStatusUpdate = async (bookingId, nextStatus) => {
     const previous = bookings;
@@ -271,7 +291,12 @@ export default function OwnerBookings() {
                   return (
                     <article
                       key={booking.id}
-                      className="flex flex-col gap-4 bg-white p-4 transition hover:bg-[#F8FAFC] lg:flex-row lg:items-center lg:justify-between"
+                      id={`owner-booking-${booking.id}`}
+                      className={cx(
+                        "flex flex-col gap-4 bg-white p-4 transition hover:bg-[#F8FAFC] lg:flex-row lg:items-center lg:justify-between",
+                        String(booking.id) === highlightedBookingId &&
+                          "ring-2 ring-[#155BC2] ring-inset",
+                      )}
                     >
                       <div className="flex min-w-0 gap-3">
                         <img

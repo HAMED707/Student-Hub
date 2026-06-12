@@ -9,13 +9,13 @@ import {
 import { getApiErrorMessage, getStoredUser } from "../utils/auth.js";
 import {
   buildChatSocketUrl,
-  buildNotificationSocketUrl,
   createDraftConversation,
   mapConversation,
   mapMessage,
   mapSocketMessage,
   mergeDraftConversation,
 } from "../utils/messaging.js";
+import { useNotifications } from "../context/notificationsContext.js";
 
 const MAX_RECONNECT_ATTEMPTS = 4;
 
@@ -41,6 +41,7 @@ export function useMessagingInbox(routeState) {
   const currentUserId = storedUser?.id ? String(storedUser.id) : "";
   const requestedConversationId = routeState?.conversationId ? String(routeState.conversationId) : null;
   const draftConversation = useMemo(() => createDraftConversation(routeState), [routeState]);
+  const { latestNotification } = useNotifications();
 
   const [conversations, setConversations] = useState([]);
   const [messagesByConversation, setMessagesByConversation] = useState({});
@@ -50,7 +51,6 @@ export function useMessagingInbox(routeState) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const chatSocketRef = useRef(null);
-  const notificationSocketRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const activeConversationIdRef = useRef(requestedConversationId);
@@ -323,35 +323,18 @@ export function useMessagingInbox(routeState) {
   }, [activeConversation?.id, activeConversation?.isDraft, handleIncomingSocketMessage]);
 
   useEffect(() => {
-    const socketUrl = buildNotificationSocketUrl();
-    if (!socketUrl) return undefined;
+    if (latestNotification?.notificationType !== "new_message") return;
 
-    let isCancelled = false;
-    const socket = new WebSocket(socketUrl);
-    notificationSocketRef.current = socket;
+    const conversationId = String(latestNotification.data?.conversation_id || "");
+    if (!conversationId || conversationId === activeConversationIdRef.current) return;
 
-    socket.onmessage = async (event) => {
-      if (isCancelled) return;
-
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.notification_type !== "new_message") return;
-
-        const conversationId = String(payload.data?.conversation_id || "");
-        if (!conversationId || conversationId === activeConversationIdRef.current) return;
-
-        await refreshConversations();
-      } catch {
-        // ignore malformed notification event
-      }
-    };
-
-    return () => {
-      isCancelled = true;
-      socket.close();
-      notificationSocketRef.current = null;
-    };
-  }, [refreshConversations]);
+    refreshConversations();
+  }, [
+    latestNotification?.data?.conversation_id,
+    latestNotification?.id,
+    latestNotification?.notificationType,
+    refreshConversations,
+  ]);
 
   const sendMessage = useCallback(
     async (body) => {

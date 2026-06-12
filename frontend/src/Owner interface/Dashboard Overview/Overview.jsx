@@ -19,8 +19,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { fetchLandlordProperties } from "../../api/properties.js";
-import { fetchNotifications as fetchOwnerNotifications, markAllNotificationsRead } from "../../api/notifications.js";
-import { buildConversationRouteState } from "../../utils/messaging.js";
+import { useNotifications } from "../../context/notificationsContext.js";
+import { resolveNotificationDestination } from "../../utils/notifications.js";
 
 /* =========================
    Constants
@@ -97,8 +97,7 @@ const DashboardHeaderSection = ({
   onSearchChange,
   notifications = [],
   unreadCount = 0,
-  onDismissNotification,
-  onClearNotifications,
+  onMarkAllRead,
   onOpenNotification,
   onViewAllNotifications,
 }) => {
@@ -184,10 +183,10 @@ const DashboardHeaderSection = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => onClearNotifications?.()}
+                  onClick={() => onMarkAllRead?.()}
                   className="text-xs font-semibold text-slate-500 hover:text-slate-700 transition"
                 >
-                  Clear
+                  Mark all read
                 </button>
               </div>
 
@@ -218,21 +217,9 @@ const DashboardHeaderSection = ({
                       )}
                       title="Open notification"
                     >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDismissNotification?.(n.id);
-                        }}
-                        className="absolute right-3 top-3 text-slate-300 hover:text-slate-500 transition"
-                        aria-label="Dismiss"
-                      >
-                        <X size={14} />
-                      </button>
-
                       <div className="flex gap-3 items-start">
                         <div className="mt-0.5 w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center">
-                          <NotifIcon type={n.type} />
+                          <NotifIcon type={n.tone} />
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -724,7 +711,7 @@ const NotifIconSmall = ({ type }) => {
   return <Info size={16} className="text-orange-500" />;
 };
 
-const NotificationRow = ({ n, onDismiss, onOpen }) => (
+const NotificationRow = ({ n, onOpen }) => (
   <div
     role="button"
     tabIndex={0}
@@ -735,21 +722,9 @@ const NotificationRow = ({ n, onDismiss, onOpen }) => (
     className="relative w-full text-left rounded-2xl border border-slate-100 bg-white p-3 shadow-sm hover:shadow-[0_12px_30px_rgba(15,23,42,0.10)] hover:bg-slate-50 transition cursor-pointer"
     title="Open notification"
   >
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onDismiss?.(n.id);
-      }}
-      className="absolute right-3 top-3 text-slate-300 hover:text-slate-500"
-      aria-label="Dismiss"
-    >
-      <X size={14} />
-    </button>
-
     <div className="flex gap-3 items-start">
       <div className="mt-0.5 w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center">
-        <NotifIconSmall type={n.type} />
+        <NotifIconSmall type={n.tone} />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-[12px] font-extrabold leading-tight text-slate-900">
@@ -762,7 +737,7 @@ const NotificationRow = ({ n, onDismiss, onOpen }) => (
   </div>
 );
 
-const ImportantNotifications = ({ items = [], onDismiss, onOpen, onAction, unreadCount }) => {
+const ImportantNotifications = ({ items = [], onOpen, onAction, unreadCount }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const btnRef = useRef(null);
   const panelRef = useRef(null);
@@ -807,16 +782,6 @@ const ImportantNotifications = ({ items = [], onDismiss, onOpen, onAction, unrea
               >
                 Mark all as read
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onAction?.("clear_all");
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Clear all
-              </button>
             </div>
           )}
         </div>
@@ -826,7 +791,7 @@ const ImportantNotifications = ({ items = [], onDismiss, onOpen, onAction, unrea
         {preview.length === 0 ? (
           <div className="text-sm text-slate-400">{EMPTY_STATES.noNotifications}</div>
         ) : (
-          preview.map((n) => <NotificationRow key={n.id} n={n} onDismiss={onDismiss} onOpen={onOpen} />)
+          preview.map((n) => <NotificationRow key={n.id} n={n} onOpen={onOpen} />)
         )}
       </div>
 
@@ -850,7 +815,13 @@ const ImportantNotifications = ({ items = [], onDismiss, onOpen, onAction, unrea
 export default function OwnerDashboard() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [notifications, setNotifications] = useState([]);
+  const {
+    role,
+    notifications,
+    unreadCount,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+  } = useNotifications();
 
   // Bookings
   const [bookings, setBookings] = useState([
@@ -910,25 +881,8 @@ export default function OwnerDashboard() {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [allStudentsOpen, setAllStudentsOpen] = useState(false);
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   useEffect(() => {
-    fetchOwnerNotifications()
-      .then((data) => {
-        const list = data?.notifications || [];
-        setNotifications(list.slice(0, 6).map((item) => ({
-          id: item.id,
-          title: item.title,
-          desc: item.message,
-          time: new Date(item.created_at).toLocaleString(),
-          type: item.notification_type.includes("booking") ? "warning" : item.notification_type.includes("payment") ? "success" : "info",
-          read: item.is_read,
-          notificationType: item.notification_type,
-          data: item.data || {},
-          action: { path: item.notification_type.includes("booking") ? "/owner/bookings" : item.notification_type.includes("payment") ? "/owner/payments" : "/owner/overview" },
-        })));
-      })
-      .catch(() => {});
     fetchLandlordProperties()
       .then((data) => {
         if (!Array.isArray(data)) return;
@@ -969,38 +923,20 @@ export default function OwnerDashboard() {
     setSelectedBooking((s) => (s?.id === b.id ? { ...s, status: "Rejected" } : s));
   };
 
-  const markRead = useCallback((id) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  }, []);
-
-  const markAllRead = useCallback(() => {
-    markAllNotificationsRead().catch(() => {});
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
-
-  const dismiss = useCallback((id) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  }, []);
-
-  const clearAll = useCallback(() => {
-    setNotifications([]);
-  }, []);
-
   // Open notification: mark as read + navigate to its action, else go to notifications page
   const openNotification = useCallback(
-    (n) => {
+    async (n) => {
       if (!n) return;
-      markRead(n.id);
-      if (n.notificationType?.includes("message") && n.data?.conversation_id) {
-        navigate("/owner/messages", {
-          state: buildConversationRouteState(n.data.conversation_id),
-        });
-        return;
+      if (!n.read) {
+        await markNotificationAsRead(n.id);
       }
-      if (n.action?.path) navigate(n.action.path);
-      else navigate("/owner/notifications");
+      const destination = resolveNotificationDestination(n, role);
+      navigate(
+        destination.path,
+        destination.state ? { state: destination.state } : undefined,
+      );
     },
-    [navigate, markRead]
+    [markNotificationAsRead, navigate, role]
   );
 
   return (
@@ -1013,8 +949,7 @@ export default function OwnerDashboard() {
           onSearchChange={setSearch}
           notifications={notifications}
           unreadCount={unreadCount}
-          onDismissNotification={dismiss}
-          onClearNotifications={clearAll}
+          onMarkAllRead={markAllNotificationsAsRead}
           onOpenNotification={openNotification}
           onViewAllNotifications={() => navigate("/owner/notifications")}
         />
@@ -1054,11 +989,9 @@ export default function OwnerDashboard() {
             <ImportantNotifications
               items={notifications}
               unreadCount={unreadCount}
-              onDismiss={dismiss}
               onOpen={(n) => openNotification(n)}
               onAction={(action) => {
-                if (action === "clear_all") clearAll();
-                if (action === "mark_all_read") markAllRead();
+                if (action === "mark_all_read") markAllNotificationsAsRead();
                 if (action === "see_more") navigate("/owner/notifications");
               }}
             />

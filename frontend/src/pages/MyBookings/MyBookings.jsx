@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   Calendar,
@@ -199,7 +199,13 @@ const ReviewModal = ({
   );
 };
 
-const BookingCard = ({ booking, navigate, onCancel, onOpenReview }) => {
+const BookingCard = ({
+  booking,
+  isHighlighted,
+  navigate,
+  onCancel,
+  onOpenReview,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const statusMeta = getStudentStatusMeta(booking.status);
   const canCancel = ["pending_payment", "deposit_paid"].includes(booking.status);
@@ -213,6 +219,10 @@ const BookingCard = ({ booking, navigate, onCancel, onOpenReview }) => {
 
   return (
     <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-shadow duration-200 hover:shadow-lg">
+      <div
+        id={`student-booking-${booking.id}`}
+        className={isHighlighted ? "ring-2 ring-blue-500 ring-offset-2" : ""}
+      >
       <div className="flex items-center gap-6 p-6">
         <div
           className="flex-shrink-0 cursor-pointer transition-opacity hover:opacity-80"
@@ -410,6 +420,7 @@ const BookingCard = ({ booking, navigate, onCancel, onOpenReview }) => {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 };
@@ -431,6 +442,7 @@ const EmptyState = ({ tabName, navigate }) => (
 );
 
 export default function MyBookings() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("All");
   const [bookings, setBookings] = useState([]);
@@ -445,6 +457,15 @@ export default function MyBookings() {
   const [reviewError, setReviewError] = useState("");
   const [reviewSuccess, setReviewSuccess] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
+  const highlightedBookingId = location.state?.bookingId
+    ? String(location.state.bookingId)
+    : "";
+
+  useEffect(() => {
+    if (highlightedBookingId) {
+      setActiveTab("All");
+    }
+  }, [highlightedBookingId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -615,6 +636,15 @@ export default function MyBookings() {
     [activeTab, bookings],
   );
 
+  useEffect(() => {
+    if (!highlightedBookingId || loading) return;
+
+    const element = document.getElementById(
+      `student-booking-${highlightedBookingId}`,
+    );
+    element?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [filteredBookings.length, highlightedBookingId, loading]);
+
   return (
     <div
       className="min-h-screen bg-gray-50 font-sans text-[#0A2647]"
@@ -690,6 +720,7 @@ export default function MyBookings() {
                 <BookingCard
                   key={booking.id}
                   booking={booking}
+                  isHighlighted={String(booking.id) === highlightedBookingId}
                   navigate={navigate}
                   onCancel={handleCancelBooking}
                   onOpenReview={openReviewModal}

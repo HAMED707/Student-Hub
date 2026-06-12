@@ -56,6 +56,7 @@ import OwnerSettings from "./Owner interface/OwnerProfile/Setting-Profile.jsx";
 import Sidebar from "./assets/components/Sidebar/Sidebar.jsx";
 import Footer from "./assets/components/Footer/Footer.jsx";
 import logo from "./assets/brand/icons/logo.svg";
+import { NotificationsProvider } from "./hooks/useNotifications.jsx";
 
 import {
   LayoutDashboard,
@@ -219,8 +220,9 @@ function StudentLayout() {
 export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
-      <Routes>
-        <Route index element={<Navigate to="/home" replace />} />
+      <NotificationsProvider>
+        <Routes>
+          <Route index element={<Navigate to="/home" replace />} />
 
         {/* Auth */}
         <Route element={<GuestOnlyRoute />}>
@@ -292,8 +294,9 @@ export default function App() {
         </Route>
 
         {/* 404 */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </NotificationsProvider>
     </div>
   );
 }

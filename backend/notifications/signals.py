@@ -12,6 +12,7 @@ from bookings.models  import Booking
 from reviews.models   import Review
 from messaging.models import Message
 
+from api.notifications_api.serializers import NotificationSerializer
 from notifications.services import push_notification
 
 
@@ -24,17 +25,13 @@ def _broadcast(notification):
     if channel_layer is None:
         return
 
+    payload = NotificationSerializer(notification).data
+
     async_to_sync(channel_layer.group_send)(
         f"notifications_{notification.recipient.id}",
         {
-            "type":              "notify",           # maps to NotificationConsumer.notify()
-            "id":                notification.id,
-            "notification_type": notification.notification_type,
-            "title":             notification.title,
-            "message":           notification.message,
-            "data":              notification.data,
-            "is_read":           notification.is_read,
-            "created_at":        str(notification.created_at),
+            "type": "notify",  # maps to NotificationConsumer.notify()
+            **payload,
         },
     )
 
