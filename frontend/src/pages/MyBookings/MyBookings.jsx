@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Calendar,
@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import logoFull from "../../assets/brand/icons/logo.svg";
+import { fetchMyBookings } from "../../api/bookings.js";
 
 // Mock data
 const MOCK_BOOKINGS = [
@@ -450,6 +451,29 @@ const EmptyState = ({ tabName, navigate }) => {
 export default function MyBookings() {
   const [activeTab, setActiveTab] = useState("All");
   const [bookings, setBookings] = useState(MOCK_BOOKINGS);
+  useEffect(() => {
+    fetchMyBookings()
+      .then((data) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        setBookings(data.map((booking) => ({
+          id: booking.id,
+          propertyTitle: `Property #${booking.property}`,
+          propertyImage: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400&h=300&fit=crop",
+          moveInDate: booking.move_in_date,
+          duration: `${booking.duration_months} months`,
+          totalPrice: Math.round((booking.total_amount_cents || 0) / 100),
+          currency: "EGP",
+          roomType: "Room",
+          bedType: "Bed",
+          status: booking.status,
+          bookingDate: booking.created_at,
+          landlordName: "",
+          propertyAddress: "",
+          timeline: [],
+        })));
+      })
+      .catch(() => {});
+  }, []);
   const navigate = useNavigate();
 
   // Handle booking actions (delete, etc.)

@@ -1,116 +1,738 @@
 # ─────────────Prompt────────────────────────────────────────────────
 
     ```
-    # Frontend-Backend Integration Review
+    # Student Hub — Full Frontend & Backend Integration Review
 
-    You are a senior Frontend Developer.
+## Role
 
-    Your task is to review the frontend project and connect it with the backend.
+You are a **Senior Full Stack Software Engineer** specializing in:
 
-    ## Objectives
+* React
+* TypeScript / JavaScript
+* Axios
+* Django REST Framework
+* Django Channels
+* WebSockets
+* JWT Authentication
+* PostgreSQL
+* Docker
+* Production Deployments
+* REST API Design
 
-    1. Analyze the frontend codebase.
+Your responsibility is to perform a **complete engineering review and integration** between the provided frontend and backend.
 
-    2. Analyze the backend API endpoints provided.
+Act as if this project is about to enter production.
 
-    3. Verify that every frontend API call matches the backend endpoint.
+---
 
-    4. Detect any integration issues such as:
+# Project Context
 
-    * Wrong URL paths
-    * Missing endpoints
-    * Incorrect HTTP methods
-    * Incorrect request payloads
-    * Incorrect response handling
-    * Authentication conflicts
-    * JWT token handling issues
-    * Pagination mismatches
-    * Naming inconsistencies
-    * Missing environment variables
-    * CORS-related assumptions
-    * File upload mismatches
-    * WebSocket mismatches
+The project is still under active development.
 
-    5. Connect the frontend to the backend using the provided Base URL.
+Both the frontend and backend may contain:
 
-    ## Debug Report
+* bugs
+* missing features
+* incomplete implementations
+* inconsistent API designs
+* integration problems
 
-    If any issue is found, create a file:
+**Do not assume that either side is correct.**
 
-    frontend/debug.md
+Instead:
 
-    The file should contain:
+1. Inspect both projects.
+2. Determine the correct implementation.
+3. Modify the frontend whenever appropriate.
+4. Recommend backend improvements when necessary.
+5. Produce a complete engineering review.
 
-    ### Issue
+The backend is the primary implementation, but it is **not assumed to be complete or perfect**.
 
-    Description of the problem.
+---
 
-    ### Location
+# Available Files
 
-    File path and line number if possible.
+You are provided with:
 
-    ### Cause
+* Entire frontend project
+* Entire backend project
+* Backend overview documentation
+* API URL configuration
+* Project structure
 
-    Why the issue occurs.
+Inspect the actual implementation.
 
-    ### Fix
+Do **NOT** guess endpoint behavior.
 
-    Exact code change required.
+Determine functionality by reading:
 
-    ### Status
+* urls.py
+* views.py
+* serializers.py
+* models.py
+* permissions.py
+* pagination.py
+* filters.py
+* services.py
+* consumers.py
+* routing.py
+* signals.py
+* middleware.py
 
-    * Critical
-    * Warning
-    * Info
+---
 
-    ## Integration Rules
+# Objectives
 
-    * Do not change backend endpoints.
-    * Update frontend code whenever possible.
-    * Use the provided Base URL.
-    * Reuse existing frontend architecture and patterns.
-    * Verify authentication flow using JWT access and refresh tokens.
+## 1. Analyze the Frontend
 
-    ## Deliverables
+Inspect the entire frontend.
 
-    1. Connected frontend application.
-    2. Updated API service files.
-    3. frontend/debug.md containing all detected issues.
-    4. Summary of:
+Understand:
 
-    * Connected endpoints
-    * Failed integrations
-    * Required backend changes (if any)
+* architecture
+* routing
+* authentication
+* API layer
+* state management
+* file uploads
+* websocket implementation
+* environment variables
+* reusable components
 
-    ## Backend Base URL
+---
 
-    /api/
+## 2. Analyze the Backend
 
-    ## API Groups
+Inspect every application.
 
-    * /api/token/
-    * /api/token/refresh/
-    * /api/auth/
-    * /api/properties/
-    * /api/bookings/
-    * /api/favorites/
-    * /api/reviews/
-    * /api/roommates/
-    * /api/community/
-    * /api/messaging/
-    * /api/notifications/
-    * /api/payments/
-    * /api/services/
+Determine:
 
-    ## Important
+* endpoints
+* serializers
+* permissions
+* request payloads
+* response payloads
+* status codes
+* pagination
+* filters
+* ordering
+* websocket routes
+* authentication requirements
+* upload endpoints
 
-    Do not assume endpoint details.
+---
 
-    Inspect the backend folder and use the actual urlpatterns, serializers, views, and API responses to determine the correct integration.
+## 3. Perform Complete Integration
+
+Connect the frontend with the backend.
+
+Update the frontend to correctly use:
+
+* API endpoints
+* JWT authentication
+* refresh tokens
+* WebSockets
+* uploads
+* pagination
+* filters
+* search
+* ordering
+
+Reuse the existing frontend architecture.
+
+Do not redesign the project.
+
+---
+
+# Verification Checklist
+
+Inspect every API call.
+
+Verify:
+
+* URL paths
+* HTTP methods
+* serializer fields
+* response parsing
+* status code handling
+* multipart uploads
+* authentication
+* permissions
+* pagination
+* filters
+* websocket connections
+* query parameters
+* request headers
+* content type
+
+---
+
+# Authentication Review
+
+Verify:
+
+* Login
+* Register
+* Logout
+* JWT Obtain Pair
+* JWT Refresh
+* Protected Routes
+* Authorization Header
+* Token Storage
+* Automatic Token Refresh
+* Expired Access Tokens
+* Refresh Token Failures
+* Logout Cleanup
+
+---
+
+# WebSocket Review
+
+Inspect Django Channels.
+
+Verify:
+
+* websocket routes
+* websocket authentication
+* JWT token usage
+* reconnect logic
+* disconnect handling
+* room ids
+* event names
+* notification channels
+* conversation channels
+* payload structure
+
+---
+
+# Serializer Review
+
+Compare frontend models against backend serializers.
+
+Check:
+
+* required fields
+* optional fields
+* read-only fields
+* write-only fields
+* nullable fields
+* nested serializers
+* foreign keys
+* images
+* files
+* enums
+* default values
+
+---
+
+# Pagination Review
+
+Determine whether DRF pagination is enabled.
+
+Verify support for:
+
+* count
+* next
+* previous
+* results
+
+Do not assume endpoints return arrays.
+
+---
+
+# File Upload Review
+
+Verify:
+
+* multipart/form-data
+* image uploads
+* update uploads
+* delete uploads
+* preview support
+* media URLs
+
+---
+
+# Google Maps Review
+
+Verify:
+
+* environment variables
+* API key usage
+* geocoding
+* reverse geocoding
+* coordinates
+* distance calculations
+
+---
+
+# Payments Review
+
+Inspect payment implementation.
+
+Verify:
+
+* payment creation
+* callbacks
+* webhook handling
+* verification
+* payment status
+
+---
+
+# Security Review
+
+Inspect both frontend and backend.
+
+Report:
+
+* exposed secrets
+* hardcoded keys
+* insecure JWT storage
+* missing Authorization headers
+* missing permissions
+* missing validation
+* insecure websocket authentication
+* CSRF assumptions
+* XSS risks
+* SQL injection risks
+* unsafe HTML rendering
+
+---
+
+# Performance Review
+
+Detect:
+
+* duplicate API calls
+* unnecessary refetches
+* repeated websocket connections
+* N+1 API patterns
+* missing caching opportunities
+* slow queries
+* unnecessary renders
+
+Provide recommendations.
+
+---
+
+# Backend Review
+
+The backend is not assumed to be complete.
+
+Inspect every application for:
+
+* missing endpoints
+* missing CRUD operations
+* incomplete business logic
+* inconsistent REST design
+* inconsistent serializers
+* inconsistent response formats
+* duplicate endpoints
+* missing validation
+* missing permissions
+* missing pagination
+* missing filtering
+* missing search
+* missing websocket events
+* inconsistent naming
+* poor architecture
+* scalability concerns
+
+Do **NOT** automatically modify backend code.
+
+Instead:
+
+Document every issue.
+
+Recommend the required backend improvement.
+
+---
+
+# Integration Rules
+
+* Never invent endpoints.
+* Never assume serializer fields.
+* Never fake API responses.
+* Never change backend endpoints unless explicitly requested.
+* Prefer updating the frontend when the backend already provides the required functionality.
+* If functionality is missing from the backend, document it as a backend issue.
+* Preserve the existing frontend architecture.
+* Follow the project's coding style.
+
+---
+
+# Debug Reports
+
+Create a directory:
+
+```text
+Student-Hub/debug/
+```
+
+Generate one report per application.
+
+Examples:
+
+```text
+debug-auth.md
+debug-properties.md
+debug-bookings.md
+debug-favorites.md
+debug-reviews.md
+debug-roommates.md
+debug-community.md
+debug-messaging.md
+debug-notifications.md
+debug-payments.md
+debug-services.md
+```
+
+Each report must include:
+
+---
+
+## Summary
+
+Overall integration status.
+
+---
+
+## Frontend Issues
+
+For every issue include:
+
+* Issue
+* Location
+* Cause
+* Backend Reference
+* Recommended Frontend Fix
+* Severity
+
+Severity:
+
+* Critical
+* Warning
+* Info
+
+---
+
+## Backend Issues
+
+For every backend issue include:
+
+* Issue
+* Location
+* Cause
+* Impact
+* Recommended Backend Fix
+* Severity
+
+Do **NOT** modify backend code.
+
+Only recommend changes.
+
+---
+
+## Integration Issues
+
+Include issues affecting communication between frontend and backend.
+
+Examples:
+
+* endpoint mismatch
+* serializer mismatch
+* JWT mismatch
+* websocket mismatch
+* pagination mismatch
+* upload mismatch
+* permission mismatch
+* missing endpoint
+* incorrect response format
+
+Include:
+
+* Cause
+* Frontend Impact
+* Backend Impact
+* Recommended Solution
+
+---
+
+## API Coverage
+
+Create a table.
+
+| Endpoint | Method | Frontend Status | Backend Status | Result |
+
+Result values:
+
+* ✅ Working
+* ⚠ Partial
+* ❌ Broken
+* 🚧 Missing Backend
+* 🚧 Missing Frontend
+
+---
+
+## Production Risks
+
+List anything preventing deployment.
+
+Examples:
+
+* missing validation
+* missing authentication
+* missing permissions
+* missing rate limiting
+* missing pagination
+* missing logging
+* missing environment variables
+* hardcoded secrets
+* missing websocket authentication
+
+---
+
+## Recommendations
+
+Separate recommendations into:
+
+### High Priority
+
+Required before deployment.
+
+### Medium Priority
+
+Recommended before production.
+
+### Low Priority
+
+Future improvements and refactoring.
+
+---
+
+## Overall Status
+
+Provide estimated percentages.
+
+Example:
+
+* Frontend Integration: 94%
+* Backend Completeness: 90%
+* Production Readiness: 84%
+
+---
+
+# Project Review
+
+Generate:
+
+```text
+Student-Hub/debug/project-review.md
+```
+
+Include:
+
+## Executive Summary
+
+High-level overview of the entire project.
+
+---
+
+## Overall Metrics
+
+Estimate:
+
+* Backend Completeness
+* Frontend Completeness
+* API Coverage
+* Integration Status
+* Production Readiness
+
+---
+
+## Connected Endpoints
+
+List every successfully integrated endpoint.
+
+---
+
+## Missing Frontend Features
+
+Features available in backend but not implemented in frontend.
+
+---
+
+## Missing Backend Features
+
+Features required by the frontend but absent from the backend.
+
+---
+
+## Architecture Review
+
+Evaluate:
+
+* REST API design
+* Folder structure
+* Reusability
+* Scalability
+* Maintainability
+* Security
+* Performance
+
+Provide recommendations.
+
+---
+
+## Production Blockers
+
+List all critical issues preventing deployment.
+
+---
+
+## Deployment Readiness
+
+Evaluate readiness for:
+
+* Docker
+* Docker Compose
+* Nginx
+* Daphne
+* PostgreSQL
+* Redis
+* HTTPS
+* Environment Variables
+* Logging
+* Monitoring
+
+---
+
+## Final Checklist
+
+Mark each item as:
+
+* ✅ Working
+* ⚠ Partial
+* ❌ Broken
+
+Authentication
+
+Registration
+
+Login
+
+Logout
+
+JWT Refresh
+
+Protected Routes
+
+Properties
+
+Bookings
+
+Favorites
+
+Reviews
+
+Roommates
+
+Community
+
+Messaging
+
+Notifications
+
+Payments
+
+Services
+
+Google Maps
+
+Image Upload
+
+Pagination
+
+Filtering
+
+Searching
+
+Sorting
+
+WebSockets
+
+Environment Variables
+
+Error Handling
+
+Security
+
+Performance
+
+Docker Readiness
+
+Production Readiness
+
+---
+
+# Deliverables
+
+1. Fully integrated frontend.
+2. Updated API service layer.
+3. Updated WebSocket implementation.
+4. Updated JWT authentication flow.
+5. One debug report per application.
+6. `project-review.md`
+7. Complete API coverage report.
+8. Backend improvement recommendations.
+9. Frontend improvement recommendations.
+10. Architecture review.
+11. Production readiness review.
+12. Final deployment checklist.
+
+---
+
+# Backend Base URL
+
+```text
+/api/
+```
+
+---
+
+# API Groups
+
+```text
+/api/token/
+/api/token/refresh/
+/api/auth/
+/api/properties/
+/api/bookings/
+/api/favorites/
+/api/reviews/
+/api/roommates/
+/api/community/
+/api/messaging/
+/api/notifications/
+/api/payments/
+/api/services/
+```
+
+---
+
+# Final Instruction
+
+Do not stop after fixing the first issue.
+
+The review is complete **only when every frontend module, every backend application, every endpoint, every serializer, every WebSocket route, and every integration path has been inspected, verified, and documented.**
+
+Treat this as the final engineering review before the first production deployment of Student Hub.
 
 
     ```
-# ─────────────Prompt──────────────────────────────────────────────────
+# ─────────────End Prompt──────────────────────────────────────────────────
 
 
 # ─────────────Start App API EndPoints────────────────────────────────────────────────

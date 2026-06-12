@@ -3,8 +3,10 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
 import { ChevronRight, ChevronLeft, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { fetchFavorites } from "../../api/favorites.js";
 
-const favoriteProperties = [
+const fallbackFavoriteProperties = [
   {
     id: 1,
     title: "Furnished Apartment - El Hamra",
@@ -45,6 +47,16 @@ const favoriteProperties = [
 
 const Like = () => {
   const navigate = useNavigate();
+  const [favoriteProperties, setFavoriteProperties] = useState([]);
+  useEffect(() => {
+    fetchFavorites()
+      .then((data) =>
+        setFavoriteProperties(
+          (Array.isArray(data) ? data : []).map((item) => item.property_detail || item.property),
+        ),
+      )
+      .catch(() => setFavoriteProperties(fallbackFavoriteProperties));
+  }, []);
   // 1. تعريف المرجع للسكرول
   const scrollRef = useRef(null);
 
@@ -130,7 +142,7 @@ const Like = () => {
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {/* قمت بتكرار القائمة لزيادة عدد العناصر للتجربة */}
-            {[...favoriteProperties, ...favoriteProperties].map(
+            {[...(favoriteProperties.length ? favoriteProperties : fallbackFavoriteProperties), ...(favoriteProperties.length ? favoriteProperties : fallbackFavoriteProperties)].map(
               (item, index) => (
                 <div
                   key={`suggest-${index}`}

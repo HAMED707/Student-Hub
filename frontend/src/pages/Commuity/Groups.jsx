@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Check,
@@ -13,6 +13,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { fetchGroups } from "../../api/community.js";
 
 const initialGroups = [
   {
@@ -168,6 +169,33 @@ const Groups = ({ onOpenGroupChat }) => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [groupForm, setGroupForm] = useState(emptyGroupForm);
+
+  useEffect(() => {
+    fetchGroups()
+      .then((data) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        setGroups(
+          data.map((group) => ({
+            id: group.id,
+            name: group.name,
+            members: group.member_count || 0,
+            activeToday: group.member_count || 0,
+            weeklyPosts: group.member_count || 0,
+            unread: 0,
+            lastActivity: "Now",
+            image: group.cover_image || "",
+            desc: group.description || group.name,
+            city: "Cairo",
+            university: group.category || "General",
+            category: group.category || "General",
+            isMyGroup: Boolean(group.is_member),
+            isRecommended: Boolean(group.is_member),
+            joinType: group.is_private ? "request" : "open",
+          })),
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const cities = useMemo(
     () => ["All", ...new Set(groups.map((group) => group.city))],

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CalendarCheck, Heart, Bell, Search, Settings, User, LogOut } from "lucide-react";
+import { clearSession } from "../../../utils/auth.js";
 
 // 👇 تأكد من مسار اللوجو الصحيح
 import logoFull from "../../brand/icons/logo.svg"; 
@@ -38,6 +39,7 @@ export default function Navbar() {
 
   const handleLogout = () => {
     setIsDropdownOpen(false);
+    clearSession();
     navigate("/login"); 
   };
 

@@ -18,6 +18,8 @@ import {
   ClipboardList,
   TrendingUp,
 } from "lucide-react";
+import { fetchLandlordProperties } from "../../api/properties.js";
+import { fetchNotifications as fetchOwnerNotifications, markAllNotificationsRead } from "../../api/notifications.js";
 
 /* =========================
    Constants
@@ -847,35 +849,7 @@ const ImportantNotifications = ({ items = [], onDismiss, onOpen, onAction, unrea
 export default function OwnerDashboard() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [notifications, setNotifications] = useState([
-    {
-      id: "n1",
-      title: "New booking request",
-      desc: "Mona Ali requested Room B2 and is waiting for your approval.",
-      time: "5 min ago",
-      type: "warning",
-      read: false,
-      action: { path: "/owner/bookings" },
-    },
-    {
-      id: "n2",
-      title: "Listing needs attention",
-      desc: "Nasr City Apartment needs updated photos to stay visible.",
-      time: "1 hour ago",
-      type: "danger",
-      read: false,
-      action: { path: "/owner/properties" },
-    },
-    {
-      id: "n3",
-      title: "Payment received",
-      desc: "Your latest payout was processed successfully.",
-      time: "Today",
-      type: "success",
-      read: true,
-      action: { path: "/owner/payments" },
-    },
-  ]);
+  const [notifications, setNotifications] = useState([]);
 
   // Bookings
   const [bookings, setBookings] = useState([
@@ -937,6 +911,41 @@ export default function OwnerDashboard() {
   const [allStudentsOpen, setAllStudentsOpen] = useState(false);
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
+  useEffect(() => {
+    fetchOwnerNotifications()
+      .then((data) => {
+        const list = data?.notifications || [];
+        setNotifications(list.slice(0, 6).map((item) => ({
+          id: item.id,
+          title: item.title,
+          desc: item.message,
+          time: new Date(item.created_at).toLocaleString(),
+          type: item.notification_type.includes("booking") ? "warning" : item.notification_type.includes("payment") ? "success" : "info",
+          read: item.is_read,
+          action: { path: item.notification_type.includes("booking") ? "/owner/bookings" : item.notification_type.includes("payment") ? "/owner/payments" : "/owner/overview" },
+        })));
+      })
+      .catch(() => {});
+    fetchLandlordProperties()
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        setBookings(data.slice(0, 6).map((property) => ({
+          id: property.id,
+          name: property.title,
+          status: property.status === "available" ? "Available" : "Pending",
+          date: new Date(property.created_at).toLocaleDateString(),
+          room: property.property_type || "Property",
+          beds: `${property.num_beds || 0} beds`,
+          requestDate: new Date(property.created_at).toLocaleDateString(),
+          leaseStart: new Date(property.created_at).toLocaleDateString(),
+          term: `${property.min_stay_months || 1}-${property.max_stay_months || 12} months`,
+          avatarUrl: property.cover_image || "",
+          note: property.description || "",
+        })));
+      })
+      .catch(() => {});
+  }, []);
+
   const openBooking = (b) => {
     setSelectedBooking(b);
     setBookingModalOpen(true);
@@ -962,6 +971,7 @@ export default function OwnerDashboard() {
   }, []);
 
   const markAllRead = useCallback(() => {
+    markAllNotificationsRead().catch(() => {});
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 

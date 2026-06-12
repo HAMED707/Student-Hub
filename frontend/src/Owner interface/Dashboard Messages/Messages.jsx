@@ -17,6 +17,7 @@ import {
   Camera,
   X,
 } from "lucide-react";
+import { fetchConversationMessages, fetchConversations } from "../../api/messaging.js";
 
 /* =========================
    Utils
@@ -474,6 +475,59 @@ export default function Messages() {
     () => threads.find((t) => t.id === activeId) || null,
     [threads, activeId]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchConversations()
+      .then((data) => {
+        if (cancelled || !Array.isArray(data) || data.length === 0) return;
+        const mapped = data.map((thread) => ({
+          id: String(thread.id),
+          studentId: String(thread.other_user?.id || thread.receiver || thread.initiator),
+          name: thread.other_user?.name || "User",
+          username: `#${thread.id}`,
+          online: false,
+          pinned: false,
+          blocked: false,
+          unread: thread.unread_count || 0,
+          lastTime: thread.last_message?.created_at ? new Date(thread.last_message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+          lastMessage: thread.last_message?.body || "Start a conversation",
+          messages: [],
+        }));
+        setThreads(mapped);
+        setActiveId(mapped[0]?.id || null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeId) return;
+    fetchConversationMessages(activeId)
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        setThreads((prev) =>
+          prev.map((thread) =>
+            thread.id === String(activeId)
+              ? {
+                  ...thread,
+                  messages: data.map((message) => ({
+                    id: String(message.id),
+                    type: "text",
+                    from: message.sender_name === thread.name ? "them" : "me",
+                    text: message.body,
+                    time: new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    status: message.is_read ? "seen" : "delivered",
+                  })),
+                }
+              : thread,
+          ),
+        );
+      })
+      .catch(() => {});
+  }, [activeId]);
 
   // فتح شات جديد من بروفايل الطالب (بدون زر New)
   useEffect(() => {

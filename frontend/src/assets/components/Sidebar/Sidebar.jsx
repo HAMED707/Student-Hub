@@ -1,5 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, Settings, LogOut, User } from "lucide-react";
+import {
+  AUTH_CHANGE_EVENT,
+  AUTH_STORAGE_KEYS,
+  clearSession,
+  getStoredUser,
+} from "../../../utils/auth.js";
 
 const cx = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -26,8 +32,7 @@ export default function Sidebar({
   onLogout = null,
 
   // localStorage keys
-  storageUserKey = "user",
-  storageTokenKey = "token",
+  storageUserKey = AUTH_STORAGE_KEYS.user,
 }) {
   const resolvedPath =
     active ||
@@ -63,16 +68,7 @@ export default function Sidebar({
 
   useEffect(() => {
     const readUser = () => {
-      try {
-        const raw = localStorage.getItem(storageUserKey);
-        if (!raw) {
-          setUser(null);
-          return;
-        }
-        setUser(JSON.parse(raw));
-      } catch {
-        setUser(null);
-      }
+      setUser(getStoredUser());
     };
 
     readUser();
@@ -80,8 +76,13 @@ export default function Sidebar({
     const onStorage = (e) => {
       if (e.key === storageUserKey) readUser();
     };
+    const onAuthChange = () => readUser();
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener(AUTH_CHANGE_EVENT, onAuthChange);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(AUTH_CHANGE_EVENT, onAuthChange);
+    };
   }, [storageUserKey]);
 
   const profile = useMemo(() => {
@@ -139,12 +140,7 @@ export default function Sidebar({
       return;
     }
 
-    try {
-      localStorage.removeItem(storageTokenKey);
-      localStorage.removeItem(storageUserKey);
-    } catch {
-      // ignore
-    }
+    clearSession();
 
     navigateTo(logoutTo);
   };

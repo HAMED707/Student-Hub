@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   MapPin,
@@ -16,6 +16,7 @@ import {
   DoorOpen,
   Calendar,
 } from "lucide-react";
+import { fetchLandlordProperties } from "../../api/properties.js";
 
 /* =========================
    Helpers
@@ -537,6 +538,31 @@ export default function OwnerProperties() {
       bills: ["Water", "Electricity", "Gas"],
     },
   ]);
+
+  useEffect(() => {
+    fetchLandlordProperties()
+      .then((data) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        setProperties(data.map((property) => ({
+          id: property.id,
+          title: property.title,
+          city: property.city,
+          area: property.district || property.city,
+          price: property.price,
+          status: property.status === "available" ? "Available" : property.status === "reserved" ? "Rented" : "Rented",
+          cover: property.cover_image || property.images?.[0]?.image || "",
+          images: property.images?.map((image) => image.image) || [],
+          address: property.address || "",
+          type: property.property_type || "",
+          rooms: property.num_rooms || 0,
+          requests: 0,
+          views: property.view_count || 0,
+          bills: Array.isArray(property.amenities) ? property.amenities : [],
+          roomsList: [],
+        })));
+      })
+      .catch(() => {});
+  }, []);
 
   const filteredProperties = useMemo(() => {
     return properties.filter((p) => {

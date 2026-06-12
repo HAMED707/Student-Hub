@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Routes,
   Route,
@@ -7,6 +7,11 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
+import {
+  AUTH_CHANGE_EVENT,
+  getAuthSnapshot,
+  getDefaultRouteForRole,
+} from "./utils/auth.js";
 
 import JoinPage from "./pages/Auth/JoinPage.jsx";
 import Login from "./pages/Auth/Login/login.jsx";
@@ -70,6 +75,49 @@ const NotFound = () => (
     </a>
   </div>
 );
+
+function useAuthState() {
+  const [authState, setAuthState] = useState(() => getAuthSnapshot());
+
+  useEffect(() => {
+    const syncAuth = () => setAuthState(getAuthSnapshot());
+
+    window.addEventListener("storage", syncAuth);
+    window.addEventListener(AUTH_CHANGE_EVENT, syncAuth);
+
+    return () => {
+      window.removeEventListener("storage", syncAuth);
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncAuth);
+    };
+  }, []);
+
+  return authState;
+}
+
+function GuestOnlyRoute() {
+  const { token, user } = useAuthState();
+
+  if (token && user) {
+    return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
+  }
+
+  return <Outlet />;
+}
+
+function RequireAuth({ allowedRoles = null }) {
+  const location = useLocation();
+  const { token, user } = useAuthState();
+
+  if (!token || !user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
+  }
+
+  return <Outlet />;
+}
 
 // ✅ Owner Layout
 function OwnerLayout() {
@@ -174,11 +222,13 @@ export default function App() {
         <Route index element={<Navigate to="/home" replace />} />
 
         {/* Auth */}
-        <Route path="/join" element={<JoinPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/student-setup" element={<StudentRegister />} />
-        <Route path="/register/landlord" element={<LandlordRegister />} />
-        <Route path="/forgot-password" element={<PasswordRecovery />} />
+        <Route element={<GuestOnlyRoute />}>
+          <Route path="/join" element={<JoinPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/student-setup" element={<StudentRegister />} />
+          <Route path="/register/landlord" element={<LandlordRegister />} />
+          <Route path="/forgot-password" element={<PasswordRecovery />} />
+        </Route>
 
         {/* Main */}
         <Route element={<StudentLayout />}>
@@ -187,6 +237,11 @@ export default function App() {
           <Route path="/property/:id" element={<PropertyDetails />} />
           <Route path="/find-room/:id" element={<PropertyDetails />} />
 
+          <Route path="/services" element={<Service />} />
+        </Route>
+
+        <Route element={<StudentLayout />}>
+          <Route element={<RequireAuth />}>
           <Route path="/community" element={<Community />} />
           <Route path="/community/groups/:id" element={<GroupDetails />} />
           <Route path="/groups" element={<Groups />} />
@@ -194,45 +249,45 @@ export default function App() {
           <Route path="/chat/:id" element={<CommunityMessages />} />
           <Route path="/posts" element={<Posts />} />
 
-          <Route path="/services" element={<Service />} />
           <Route path="/roommate" element={<Roommate />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/profile/:id" element={<PublicProfile />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/edit-profile" element={<EditProfile />} />
+          <Route path="/settings" element={<Settings />} />
+          </Route>
+
+          <Route element={<RequireAuth allowedRoles={["student"]} />}>
           <Route path="/likes" element={<Like />} />
           <Route path="/favorites" element={<Like />} />
           <Route path="/bookings" element={<MyBookings />} />
           <Route path="/my-bookings" element={<MyBookings />} />
           <Route path="/booking/:id" element={<MyBookings />} />
           <Route path="/payments" element={<MyBookings />} />
-          <Route path="/notifications" element={<Notifications />} />
-
-          {/* Profile */}
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/edit-profile" element={<EditProfile />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/profile/:id" element={<PublicProfile />} />
+          </Route>
         </Route>
 
         {/* ✅ Owner */}
-        <Route path="/owner" element={<OwnerLayout />}>
-          <Route index element={<Navigate to="/owner/overview" replace />} />
-          <Route
-            path="dashboard"
-            element={<Navigate to="/owner/overview" replace />}
-          />
-          <Route path="overview" element={<Overview />} />
-          <Route path="properties" element={<OwnerProperties />} />
-          <Route path="payments" element={<OwnerPayments />} />
-          <Route path="messages" element={<OwnerMessages />} />
-          <Route path="bookings" element={<OwnerBookings />} />
-          <Route path="notifications" element={<OwnerNotifications />} />
-          <Route path="properties/new" element={<AddNewProperty />} />
-          <Route path="properties/edit" element={<EditProperty />} />
-          <Route path="properties/edit/:id" element={<EditProperty />} />
+        <Route element={<RequireAuth allowedRoles={["landlord"]} />}>
+          <Route path="/owner" element={<OwnerLayout />}>
+            <Route index element={<Navigate to="/owner/overview" replace />} />
+            <Route
+              path="dashboard"
+              element={<Navigate to="/owner/overview" replace />}
+            />
+            <Route path="overview" element={<Overview />} />
+            <Route path="properties" element={<OwnerProperties />} />
+            <Route path="payments" element={<OwnerPayments />} />
+            <Route path="messages" element={<OwnerMessages />} />
+            <Route path="bookings" element={<OwnerBookings />} />
+            <Route path="notifications" element={<OwnerNotifications />} />
+            <Route path="properties/new" element={<AddNewProperty />} />
+            <Route path="properties/edit" element={<EditProperty />} />
+            <Route path="properties/edit/:id" element={<EditProperty />} />
 
-          {/* ✅ بروفايل المالك */}
-          <Route path="settings" element={<OwnerSettings />} />
-
-          {/* ✅ بروفايل المالك */}
-          <Route path="profile" element={<OwnerProfile />} />
+            <Route path="settings" element={<OwnerSettings />} />
+            <Route path="profile" element={<OwnerProfile />} />
+          </Route>
         </Route>
 
         {/* 404 */}

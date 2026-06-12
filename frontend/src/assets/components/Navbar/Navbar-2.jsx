@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CalendarCheck, Heart, Bell, Settings, User, LogOut } from "lucide-react";
+import { clearSession } from "../../../utils/auth.js";
 
 // ✅ استيراد اللوجو
 import logo from "../../brand/icons/logo.svg"; 
@@ -39,6 +40,7 @@ export default function NavbarOwner() {
   ];
 
   const handleLogout = () => {
+    clearSession();
     navigate("/login"); 
   };
 

@@ -1,38 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, CheckCircle2, Info, Search, Trash2, XCircle, AlertCircle } from "lucide-react";
+import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "../../api/notifications.js";
 
 const cx = (...classes) => classes.filter(Boolean).join(" ");
 
-const initialNotifications = [
-  {
-    id: "n1",
-    title: "New booking request",
-    desc: "Mona Ali requested Room B2 and is waiting for your approval.",
-    time: "5 min ago",
-    type: "warning",
-    read: false,
-    path: "/owner/bookings",
-  },
-  {
-    id: "n2",
-    title: "Listing needs attention",
-    desc: "Nasr City Apartment needs updated photos to stay visible.",
-    time: "1 hour ago",
-    type: "danger",
-    read: false,
-    path: "/owner/properties",
-  },
-  {
-    id: "n3",
-    title: "Payment received",
-    desc: "Your latest payout was processed successfully.",
-    time: "Today",
-    type: "success",
-    read: true,
-    path: "/owner/payments",
-  },
-];
+const initialNotifications = [];
 
 const iconMap = {
   success: <CheckCircle2 className="h-5 w-5 text-emerald-500" />,
@@ -46,6 +19,35 @@ export default function OwnerNotifications() {
   const [notifications, setNotifications] = useState(initialNotifications);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All");
+
+  useEffect(() => {
+    fetchNotifications()
+      .then((data) => {
+        const list = data?.notifications || [];
+        setNotifications(
+          list.map((item) => ({
+            id: item.id,
+            title: item.title,
+            desc: item.message,
+            time: new Date(item.created_at).toLocaleString(),
+            type: item.notification_type.includes("payment")
+              ? "success"
+              : item.notification_type.includes("booking")
+                ? "warning"
+                : item.notification_type.includes("system")
+                  ? "info"
+                  : "danger",
+            read: item.is_read,
+            path: item.notification_type.includes("payment")
+              ? "/owner/payments"
+              : item.notification_type.includes("booking")
+                ? "/owner/bookings"
+                : "/owner/overview",
+          })),
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const unreadCount = notifications.filter((item) => !item.read).length;
   const filteredNotifications = useMemo(() => {
@@ -62,6 +64,7 @@ export default function OwnerNotifications() {
   }, [notifications, query, filter]);
 
   const openNotification = (item) => {
+    markNotificationRead(item.id).catch(() => {});
     setNotifications((current) => current.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
     navigate(item.path || "/owner/overview");
   };
@@ -148,7 +151,7 @@ export default function OwnerNotifications() {
           </div>
 
           <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => setNotifications((current) => current.map((item) => ({ ...item, read: true })))} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
+            <button type="button" onClick={() => { markAllNotificationsRead().catch(() => {}); setNotifications((current) => current.map((item) => ({ ...item, read: true }))); }} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
               Mark all as read
             </button>
             <button type="button" onClick={() => setNotifications([])} className="rounded-xl bg-[#091E42] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#155BC2]">

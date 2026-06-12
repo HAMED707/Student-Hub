@@ -1,66 +1,67 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { User, Eye, EyeOff, Lock, AlertCircle } from 'lucide-react';
+import { loginUser } from "../../../api/accounts.js";
+import { getApiErrorMessage, getDefaultRouteForRole } from "../../../utils/auth.js";
 
 const Login = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     
     const [formData, setFormData] = useState({ username: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
-    
-    // حالة لتخزين رسائل الخطأ
     const [errors, setErrors] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formError, setFormError] = useState('');
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData({ ...formData, [name]: value });
         
-        // مسح رسالة الخطأ عند بدء الكتابة
         if (errors[name]) {
             setErrors({ ...errors, [name]: '' });
         }
+        if (formError) {
+            setFormError('');
+        }
     };
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         
         let newErrors = {};
+        const identifier = formData.username.trim();
 
-        // 🚫 تعبير نمطي لاكتشاف أي حرف عربي
-        const arabicRegex = /[\u0600-\u06FF]/;
-
-        // --- 1. التحقق من اسم المستخدم ---
-        if (!formData.username.trim()) {
-            newErrors.username = "Username is required";
-        } else if (arabicRegex.test(formData.username)) {
-            // شرط منع العربية
-            newErrors.username = "English characters only (No Arabic allowed)";
-        } else if (formData.username.length < 3) {
-            newErrors.username = "Username must be at least 3 characters";
+        if (!identifier) {
+            newErrors.username = "Username or email is required";
         }
-
-        // --- 2. التحقق من كلمة المرور ---
-        // تعبير نمطي لكلمة مرور قوية (8 أحرف، حرف كبير، رقم)
-        const strongPasswordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
 
         if (!formData.password) {
             newErrors.password = "Password is required";
-        } else if (arabicRegex.test(formData.password)) {
-            // شرط منع العربية
-            newErrors.password = "English characters only (No Arabic allowed)";
-        } else if (!strongPasswordRegex.test(formData.password)) {
-            newErrors.password = "Min 8 chars, 1 Uppercase & 1 Number";
         }
 
-        // إذا وجدت أخطاء، قم بتخزينها وأوقف الإرسال
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
             return;
         }
 
-        // النجاح
-        console.log("Login Success:", formData);
-        // navigate('/dashboard'); 
+        try {
+            setIsSubmitting(true);
+            setFormError('');
+            const data = await loginUser({
+                username: identifier,
+                password: formData.password,
+            });
+            const destination =
+                location.state?.from?.pathname ||
+                getDefaultRouteForRole(data.user?.role);
+
+            navigate(destination, { replace: true });
+        } catch (error) {
+            setFormError(getApiErrorMessage(error, "Login failed"));
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -76,6 +77,12 @@ const Login = () => {
                     </div>
 
                     <form onSubmit={handleLogin} className="flex flex-col gap-5">
+                        {formError && (
+                            <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                <AlertCircle className="h-4 w-4 shrink-0" />
+                                <span>{formError}</span>
+                            </div>
+                        )}
                         
                         {/* Username Field */}
                         <div className="flex flex-col gap-1">
@@ -86,7 +93,7 @@ const Login = () => {
                                 <input 
                                     type="text" 
                                     name="username"
-                                    placeholder="Username" 
+                                    placeholder="Username or email" 
                                     value={formData.username}
                                     onChange={handleChange}
                                     dir="ltr" // إجبار اتجاه النص لليسار
@@ -159,13 +166,17 @@ const Login = () => {
                             </button>
                         </div>
 
-                        <button onClick={() => navigate('/home')} type="submit" className="w-full h-12 bg-[#1A56DB] text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-md hover:shadow-lg active:scale-95">
-                            Login
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="w-full h-12 bg-[#1A56DB] text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-md hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                            {isSubmitting ? "Signing In..." : "Login"}
                         </button>
 
                         <div className="text-center text-sm text-gray-500 mt-2">
                             Don’t have an account? 
-                            <button onClick={() => navigate('/')} className="text-[#1A56DB] font-bold ml-1 hover:underline">
+                            <button onClick={() => navigate('/join')} className="text-[#1A56DB] font-bold ml-1 hover:underline">
                                 Register
                             </button>
                         </div>

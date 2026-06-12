@@ -10,6 +10,8 @@ import {
   Trash2,
 } from "lucide-react";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
+import { useEffect } from "react";
+import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "../../api/notifications.js";
 
 const FILTER_TABS = ["All", "Unread", "Bookings", "Messages"];
 
@@ -192,6 +194,21 @@ export default function Notifications() {
   const [activeTab, setActiveTab] = useState("All");
   const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
 
+  useEffect(() => {
+    fetchNotifications()
+      .then((data) => setNotifications((data?.notifications || []).map((item) => ({
+        id: item.id,
+        type: item.notification_type,
+        category: item.notification_type.includes("message") ? "Messages" : "Bookings",
+        title: item.title,
+        message: item.message,
+        timestamp: new Date(item.created_at).toLocaleString(),
+        unread: !item.is_read,
+        actionLabel: "",
+      }))))
+      .catch(() => {});
+  }, []);
+
   const unreadCount = notifications.filter((item) => item.unread).length;
 
   const tabCounts = useMemo(
@@ -215,6 +232,7 @@ export default function Notifications() {
   }, [activeTab, notifications]);
 
   const markAsRead = (id) => {
+    markNotificationRead(id).catch(() => {});
     setNotifications((current) =>
       current.map((item) =>
         item.id === id ? { ...item, unread: false } : item,
@@ -223,6 +241,7 @@ export default function Notifications() {
   };
 
   const markAllAsRead = () => {
+    markAllNotificationsRead().catch(() => {});
     setNotifications((current) =>
       current.map((item) => ({ ...item, unread: false })),
     );

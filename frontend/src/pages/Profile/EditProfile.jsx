@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom"; // ✅ لاستخدام التنقل
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import {
@@ -17,6 +17,8 @@ import {
   Coffee,
   Upload,
 } from "lucide-react";
+import { apiJson } from "../../api/client.js";
+import { fetchMyProfile } from "../../api/accounts.js";
 
 const EditProfile = () => {
   const navigate = useNavigate(); // ✅ هوك التنقل
@@ -49,6 +51,33 @@ const EditProfile = () => {
     cleanliness: "Medium",
   });
 
+  useEffect(() => {
+    fetchMyProfile()
+      .then((data) => {
+        const student = data.student_profile || {};
+        setFormData((prev) => ({
+          ...prev,
+          name: [data.first_name, data.last_name].filter(Boolean).join(" ") || prev.name,
+          email: data.email || prev.email,
+          phone: data.phone_number || prev.phone,
+          avatar: data.profile_picture || prev.avatar,
+          location: data.city || prev.location,
+          university: student.university || prev.university,
+          faculty: student.faculty || prev.faculty,
+          year: student.year_of_study || prev.year,
+          bio: student.bio || prev.bio,
+          sleepingTime: student.sleeping_time || prev.sleepingTime,
+          studyEnv: student.study_environment || prev.studyEnv,
+          music: student.music_preference || prev.music,
+          smoking: student.smoking || prev.smoking,
+          budgetRange: `${student.budget_min || ""}${student.budget_max ? ` - ${student.budget_max}` : ""}` || prev.budgetRange,
+          roomType: student.preferred_room_type || prev.roomType,
+          cleanliness: student.cleanliness || prev.cleanliness,
+        }));
+      })
+      .catch(() => {});
+  }, []);
+
   // التعامل مع تغيير النصوص
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -78,11 +107,38 @@ const EditProfile = () => {
   };
 
   // ✅ زر الحفظ: يعرض رسالة ثم يعود للبروفايل
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    // هنا المفروض نرسل البيانات للباك إند (API)
-    alert("Profile Updated Successfully! ✅");
-    navigate("/profile"); // 👈 العودة لصفحة البروفايل
+    try {
+      const [minBudget, maxBudget] = formData.budgetRange.split("-").map((value) => Number(value.trim()));
+      await apiJson("/api/auth/profile/", {
+        method: "PATCH",
+        body: JSON.stringify({
+          email: formData.email,
+          phone_number: formData.phone,
+          city: formData.location,
+          profile_picture: formData.avatar,
+          first_name: formData.name.split(" ")[0] || formData.name,
+          last_name: formData.name.split(" ").slice(1).join(" "),
+          student_profile: {
+            bio: formData.bio,
+            university: formData.university,
+            faculty: formData.faculty,
+            year_of_study: formData.year,
+            sleeping_time: formData.sleepingTime,
+            music_preference: formData.studyEnv,
+            smoking: formData.smoking,
+            budget_min: Number.isFinite(minBudget) ? minBudget : undefined,
+            budget_max: Number.isFinite(maxBudget) ? maxBudget : undefined,
+            preferred_room_type: formData.roomType,
+            cleanliness: formData.cleanliness,
+          },
+        }),
+      });
+      navigate("/profile");
+    } catch {
+      alert("Failed to update profile");
+    }
   };
 
   // ✅ زر الإلغاء: يعود للبروفايل فوراً

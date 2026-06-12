@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, ChevronRight, Check, AlertCircle, Upload } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Check, AlertCircle } from 'lucide-react';
+import { registerUser, updateMyProfile, uploadVerificationDocument } from "../../../api/accounts.js";
+import { getApiErrorMessage, mapGenderToBackend } from "../../../utils/auth.js";
 
 // === المكونات الفرعية (خارج المكون الرئيسي) ===
 
@@ -71,6 +73,8 @@ const LandlordRegister = () => {
     const [fileNames, setFileNames] = useState({ idFront: '', profilePhoto: '' });
     const [errors, setErrors] = useState({});
     const [availableCities, setAvailableCities] = useState([]);
+    const [formError, setFormError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleChange = (e) => {
         const { name, value, files } = e.target;
@@ -79,10 +83,12 @@ const LandlordRegister = () => {
                 setFormData(prev => ({ ...prev, [name]: files[0] }));
                 setFileNames(prev => ({ ...prev, [name]: files[0].name }));
                 if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+                if (formError) setFormError('');
             }
         } else {
             setFormData(prev => ({ ...prev, [name]: value }));
             if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+            if (formError) setFormError('');
             if (name === 'governorate') {
                 setAvailableCities(egyptData[value] || []);
                 setFormData(prev => ({ ...prev, governorate: value, city: '' }));
@@ -112,14 +118,63 @@ const LandlordRegister = () => {
             if (!formData.email.trim()) newErrors.email = "Required";
             else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid Email";
             if (!formData.password) newErrors.password = "Required";
-            else if (formData.password.length < 6) newErrors.password = "Min 6 chars";
-            if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords mismatch";
+            else if (formData.password.length < 8) newErrors.password = "Min 8 chars";
+            if (!formData.confirmPassword) newErrors.confirmPassword = "Please confirm password";
+            else if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords mismatch";
         }
         if (Object.keys(newErrors).length > 0) { setErrors(newErrors); isValid = false; }
         return isValid;
     };
 
-    const handleNext = () => { if (validateStep(currentStep)) { if (currentStep < 3) setCurrentStep(prev => prev + 1); else console.log("Landlord Registered:", formData); } };
+    const handleNext = async () => { 
+        if (validateStep(currentStep)) {
+            if (currentStep < 3) setCurrentStep(prev => prev + 1); 
+            else {
+                try {
+                    setIsSubmitting(true);
+                    setFormError('');
+                    const payload = {
+                        username: `${formData.firstName}.${formData.lastName}`.toLowerCase().replace(/\s+/g, ""),
+                        email: formData.email,
+                        first_name: formData.firstName,
+                        last_name: formData.lastName,
+                        password: formData.password,
+                        phone_number: formData.phone,
+                        gender: mapGenderToBackend(formData.gender),
+                        date_of_birth: formData.dob,
+                        city: `${formData.city}, ${formData.governorate}`,
+                        role: "landlord",
+                    };
+                    await registerUser(payload);
+                    await updateMyProfile({
+                        city: `${formData.city}, ${formData.governorate}`,
+                        landlord_profile: {
+                            national_id: formData.nationalId,
+                        },
+                    });
+
+                    if (formData.profilePhoto) {
+                        const profilePayload = new FormData();
+                        profilePayload.append("profile_picture", formData.profilePhoto);
+                        await updateMyProfile(profilePayload);
+                    }
+
+                    if (formData.idFront) {
+                        const documentPayload = new FormData();
+                        documentPayload.append("doc_type", "national_id");
+                        documentPayload.append("file", formData.idFront);
+                        await uploadVerificationDocument(documentPayload);
+                    }
+
+                    navigate("/owner/overview");
+                } catch (error) {
+                    setFormError(getApiErrorMessage(error, "Registration failed"));
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
+        }
+    };
     const handleBack = () => { setErrors({}); if (currentStep > 1) setCurrentStep(prev => prev - 1); };
 
     return (
@@ -134,6 +189,12 @@ const LandlordRegister = () => {
                 {/* Body: المحتوى */}
                 <div className="flex-1 flex flex-col justify-center px-12 md:px-20 overflow-y-auto custom-scrollbar">
                     <div className="w-full max-w-4xl mx-auto">
+                        {formError && (
+                            <div className="mb-6 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                <AlertCircle className="h-4 w-4 shrink-0" />
+                                <span>{formError}</span>
+                            </div>
+                        )}
                         {currentStep === 1 && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
                                 <InputField label="First name" name="firstName" placeholder="Enter First name" value={formData.firstName} onChange={handleChange} error={errors.firstName} />
@@ -163,7 +224,13 @@ const LandlordRegister = () => {
                         {/* الأزرار */}
                         <div className="flex justify-between items-center mt-10 mb-2 w-full">
                             <button onClick={handleBack} className={`flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-300 px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition ${currentStep === 1 ? 'invisible' : 'visible'}`}><ArrowLeft className="w-5 h-5" /> Back</button>
-                            <button onClick={handleNext} className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95">{currentStep === 3 ? "Create Account" : "NEXT"} <ChevronRight className="w-5 h-5" /></button>
+                            <button
+                                onClick={handleNext}
+                                disabled={isSubmitting}
+                                className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                                {currentStep === 3 ? (isSubmitting ? "Creating..." : "Create Account") : "NEXT"} <ChevronRight className="w-5 h-5" />
+                            </button>
                         </div>
                     </div>
                 </div>

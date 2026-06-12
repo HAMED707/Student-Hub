@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CalendarDays,
@@ -9,82 +9,192 @@ import {
   User,
   X,
 } from "lucide-react";
+import {
+  fetchMyBookings,
+  updateBookingStatus,
+} from "../../api/bookings.js";
+import { fetchLandlordProperties } from "../../api/properties.js";
+import { fetchPublicProfile } from "../../api/accounts.js";
+import { withApiUrl } from "../../api/client.js";
 
 const cx = (...classes) => classes.filter(Boolean).join(" ");
 
-const initialBookings = [
-  {
-    id: "b1",
-    student: "Ahmed Khaled",
-    property: "Shared Room - Nasr City",
-    room: "Room A3",
-    date: "12 March 2025",
-    status: "Accepted",
-    avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=200&q=80",
+const statusMeta = {
+  pending_payment: {
+    label: "Awaiting Deposit",
+    className: "bg-slate-50 text-slate-700 border-slate-100",
   },
-  {
-    id: "b2",
-    student: "Mona Ali",
-    property: "Luxury Apartment - Zamalek",
-    room: "Room B2",
-    date: "15 March 2025",
-    status: "Pending",
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80",
+  deposit_paid: {
+    label: "Pending Review",
+    className: "bg-amber-50 text-amber-700 border-amber-100",
   },
-  {
-    id: "b3",
-    student: "Salah K.",
-    property: "Studio Near Cairo University",
-    room: "Room C1",
-    date: "18 March 2025",
-    status: "Pending",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
+  confirmed: {
+    label: "Accepted",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-100",
   },
-];
-
-const statusStyle = {
-  Accepted: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  Pending: "bg-amber-50 text-amber-700 border-amber-100",
-  Rejected: "bg-rose-50 text-rose-700 border-rose-100",
+  completed: {
+    label: "Completed",
+    className: "bg-blue-50 text-blue-700 border-blue-100",
+  },
+  cancelled: {
+    label: "Rejected",
+    className: "bg-rose-50 text-rose-700 border-rose-100",
+  },
 };
 
-const StatusBadge = ({ status }) => (
-  <span className={cx("rounded-full border px-3 py-1 text-xs font-bold", statusStyle[status] || "bg-slate-50 text-slate-600 border-slate-100")}>
-    {status}
-  </span>
-);
+const StatusBadge = ({ status }) => {
+  const config = statusMeta[status] || {
+    label: status,
+    className: "bg-slate-50 text-slate-600 border-slate-100",
+  };
+
+  return (
+    <span
+      className={cx(
+        "rounded-full border px-3 py-1 text-xs font-bold",
+        config.className,
+      )}
+    >
+      {config.label}
+    </span>
+  );
+};
+
+const formatDate = (value) => {
+  if (!value) return "Not scheduled";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not scheduled";
+  return date.toLocaleDateString();
+};
 
 export default function OwnerBookings() {
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState(initialBookings);
+  const [bookings, setBookings] = useState([]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const loadBookings = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const [bookingRows, properties] = await Promise.all([
+          fetchMyBookings(),
+          fetchLandlordProperties(),
+        ]);
+
+        const propertyMap = new Map(
+          (properties || []).map((property) => [property.id, property]),
+        );
+        const tenantIds = [...new Set((bookingRows || []).map((row) => row.tenant))];
+        const tenantProfiles = await Promise.allSettled(
+          tenantIds.map(async (tenantId) => [
+            tenantId,
+            await fetchPublicProfile(tenantId),
+          ]),
+        );
+
+        const tenantMap = new Map(
+          tenantProfiles
+            .filter((result) => result.status === "fulfilled")
+            .map((result) => result.value),
+        );
+
+        setBookings(
+          (bookingRows || []).map((booking) => {
+            const tenant = tenantMap.get(booking.tenant);
+            const property = propertyMap.get(booking.property);
+            const fullName =
+              [tenant?.first_name, tenant?.last_name].filter(Boolean).join(" ") ||
+              tenant?.username ||
+              `Student #${booking.tenant}`;
+
+            return {
+              id: booking.id,
+              tenantId: booking.tenant,
+              status: booking.status,
+              student: fullName,
+              property:
+                property?.title ||
+                property?.name ||
+                `Property #${booking.property}`,
+              room: `${booking.duration_months} month(s)`,
+              date: formatDate(booking.move_in_date),
+              avatar: tenant?.profile_picture
+                ? withApiUrl(tenant.profile_picture)
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    fullName,
+                  )}&background=E2E8F0&color=0F172A`,
+              message: booking.message || "",
+            };
+          }),
+        );
+      } catch (loadError) {
+        setError(loadError.message || "Unable to load bookings.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBookings();
+  }, []);
 
   const filteredBookings = useMemo(() => {
     const search = query.trim().toLowerCase();
     return bookings.filter((booking) => {
+      const label = statusMeta[booking.status]?.label || booking.status;
       const matchesSearch =
         !search ||
         booking.student.toLowerCase().includes(search) ||
         booking.property.toLowerCase().includes(search) ||
-        booking.room.toLowerCase().includes(search);
-      const matchesStatus = statusFilter === "All" || booking.status === statusFilter;
+        booking.room.toLowerCase().includes(search) ||
+        label.toLowerCase().includes(search);
+      const matchesStatus =
+        statusFilter === "All" ||
+        (statusFilter === "Pending" && booking.status === "deposit_paid") ||
+        (statusFilter === "Accepted" &&
+          ["confirmed", "completed"].includes(booking.status)) ||
+        (statusFilter === "Rejected" && booking.status === "cancelled");
       return matchesSearch && matchesStatus;
     });
   }, [bookings, query, statusFilter]);
 
-  const setStatus = (id, status) => {
-    setBookings((current) => current.map((booking) => (booking.id === id ? { ...booking, status } : booking)));
+  const handleStatusUpdate = async (bookingId, nextStatus) => {
+    const previous = bookings;
+
+    setBookings((currentBookings) =>
+      currentBookings.map((booking) =>
+        booking.id === bookingId ? { ...booking, status: nextStatus } : booking,
+      ),
+    );
+
+    try {
+      await updateBookingStatus(bookingId, nextStatus);
+    } catch {
+      setBookings(previous);
+    }
   };
+
+  const pendingCount = bookings.filter((booking) => booking.status === "deposit_paid").length;
+  const acceptedCount = bookings.filter((booking) =>
+    ["confirmed", "completed"].includes(booking.status),
+  ).length;
 
   return (
     <div className="min-h-screen bg-[#F6F8FC] font-sans text-[#091E42]">
       <main className="mx-auto max-w-7xl px-6 py-8">
         <header className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#155BC2]">Owner bookings</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#155BC2]">
+              Owner bookings
+            </p>
             <h1 className="mt-1 text-2xl font-black">Student Booking Requests</h1>
-            <p className="mt-1 text-sm text-slate-500">Review student requests and keep each booking status updated.</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Review confirmed deposit requests and keep each booking status updated.
+            </p>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-blue-50 px-4 py-3">
@@ -92,11 +202,11 @@ export default function OwnerBookings() {
               <p className="text-[11px] font-bold text-slate-500">Total</p>
             </div>
             <div className="rounded-xl bg-amber-50 px-4 py-3">
-              <p className="text-lg font-black text-amber-700">{bookings.filter((b) => b.status === "Pending").length}</p>
+              <p className="text-lg font-black text-amber-700">{pendingCount}</p>
               <p className="text-[11px] font-bold text-slate-500">Pending</p>
             </div>
             <div className="rounded-xl bg-emerald-50 px-4 py-3">
-              <p className="text-lg font-black text-emerald-700">{bookings.filter((b) => b.status === "Accepted").length}</p>
+              <p className="text-lg font-black text-emerald-700">{acceptedCount}</p>
               <p className="text-[11px] font-bold text-slate-500">Accepted</p>
             </div>
           </div>
@@ -133,49 +243,104 @@ export default function OwnerBookings() {
           </div>
 
           <div className="mt-4 overflow-hidden rounded-xl border border-slate-100">
-            {filteredBookings.length === 0 ? (
+            {loading ? (
               <div className="grid place-items-center py-16 text-center">
                 <CalendarDays className="h-10 w-10 text-slate-300" />
-                <p className="mt-3 text-sm font-bold text-slate-500">No bookings match your filters.</p>
+                <p className="mt-3 text-sm font-bold text-slate-500">
+                  Loading landlord bookings...
+                </p>
+              </div>
+            ) : error ? (
+              <div className="grid place-items-center py-16 px-4 text-center">
+                <CalendarDays className="h-10 w-10 text-rose-300" />
+                <p className="mt-3 text-sm font-bold text-slate-700">{error}</p>
+              </div>
+            ) : filteredBookings.length === 0 ? (
+              <div className="grid place-items-center py-16 text-center">
+                <CalendarDays className="h-10 w-10 text-slate-300" />
+                <p className="mt-3 text-sm font-bold text-slate-500">
+                  No bookings match your filters.
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {filteredBookings.map((booking) => (
-                  <article key={booking.id} className="flex flex-col gap-4 bg-white p-4 transition hover:bg-[#F8FAFC] lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex min-w-0 gap-3">
-                      <img src={booking.avatar} alt={booking.student} className="h-12 w-12 rounded-full object-cover" />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-black text-[#091E42]">{booking.student}</h3>
-                          <StatusBadge status={booking.status} />
-                        </div>
-                        <p className="mt-1 text-sm font-semibold text-slate-600">{booking.property}</p>
-                        <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
-                          <Clock3 className="h-3.5 w-3.5" /> {booking.room} • Move-in {booking.date}
-                        </p>
-                      </div>
-                    </div>
+                {filteredBookings.map((booking) => {
+                  const canReview = booking.status === "deposit_paid";
 
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => navigate(`/owner/messages?student=${booking.id}`)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50">
-                        <MessageSquare className="h-4 w-4" /> Message
-                      </button>
-                      <button type="button" onClick={() => navigate(`/profile/${booking.id}`)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50">
-                        <User className="h-4 w-4" /> Profile
-                      </button>
-                      {booking.status === "Pending" && (
-                        <>
-                          <button type="button" onClick={() => setStatus(booking.id, "Rejected")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 text-xs font-bold text-rose-700 transition hover:bg-rose-100">
-                            <X className="h-4 w-4" /> Reject
-                          </button>
-                          <button type="button" onClick={() => setStatus(booking.id, "Accepted")} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#155BC2] px-3 text-xs font-bold text-white transition hover:bg-[#0f4ca3]">
-                            <Check className="h-4 w-4" /> Accept
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </article>
-                ))}
+                  return (
+                    <article
+                      key={booking.id}
+                      className="flex flex-col gap-4 bg-white p-4 transition hover:bg-[#F8FAFC] lg:flex-row lg:items-center lg:justify-between"
+                    >
+                      <div className="flex min-w-0 gap-3">
+                        <img
+                          src={booking.avatar}
+                          alt={booking.student}
+                          className="h-12 w-12 rounded-full object-cover"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-black text-[#091E42]">
+                              {booking.student}
+                            </h3>
+                            <StatusBadge status={booking.status} />
+                          </div>
+                          <p className="mt-1 text-sm font-semibold text-slate-600">
+                            {booking.property}
+                          </p>
+                          <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
+                            <Clock3 className="h-3.5 w-3.5" /> {booking.room} • Move-in{" "}
+                            {booking.date}
+                          </p>
+                          {booking.message && (
+                            <p className="mt-2 line-clamp-2 text-xs text-slate-500">
+                              {booking.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate("/owner/messages")}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          <MessageSquare className="h-4 w-4" /> Message
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/profile/${booking.tenantId}`)}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          <User className="h-4 w-4" /> Profile
+                        </button>
+                        {canReview && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStatusUpdate(booking.id, "cancelled")
+                              }
+                              className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                            >
+                              <X className="h-4 w-4" /> Reject
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStatusUpdate(booking.id, "confirmed")
+                              }
+                              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#155BC2] px-3 text-xs font-bold text-white transition hover:bg-[#0f4ca3]"
+                            >
+                              <Check className="h-4 w-4" /> Accept
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </div>

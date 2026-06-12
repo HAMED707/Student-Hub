@@ -15,6 +15,7 @@ import {
   Volume2,
   X,
 } from "lucide-react";
+import { fetchConversations } from "../../api/messaging.js";
 
 const fallbackChat = {
   id: "demo",
@@ -60,6 +61,7 @@ const Messages = ({ selectedChat, onSendMessage }) => {
   const imageInputRef = useRef(null);
 
   const chat = selectedChat || fallbackChat;
+  const [conversationList, setConversationList] = useState([]);
 
   const messages = useMemo(() => {
     const baseMessages = chat.messages?.length
@@ -97,6 +99,15 @@ const Messages = ({ selectedChat, onSendMessage }) => {
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.id, messages.length]);
+
+  useEffect(() => {
+    fetchConversations()
+      .then((data) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        setConversationList(data);
+      })
+      .catch(() => {});
+  }, []);
 
   const showNotice = (text) => {
     setNotice(text);
@@ -236,6 +247,7 @@ const Messages = ({ selectedChat, onSendMessage }) => {
                 {chat.active ? "Online" : "Recently active"}
               </span>
               <span>{messages.length} messages</span>
+              <span>{conversationList.length} threads</span>
               <span>{sharedFiles.length} files</span>
             </div>
           </div>

@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from "../../assets/components/Navbar/Navbar.jsx"; 
 import { Search, SlidersHorizontal, Heart, X, Clock, Check, Users, School, Wallet, Sparkles, RotateCcw } from 'lucide-react';
+import { fetchRoommates } from "../../api/roommates.js";
 
 const roommatesData = [
   {
@@ -226,6 +227,7 @@ const Roommates = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [roommates, setRoommates] = useState(roommatesData);
+  const [loading, setLoading] = useState(true);
   const [isMatchingOpen, setIsMatchingOpen] = useState(false);
   const [isMatchingActive, setIsMatchingActive] = useState(false);
   const [matchingPreferences, setMatchingPreferences] = useState(defaultMatchingPreferences);
@@ -236,6 +238,49 @@ const Roommates = () => {
     year: "All",
     budget: "All"
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRoommates = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchRoommates();
+        if (cancelled) return;
+
+        if (Array.isArray(data)) {
+          setRoommates(
+            data.map((student) => ({
+              id: student.user_id || student.id,
+              name: student.username || "Student",
+              gender: student.gender || "Not specified",
+              year: "Student",
+              university: student.university || "Unknown",
+              budget: `${student.budget_min ?? 0}-${student.budget_max ?? 0}`,
+              bio: student.bio || "",
+              tags: [student.personality, student.cleanliness, student.room_type_preference].filter(Boolean),
+              matchPercentage: Math.round(student.match_score || 0),
+              image: student.profile_picture || "https://ui-avatars.com/api/?name=Student&background=0A2647&color=fff",
+              details: {
+                sleepTime: student.sleeping_time || "",
+                cleanliness: student.cleanliness || "",
+                hobbies: [student.guests_policy, student.smoking].filter(Boolean),
+              },
+            })),
+          );
+        }
+      } catch {
+        if (!cancelled) setRoommates(roommatesData);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadRoommates();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const displayedRoommates = useMemo(() => {
     const scored = isMatchingActive
@@ -418,6 +463,12 @@ const Roommates = () => {
         {isMatchingActive && (
           <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">
             Showing best matches based on your matching preferences.
+          </div>
+        )}
+
+        {loading && (
+          <div className="mb-6 rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
+            Loading roommate profiles from the backend...
           </div>
         )}
 

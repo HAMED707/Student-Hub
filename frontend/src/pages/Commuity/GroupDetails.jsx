@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { loadGroups, saveGroups } from "./groupData.js";
+import { fetchGroupDetail } from "../../api/community.js";
 
 const formatMembers = (members) =>
   members >= 1000 ? `${(members / 1000).toFixed(1)}k` : members;
@@ -34,6 +35,29 @@ const GroupDetails = () => {
   useEffect(() => {
     const timeout = window.setTimeout(() => setIsLoading(false), 240);
     return () => window.clearTimeout(timeout);
+  }, [groupId]);
+
+  useEffect(() => {
+    fetchGroupDetail(groupId)
+      .then((data) => {
+        if (!data) return;
+        setGroups((current) =>
+          current.map((item) =>
+            item.id === groupId
+              ? {
+                  ...item,
+                  name: data.name,
+                  desc: data.description,
+                  category: data.category,
+                  image: data.cover_image || item.image,
+                  members: data.member_count,
+                  isMyGroup: data.is_member,
+                }
+              : item,
+          ),
+        );
+      })
+      .catch(() => {});
   }, [groupId]);
 
   useEffect(() => {

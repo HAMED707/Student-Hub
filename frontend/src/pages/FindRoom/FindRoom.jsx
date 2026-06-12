@@ -12,6 +12,7 @@ import {
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { fetchProperties } from "../../api/properties.js";
 
 const generateData = () => {
   const images = [
@@ -174,7 +175,7 @@ const applyFiltersToItems = (items, query, filters) => {
 
 const FindRoom = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [properties] = useState(() => generateData());
+  const [properties, setProperties] = useState(() => generateData());
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [activeSort, setActiveSort] = useState(searchParams.get("sort") || "Recommended");
   const [filters, setFilters] = useState({
@@ -205,6 +206,45 @@ const FindRoom = () => {
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 650);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadProperties = async () => {
+      try {
+        const data = await fetchProperties();
+        if (cancelled || !Array.isArray(data) || data.length === 0) return;
+        setProperties(
+          data.map((property) => ({
+            id: property.id,
+            title: property.title,
+            type: property.property_type,
+            location: `${property.city}${property.district ? ` - ${property.district}` : ""}`,
+            universityDistance: property.university_distance || property.distance_to_university || "",
+            campusMinutes: Number.parseInt(property.distance_to_university) || 15,
+            price: property.price,
+            rating: property.average_rating || 0,
+            reviews: property.review_count || 0,
+            roommates: property.num_roommates || 0,
+            image: property.cover_image || property.images?.[0]?.image || "",
+            availabilityStatus: property.status,
+            isAvailable: property.status === "available",
+            amenities: Array.isArray(property.amenities) ? property.amenities : [],
+            city: property.city,
+            area: property.district || property.city,
+            lat: property.latitude,
+            lng: property.longitude,
+            createdAt: new Date(property.created_at).getTime(),
+            description: property.description || "",
+            images: property.images?.map((image) => image.image) || [],
+          })),
+        );
+      } catch {
+        // keep mock data fallback
+      }
+    };
+    loadProperties();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {

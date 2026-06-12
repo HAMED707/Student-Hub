@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, ChevronRight, Check, AlertCircle } from 'lucide-react';
+import { registerUser, updateMyProfile } from "../../../api/accounts.js";
+import { getApiErrorMessage, mapGenderToBackend } from "../../../utils/auth.js";
 
 // ==========================================
 // 1. المكونات الفرعية (يجب أن تكون خارج المكون الرئيسي)
@@ -87,6 +89,8 @@ const StudentRegister = () => {
 
     const [errors, setErrors] = useState({});
     const [availableCities, setAvailableCities] = useState([]);
+    const [formError, setFormError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -94,6 +98,9 @@ const StudentRegister = () => {
         
         if (errors[name]) {
             setErrors(prev => ({ ...prev, [name]: '' }));
+        }
+        if (formError) {
+            setFormError('');
         }
 
         if (name === 'governorate') {
@@ -129,9 +136,10 @@ const StudentRegister = () => {
             else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid email";
             
             if (!formData.password) newErrors.password = "Password is required";
-            else if (formData.password.length < 6) newErrors.password = "Min 6 characters";
+            else if (formData.password.length < 8) newErrors.password = "Min 8 characters";
 
-            if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords do not match";
+            if (!formData.confirmPassword) newErrors.confirmPassword = "Please confirm your password";
+            else if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords do not match";
         }
 
         if (Object.keys(newErrors).length > 0) {
@@ -142,10 +150,41 @@ const StudentRegister = () => {
         return isValid;
     };
 
-    const handleNext = () => { 
+    const handleNext = async () => { 
         if (validateStep(currentStep)) {
             if (currentStep < 3) setCurrentStep(prev => prev + 1); 
-            else console.log("Form Submitted:", formData);
+            else {
+                try {
+                    setIsSubmitting(true);
+                    setFormError('');
+                    const payload = {
+                        username: `${formData.firstName}.${formData.lastName}`.toLowerCase().replace(/\s+/g, ""),
+                        email: formData.email,
+                        first_name: formData.firstName,
+                        last_name: formData.lastName,
+                        password: formData.password,
+                        phone_number: formData.phone,
+                        gender: mapGenderToBackend(formData.gender),
+                        date_of_birth: formData.dob,
+                        city: `${formData.city}, ${formData.governorate}`,
+                        role: "student",
+                    };
+                    await registerUser(payload);
+                    await updateMyProfile({
+                        city: `${formData.city}, ${formData.governorate}`,
+                        student_profile: {
+                            university: formData.university,
+                            faculty: formData.major,
+                            year_of_study: formData.academicYear,
+                        },
+                    });
+                    navigate("/home");
+                } catch (error) {
+                    setFormError(getApiErrorMessage(error, "Registration failed"));
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
         }
     };
 
@@ -173,6 +212,12 @@ const StudentRegister = () => {
                 {/* المحتوى في المنتصف (justify-center) */}
                 <div className="flex-1 flex flex-col justify-center px-12 md:px-20 overflow-y-auto custom-scrollbar">
                     <div className="w-full max-w-4xl mx-auto">
+                        {formError && (
+                            <div className="mb-6 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                <AlertCircle className="h-4 w-4 shrink-0" />
+                                <span>{formError}</span>
+                            </div>
+                        )}
                         
                         {/* Step 1 */}
                         {currentStep === 1 && (
@@ -219,9 +264,10 @@ const StudentRegister = () => {
 
                             <button 
                                 onClick={handleNext}
-                                className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95"
+                                disabled={isSubmitting}
+                                className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
                             >
-                                {currentStep === 3 ? "Create Account" : "NEXT"} <ChevronRight className="w-5 h-5" />
+                                {currentStep === 3 ? (isSubmitting ? "Creating..." : "Create Account") : "NEXT"} <ChevronRight className="w-5 h-5" />
                             </button>
                         </div>
                     </div>

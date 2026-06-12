@@ -16,6 +16,8 @@ import {
   Plus,
   Receipt
 } from "lucide-react";
+import { apiJson } from "../../api/client.js";
+import { fetchMyProfile } from "../../api/accounts.js";
 
 
 const ToggleSwitch = ({ checked, onChange }) => (
@@ -50,13 +52,29 @@ const Settings = () => {
   // حالة رسائل الإشعارات الداخلية
   const [notification, setNotification] = useState({ show: false, message: "", type: "" });
 
+  React.useEffect(() => {
+    fetchMyProfile()
+      .then((data) => setEmail(data.email || ""))
+      .catch(() => {});
+  }, []);
+
   const showMessage = (msg, type = "success") => {
     setNotification({ show: true, message: msg, type });
     setTimeout(() => setNotification({ show: false, message: "", type: "" }), 3000);
   };
 
   
-  const saveAccount = () => showMessage("Account settings updated successfully!");
+  const saveAccount = async () => {
+    try {
+      await apiJson("/api/auth/profile/", {
+        method: "PATCH",
+        body: JSON.stringify({ email }),
+      });
+      showMessage("Account settings updated successfully!");
+    } catch (error) {
+      showMessage(error.message || "Failed to update account", "error");
+    }
+  };
   const savePreferences = () => showMessage("Preferences saved successfully!");
 
   const changePassword = () => {
