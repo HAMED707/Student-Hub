@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bell,
   Check,
@@ -12,6 +13,7 @@ import {
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import { useEffect } from "react";
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "../../api/notifications.js";
+import { buildConversationRouteState } from "../../utils/messaging.js";
 
 const FILTER_TABS = ["All", "Unread", "Bookings", "Messages"];
 
@@ -108,7 +110,7 @@ const EmptyState = ({ activeTab }) => (
   </div>
 );
 
-const NotificationItem = ({ notification, onMarkAsRead, onDelete }) => {
+const NotificationItem = ({ notification, onDelete, onOpen }) => {
   const config =
     notificationStyles[notification.type] || notificationStyles.system;
   const Icon = config.icon;
@@ -156,6 +158,7 @@ const NotificationItem = ({ notification, onMarkAsRead, onDelete }) => {
           {notification.actionLabel && (
             <button
               type="button"
+              onClick={() => onOpen(notification)}
               className="text-sm font-bold text-blue-600 transition hover:text-blue-700"
             >
               {notification.actionLabel}
@@ -168,7 +171,7 @@ const NotificationItem = ({ notification, onMarkAsRead, onDelete }) => {
         {notification.unread && (
           <button
             type="button"
-            onClick={() => onMarkAsRead(notification.id)}
+            onClick={() => onOpen(notification)}
             className="grid h-9 w-9 place-items-center rounded-full border border-blue-100 bg-white text-blue-600 shadow-sm transition hover:bg-blue-600 hover:text-white"
             aria-label="Mark as read"
             title="Mark as read"
@@ -191,6 +194,7 @@ const NotificationItem = ({ notification, onMarkAsRead, onDelete }) => {
 };
 
 export default function Notifications() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("All");
   const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
 
@@ -204,7 +208,8 @@ export default function Notifications() {
         message: item.message,
         timestamp: new Date(item.created_at).toLocaleString(),
         unread: !item.is_read,
-        actionLabel: "",
+        actionLabel: item.notification_type.includes("message") ? "Open chat" : "",
+        data: item.data || {},
       }))))
       .catch(() => {});
   }, []);
@@ -249,6 +254,18 @@ export default function Notifications() {
 
   const deleteNotification = (id) => {
     setNotifications((current) => current.filter((item) => item.id !== id));
+  };
+
+  const openNotification = (notification) => {
+    if (notification.unread) {
+      markAsRead(notification.id);
+    }
+
+    if (notification.type.includes("message") && notification.data?.conversation_id) {
+      navigate("/messages", {
+        state: buildConversationRouteState(notification.data.conversation_id),
+      });
+    }
   };
 
   return (
@@ -324,8 +341,8 @@ export default function Notifications() {
                   <NotificationItem
                     key={notification.id}
                     notification={notification}
-                    onMarkAsRead={markAsRead}
                     onDelete={deleteNotification}
+                    onOpen={openNotification}
                   />
                 ))}
               </div>

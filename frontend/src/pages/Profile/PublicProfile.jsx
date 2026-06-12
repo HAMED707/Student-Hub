@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import {
   MapPin,
@@ -12,7 +12,10 @@ import {
   Check,
 } from "lucide-react";
 import { apiJson, withApiUrl } from "../../api/client.js";
+import { createUserReview } from "../../api/reviews.js";
 import { fetchRoommateProfile, fetchUserReviews } from "../../api/roommates.js";
+import { getApiErrorMessage, getStoredUser } from "../../utils/auth.js";
+import { buildDraftChatState } from "../../utils/messaging.js";
 
 const coverImage =
   "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2000&auto=format&fit=crop";
@@ -52,11 +55,24 @@ const formatLabel = (value) =>
 
 export default function PublicProfile() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [roommateProfile, setRoommateProfile] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reviewForm, setReviewForm] = useState({
+    rating: 5,
+    reviewer_role: "classmate",
+    comment: "",
+  });
+  const [reviewError, setReviewError] = useState("");
+  const [reviewSuccess, setReviewSuccess] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const storedUser = getStoredUser();
+  const isOwnProfile = String(storedUser?.id || "") === String(id);
+  const canLeaveReview = Boolean(storedUser && !isOwnProfile);
+  const currentRole = storedUser?.role || "student";
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +104,61 @@ export default function PublicProfile() {
       cancelled = true;
     };
   }, [id]);
+
+  const handleReviewFieldChange = (field, value) => {
+    if (reviewError) setReviewError("");
+    if (reviewSuccess) setReviewSuccess("");
+    setReviewForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSubmitReview = async (event) => {
+    event.preventDefault();
+
+    if (!canLeaveReview) {
+      setReviewError("You must be signed in and viewing someone else's profile.");
+      return;
+    }
+
+    try {
+      setSubmittingReview(true);
+      setReviewError("");
+      setReviewSuccess("");
+
+      const createdReview = await createUserReview(id, {
+        rating: Number(reviewForm.rating),
+        reviewer_role: reviewForm.reviewer_role,
+        comment: reviewForm.comment.trim(),
+      });
+
+      setReviews((current) => [createdReview, ...current]);
+      setReviewForm({
+        rating: 5,
+        reviewer_role: "classmate",
+        comment: "",
+      });
+      setReviewSuccess("Review submitted successfully.");
+    } catch (submitError) {
+      setReviewError(getApiErrorMessage(submitError, "Failed to submit review"));
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleMessageUser = () => {
+    if (!profile?.id || isOwnProfile) return;
+
+    navigate(currentRole === "landlord" ? "/owner/messages" : "/messages", {
+      state: buildDraftChatState({
+        receiverId: profile.id,
+        name:
+          [profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
+          profile.username ||
+          "User",
+        avatar: profile.profile_picture ? withApiUrl(profile.profile_picture) : fallbackAvatar,
+        receiverRole: currentRole === "landlord" ? "Student" : "User",
+      }),
+    });
+  };
 
   const userData = useMemo(() => {
     const studentProfile = profile?.student_profile || {};
@@ -212,7 +283,11 @@ export default function PublicProfile() {
               </div>
 
               <div className="mt-2 flex w-full gap-3 shrink-0 md:mt-0 md:w-auto">
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition-all hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-600/20 md:flex-none">
+                <button
+                  onClick={handleMessageUser}
+                  disabled={isOwnProfile}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition-all hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-600/20 disabled:cursor-not-allowed disabled:bg-blue-300 md:flex-none"
+                >
                   <MessageCircle className="h-4 w-4" />
                   Message
                 </button>
@@ -255,6 +330,109 @@ export default function PublicProfile() {
 
             <SectionCard title="Reviews from Landlords & Students">
               <div className="space-y-4">
+                {canLeaveReview && (
+                  <form
+                    onSubmit={handleSubmitReview}
+                    className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5"
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-base font-bold text-gray-900">Leave a review</h4>
+                        <p className="mt-1 text-sm text-gray-600">
+                          Share your experience with this user.
+                        </p>
+                      </div>
+                      <div className="rounded-full bg-white px-4 py-2 text-xs font-bold text-blue-700 shadow-sm">
+                        Public feedback
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">
+                          Rating
+                        </label>
+                        <select
+                          value={reviewForm.rating}
+                          onChange={(event) =>
+                            handleReviewFieldChange("rating", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800"
+                        >
+                          {[5, 4, 3, 2, 1].map((value) => (
+                            <option key={value} value={value}>
+                              {value} star{value > 1 ? "s" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">
+                          Relationship
+                        </label>
+                        <select
+                          value={reviewForm.reviewer_role}
+                          onChange={(event) =>
+                            handleReviewFieldChange("reviewer_role", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800"
+                        >
+                          <option value="classmate">Classmate</option>
+                          <option value="roommate">Roommate</option>
+                          <option value="neighbor">Neighbor</option>
+                          <option value="landlord">Landlord</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">
+                        Comment
+                      </label>
+                      <textarea
+                        value={reviewForm.comment}
+                        onChange={(event) =>
+                          handleReviewFieldChange("comment", event.target.value)
+                        }
+                        rows={4}
+                        maxLength={600}
+                        placeholder="Write a short, honest review."
+                        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800"
+                      />
+                    </div>
+
+                    {reviewError && (
+                      <p className="mt-3 text-sm font-medium text-rose-600">{reviewError}</p>
+                    )}
+                    {reviewSuccess && (
+                      <p className="mt-3 text-sm font-medium text-emerald-600">{reviewSuccess}</p>
+                    )}
+
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={submittingReview}
+                        className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {submittingReview ? "Submitting..." : "Submit Review"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {!storedUser && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    Sign in to leave a review for this user.
+                  </div>
+                )}
+
+                {storedUser && isOwnProfile && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    You cannot leave a review on your own profile.
+                  </div>
+                )}
+
                 {userData.reviews.length ? (
                   userData.reviews.map((review) => (
                     <div

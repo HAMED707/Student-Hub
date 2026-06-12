@@ -59,3 +59,7 @@ class StartConversationSerializer(serializers.Serializer):
         except Users.DoesNotExist:
             raise serializers.ValidationError("User not found.")
         return value
+
+
+class SendMessageSerializer(serializers.Serializer):
+    body = serializers.CharField()

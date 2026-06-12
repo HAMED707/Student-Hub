@@ -12,6 +12,25 @@ from bookings.models import Booking
 
 
 class BookingSerializer(serializers.ModelSerializer):
+    can_review_property = serializers.SerializerMethodField()
+    has_property_review = serializers.SerializerMethodField()
+    property_review_id = serializers.SerializerMethodField()
+
+    def _get_review(self, obj):
+        try:
+            return obj.review
+        except Exception:
+            return None
+
+    def get_has_property_review(self, obj):
+        return self._get_review(obj) is not None
+
+    def get_property_review_id(self, obj):
+        review = self._get_review(obj)
+        return review.id if review else None
+
+    def get_can_review_property(self, obj):
+        return obj.status in ["confirmed", "completed"] and not self.get_has_property_review(obj)
 
     class Meta:
         model=Booking
@@ -29,6 +48,9 @@ class BookingSerializer(serializers.ModelSerializer):
                     "expires_at", 
                     "created_at" ,
                     "updated_at",
+                    "can_review_property",
+                    "has_property_review",
+                    "property_review_id",
                     ]
         read_only_fields =[
             "id",
@@ -40,6 +62,9 @@ class BookingSerializer(serializers.ModelSerializer):
             "expires_at", 
             "created_at",
             "updated_at",
+            "can_review_property",
+            "has_property_review",
+            "property_review_id",
         ]
 
 class BookingCreateSerializer(serializers.ModelSerializer):

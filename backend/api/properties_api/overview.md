@@ -160,7 +160,7 @@ class PropertyListSerializer(serializers.ModelSerializer):
         model  = Property
         fields = [
             "id", "title", "property_type", "price",
-            "city", "district",
+            "city", "district", "latitude", "longitude",
             "nearby_university", "distance_to_university", "transport_type",
             "num_beds", "num_roommates", "gender_preference",
             "amenities", "status", "is_featured",
@@ -332,6 +332,7 @@ def apply_filters(queryset, params):
         price_min, price_max, num_beds, num_rooms,
         gender, university, amenity (single value, checks if list contains it)
     """
+    query = params.get("q")
     city = params.get("city")
     district = params.get("district")
     property_type = params.get("type")
@@ -344,12 +345,22 @@ def apply_filters(queryset, params):
     university = params.get("university")
     amenity = params.get("amenity")
 
+    if query:
+        queryset = queryset.filter(
+            Q(title__icontains=query)
+            | Q(city__icontains=query)
+            | Q(district__icontains=query)
+            | Q(address__icontains=query)
+            | Q(nearby_university__icontains=query)
+        )
     if city:
         queryset = queryset.filter(city__icontains=city)
     if district:
         queryset = queryset.filter(district__icontains=district)
     if property_type:
-        queryset = queryset.filter(property_type=property_type)
+        property_types = [item.strip() for item in property_type.split(",") if item.strip()]
+        if property_types:
+            queryset = queryset.filter(property_type__in=property_types)
     if prop_status:
         queryset = queryset.filter(status=prop_status)
     if price_min:
@@ -365,8 +376,9 @@ def apply_filters(queryset, params):
     if university:
         queryset = queryset.filter(nearby_university__icontains=university)
     if amenity:
-        # JSONField list — filter rows where the amenity string appears in the array
-        queryset = queryset.filter(amenities__contains=amenity)
+        amenities = [item.strip() for item in amenity.split(",") if item.strip()]
+        for amenity_value in amenities:
+            queryset = queryset.filter(amenities__contains=amenity_value)
 
     return queryset
 

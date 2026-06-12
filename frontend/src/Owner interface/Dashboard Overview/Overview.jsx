@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { fetchLandlordProperties } from "../../api/properties.js";
 import { fetchNotifications as fetchOwnerNotifications, markAllNotificationsRead } from "../../api/notifications.js";
+import { buildConversationRouteState } from "../../utils/messaging.js";
 
 /* =========================
    Constants
@@ -922,6 +923,8 @@ export default function OwnerDashboard() {
           time: new Date(item.created_at).toLocaleString(),
           type: item.notification_type.includes("booking") ? "warning" : item.notification_type.includes("payment") ? "success" : "info",
           read: item.is_read,
+          notificationType: item.notification_type,
+          data: item.data || {},
           action: { path: item.notification_type.includes("booking") ? "/owner/bookings" : item.notification_type.includes("payment") ? "/owner/payments" : "/owner/overview" },
         })));
       })
@@ -988,6 +991,12 @@ export default function OwnerDashboard() {
     (n) => {
       if (!n) return;
       markRead(n.id);
+      if (n.notificationType?.includes("message") && n.data?.conversation_id) {
+        navigate("/owner/messages", {
+          state: buildConversationRouteState(n.data.conversation_id),
+        });
+        return;
+      }
       if (n.action?.path) navigate(n.action.path);
       else navigate("/owner/notifications");
     },

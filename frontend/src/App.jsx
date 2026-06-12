@@ -30,6 +30,7 @@ import Posts from "./pages/Commuity/Posts.jsx";
 
 import Like from "./pages/Like/Like.jsx";
 import MyBookings from "./pages/MyBookings/MyBookings.jsx";
+import Payments from "./pages/Payments/Payments.jsx";
 import Notifications from "./pages/Notifications/Notifications.jsx";
 import Roommate from "./pages/Roommate/Roommate.jsx";
 import Service from "./pages/Service/Service.jsx";
@@ -263,7 +264,7 @@ export default function App() {
           <Route path="/bookings" element={<MyBookings />} />
           <Route path="/my-bookings" element={<MyBookings />} />
           <Route path="/booking/:id" element={<MyBookings />} />
-          <Route path="/payments" element={<MyBookings />} />
+          <Route path="/payments" element={<Payments />} />
           </Route>
         </Route>
 

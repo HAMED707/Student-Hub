@@ -2,57 +2,57 @@
 
 ## Summary
 - Domain: Bookings
-- Gate Verdict: FAIL
-- Status: ⚠ Partial / ❌ Broken / 🚧 Missing Frontend
-- Audit scope: booking creation, student booking list, landlord booking list, status updates, and payment-state assumptions.
-- Overall assessment: owner-side booking management is partially wired, but student booking creation is not connected and UI status models do not match backend booking states.
+- Gate Verdict: PASS WITH GAPS
+- Status: ✅ Working / ⚠ Partial / 🚧 Dependent on Payments
+- Audit scope: booking creation, student booking list, landlord booking list, status updates, and booking lifecycle assumptions.
+- Overall assessment: the bookings domain is now meaningfully linked. Students can create real bookings from the live property detail page, the student bookings page renders real backend bookings with enriched property data, and the landlord review/update flow remains connected. The remaining gap is deposit-payment progression.
 
 ## Frontend Issues
-- `frontend/src/api/bookings.js` exposes `createBooking`, but no student-facing page currently uses it.
-- `frontend/src/pages/FindRoom/PropertyDetails.jsx` contains booking intent UI that is still static and not connected to real booking creation.
-- `frontend/src/pages/MyBookings/MyBookings.jsx` expects a richer booking card model and different status vocabulary than the backend returns.
-- Student booking views assume property context and landlord info that backend serializers do not currently include directly.
-- Owner dashboard booking management is better connected, but still depends on extra enrichment requests to render usable cards.
+- Resolved: `frontend/src/pages/FindRoom/PropertyDetails.jsx` now submits a real booking request to `/api/bookings/` instead of ending in a fake success flow.
+- Resolved: booking creation now checks auth/role before opening the flow.
+- Resolved: `frontend/src/pages/MyBookings/MyBookings.jsx` now reads live backend bookings and enriches them with property details instead of relying on static mock bookings.
+- Resolved: student-side booking statuses now match backend values like `pending_payment`, `deposit_paid`, `confirmed`, `completed`, and `cancelled`.
+- Resolved: student cancellation now calls the real booking status endpoint.
+- Remaining: the booking flow still does not initiate deposit payment after booking creation.
 
 ## Backend Issues
-- Booking serializer output is relatively thin for the current frontend screens and does not ship fully nested property details needed by the student UI.
-- Backend booking statuses differ from current frontend labels and flow assumptions, especially around payment progression.
+- Backend booking serializer is still lean and returns IDs rather than nested property snapshots, so the frontend must enrich bookings with additional property detail requests.
+- Backend booking creation immediately reserves the property while the booking is only `pending_payment`, which may need expiration cleanup and stronger payment coupling in production.
 
 ## Integration Issues
-- Student booking creation is missing end to end.
-- Student booking list is only partially connected because frontend display logic does not align with backend payload shape.
-- Landlord booking status updates are implemented and represent the strongest part of this domain.
-- Payment and booking lifecycle are coupled in backend, but the current student UI does not reflect that lifecycle accurately.
+- Resolved: student booking creation is now real and uses backend validation.
+- Resolved: student booking list is now mapped to the backend contract and uses truthful status/timeline rendering.
+- Resolved: landlord status review/update remains connected and consistent with backend transitions.
+- Remaining: the full booking-to-payment flow is incomplete because payment initiation is still deferred to the payments domain.
 
 ## API Coverage
 | Endpoint | Method | Frontend Status | Backend Status | Result |
 | --- | --- | --- | --- | --- |
-| `/api/bookings/create/` | POST | Helper exists, not used | Implemented | 🚧 Missing Frontend |
-| `/api/bookings/my/` | GET | Used in student and owner contexts | Implemented | ⚠ Partial |
-| `/api/bookings/<id>/status/` | PATCH | Used in owner dashboard | Implemented | ✅ Working |
+| `/api/bookings/` | POST | Used from property detail booking flow | Implemented | ✅ Working |
+| `/api/bookings/my/` | GET | Used for student and owner booking screens | Implemented | ✅ Working |
+| `/api/bookings/<id>/status/` | PATCH | Used for landlord accept/reject and student cancel | Implemented | ✅ Working |
+| deposit payment handoff from booking flow | POST | Not yet wired | Implemented elsewhere | 🚧 Dependent on Payments |
 
 ## Production Risks
-- Students cannot complete a real booking journey from property discovery to reservation.
-- Status mismatches can mislead users about whether a booking is pending, paid, confirmed, or active.
-- Missing nested details increase frontend fragility and duplicate API fetches.
+- A created booking remains stuck in `pending_payment` until the payments flow is implemented, so users cannot complete the intended lifecycle yet.
+- Booking pages currently enrich each booking with property detail requests, which may become expensive without batching if booking volume grows.
 
 ## Recommendations
-- Connect booking creation from the live property detail page.
-- Align frontend booking status labels with backend enum values.
-- Either extend booking read serializers with property snapshots/details or normalize the student UI to the existing API contract.
-- Keep owner status updates, but add explicit guards for only valid transitions.
+- Keep the real booking create/list/status flow as the source of truth going forward.
+- Next, connect deposit payment immediately after successful booking creation.
+- Consider extending backend booking responses with lightweight property snapshots if booking volume becomes high.
 
 ## Manual E2E Checklist
-- Preconditions: authenticated student, authenticated landlord, at least one bookable property.
-- Create booking: from a live property detail page, submit a booking and verify `/api/bookings/create/` returns the new record.
-- Student list: open My Bookings and verify live bookings render with correct status text and dates.
-- Landlord list: open owner bookings dashboard and verify landlord sees bookings for owned properties only.
-- Status update: approve/cancel a booking as landlord and verify `/api/bookings/<id>/status/` persists and student view updates.
-- Invalid transition: attempt an unsupported status change and verify UI handles backend validation cleanly.
+- Preconditions: authenticated student, authenticated landlord, one available property.
+- Booking create: open a live property detail page, complete the booking modal, and verify `/api/bookings/` returns a new `pending_payment` booking.
+- Student list: open My Bookings and verify the new booking appears with real property title, address, amounts, and timeline.
+- Student cancel: cancel a `pending_payment` booking and verify `/api/bookings/<id>/status/` changes it to `cancelled`.
+- Landlord review: as the property owner, open owner bookings and verify `deposit_paid` bookings can be accepted or rejected.
+- Status propagation: after a landlord accepts or rejects, verify the student bookings page reflects the updated status.
+- Payment dependency: confirm the booking flow clearly stops before payment rather than pretending deposit payment completed.
 
 ## Overall Status
-- Working: 30%
-- Partial: 40%
-- Missing Frontend: 20%
-- Broken: 10%
-- Checkpoint: FAIL until students can create and accurately view bookings end to end.
+- Working: 75%
+- Partial: 15%
+- Dependent on Payments: 10%
+- Checkpoint: PASS for booking creation/list/status management. Full lifecycle completion still depends on the payments integration.

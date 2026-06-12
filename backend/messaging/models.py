@@ -1,6 +1,7 @@
 
 
 from django.db import models
+from django.utils import timezone
 
 from accounts.models import Users
 from bookings.models import Booking
@@ -37,6 +38,10 @@ class Conversation(models.Model):
 
     def __str__(self):
         return f"{self.initiator.username} ↔ {self.receiver.username} ({self.booking or 'DM'})"
+
+    def touch(self):
+        self.updated_at = timezone.now()
+        self.save(update_fields=["updated_at"])
     
  
 #─────────────────────────────────────────────────────────────────────────────────────────────────────────────

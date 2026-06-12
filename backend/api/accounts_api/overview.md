@@ -76,6 +76,20 @@ from accounts.validators import validate_phone_number
 # ──────────────────────────────────────────────────────────────────────────────────────────
 
 
+def normalize_gender_value(value):
+    """Accept both verbose and compact gender values from the frontend."""
+    if value in (None, ""):
+        return value
+
+    normalized = str(value).strip().lower()
+    if normalized in ("male", "m"):
+        return "M"
+    if normalized in ("female", "f"):
+        return "F"
+
+    raise serializers.ValidationError("Gender must be M/F or Male/Female.")
+
+
 class StudentProfileSerializer(serializers.ModelSerializer):
     """
     Serializes the StudentProfile model.
@@ -211,11 +225,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             "gender",
             "date_of_birth",
             "profile_picture",
+            "city",
             "role",             # required — determines which profile gets created
         ]
         extra_kwargs = {
             "email": {"required": True},
         }
+
+    def validate_gender(self, value):
+        """Allow either Male/Female or M/F from the client."""
+        return normalize_gender_value(value)
 
     def validate_phone_number(self, value):
         """Delegate phone validation to the shared validator."""
@@ -316,6 +335,10 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             "landlord_profile",
         ]
 
+    def validate_gender(self, value):
+        """Allow either Male/Female or M/F from the client."""
+        return normalize_gender_value(value)
+
     def validate_phone_number(self, value):
         """Delegate phone validation to the shared validator."""
         return validate_phone_number(value)
@@ -373,6 +396,7 @@ class VerificationDocumentSerializer(serializers.ModelSerializer):
             "uploaded_at",
         ]
         read_only_fields = ["id", "is_verified", "uploaded_at"]
+
 
 ```
 

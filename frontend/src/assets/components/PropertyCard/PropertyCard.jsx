@@ -6,11 +6,16 @@ const PropertyCard = memo(({
   property,
   initialFavorite = false,
   isFavorite: favoriteProp,
+  onFavoriteToggle,
+  favoriteLoading = false,
+  favoriteDisabled = false,
+  onFavoriteDisabled,
 }) => {
   const navigate = useNavigate(); // 2. تفعيل الهوك
-  const [isFavorite, setIsFavorite] = useState(
+  const [localFavorite, setLocalFavorite] = useState(
     favoriteProp ?? initialFavorite,
   );
+  const isFavorite = favoriteProp ?? localFavorite;
 
   // حماية البيانات الافتراضية
   const defaultData = {
@@ -56,9 +61,19 @@ const PropertyCard = memo(({
     navigate(`/find-room/${data.id}`);
   };
 
-  const toggleFavorite = (e) => {
+  const toggleFavorite = async (e) => {
     e.stopPropagation(); // منع فتح الصفحة عند الضغط على القلب
-    setIsFavorite(!isFavorite);
+    if (favoriteDisabled) {
+      onFavoriteDisabled?.(data);
+      return;
+    }
+
+    if (onFavoriteToggle) {
+      await onFavoriteToggle(data);
+      return;
+    }
+
+    setLocalFavorite(!isFavorite);
   };
 
   return (
@@ -86,11 +101,12 @@ const PropertyCard = memo(({
         {/* زر القلب */}
         <button
           onClick={toggleFavorite}
-          className="absolute top-4 right-4 z-20 bg-white rounded-full p-3 shadow-lg transition-all hover:scale-110 active:scale-95 flex items-center justify-center hover:shadow-xl"
+          disabled={favoriteLoading}
+          className={`absolute top-4 right-4 z-20 rounded-full bg-white p-3 shadow-lg transition-all active:scale-95 flex items-center justify-center hover:shadow-xl ${favoriteDisabled ? "cursor-not-allowed opacity-70" : "hover:scale-110"}`}
         >
           <Heart
             size={28}
-            className={`transition-colors duration-200 ${isFavorite ? "fill-red-500 text-red-500" : "text-gray-700 hover:text-red-400"}`}
+            className={`transition-colors duration-200 ${isFavorite ? "fill-red-500 text-red-500" : "text-gray-700 hover:text-red-400"} ${favoriteLoading ? "opacity-60" : ""}`}
           />
         </button>
       </div>

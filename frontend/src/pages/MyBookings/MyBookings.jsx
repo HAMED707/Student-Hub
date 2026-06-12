@@ -1,364 +1,336 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  AlertCircle,
   Calendar,
-  MapPin,
-  DollarSign,
-  Clock,
+  CheckCircle,
   ChevronDown,
   ChevronUp,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  MessageCircle,
-  FileText,
+  Clock,
   CreditCard,
+  FileText,
   Home,
+  MapPin,
+  MessageCircle,
   Trash2,
-  Bed,
-  Mail,
-  Phone,
-  Globe,
-  Facebook,
-  Instagram,
-  Twitter,
 } from "lucide-react";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
-import logoFull from "../../assets/brand/icons/logo.svg";
-import { fetchMyBookings } from "../../api/bookings.js";
+import { fetchMyBookings, updateBookingStatus } from "../../api/bookings.js";
+import { fetchPropertyDetail } from "../../api/properties.js";
+import { createPropertyReview } from "../../api/reviews.js";
+import {
+  buildBookingTimeline,
+  formatBookingDate,
+  formatMoneyFromCents,
+  getStudentStatusMeta,
+  matchesStudentBookingTab,
+  STUDENT_BOOKING_TABS,
+} from "../../utils/bookings.js";
+import { getApiErrorMessage } from "../../utils/auth.js";
+import { buildDraftChatState } from "../../utils/messaging.js";
+import { withApiUrl } from "../../api/client.js";
+import { notifyPropertyReviewCreated } from "../../utils/reviews.js";
 
-// Mock data
-const MOCK_BOOKINGS = [
-  {
-    id: "BK-001",
-    propertyTitle: "Cozy Studio Near Campus",
-    propertyImage:
-      "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400&h=300&fit=crop",
-    moveInDate: "2026-06-15",
-    duration: "12 months",
-    totalPrice: 7200,
-    currency: "EGP",
-    roomType: "Studio",
-    bedType: "1 Single Bed",
-    status: "Pending",
-    bookingDate: "2026-05-01",
-    landlordName: "John Smith",
-    propertyAddress: "123 University Ave, Boston, MA",
-    timeline: [
-      { step: "Submitted", completed: true, date: "2026-05-01" },
-      { step: "Reviewing", completed: false, date: null },
-      { step: "Approved", completed: false, date: null },
-      { step: "Paid", completed: false, date: null },
-    ],
-  },
-  {
-    id: "BK-002",
-    propertyTitle: "Modern 2-Bedroom Apartment",
-    propertyImage:
-      "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400&h=300&fit=crop",
-    moveInDate: "2026-07-01",
-    duration: "12 months",
-    totalPrice: 12000,
-    currency: "EGP",
-    roomType: "Master Bedroom",
-    bedType: "1 Double Bed",
-    status: "Approved",
-    bookingDate: "2026-04-20",
-    landlordName: "Sarah Johnson",
-    propertyAddress: "456 College Street, Boston, MA",
-    timeline: [
-      { step: "Submitted", completed: true, date: "2026-04-20" },
-      { step: "Reviewing", completed: true, date: "2026-04-25" },
-      { step: "Approved", completed: true, date: "2026-05-01" },
-      { step: "Paid", completed: false, date: null },
-    ],
-  },
-  {
-    id: "BK-003",
-    propertyTitle: "Shared House with Garden",
-    propertyImage:
-      "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400&h=300&fit=crop",
-    moveInDate: "2026-05-15",
-    duration: "6 months",
-    totalPrice: 4800,
-    currency: "EGP",
-    roomType: "Shared Room",
-    bedType: "1 Single Bed (Shared)",
-    status: "Active",
-    bookingDate: "2026-03-10",
-    landlordName: "Michael Chen",
-    propertyAddress: "789 Student Lane, Boston, MA",
-    timeline: [
-      { step: "Submitted", completed: true, date: "2026-03-10" },
-      { step: "Reviewing", completed: true, date: "2026-03-15" },
-      { step: "Approved", completed: true, date: "2026-03-20" },
-      { step: "Paid", completed: true, date: "2026-04-01" },
-    ],
-  },
-  {
-    id: "BK-004",
-    propertyTitle: "Luxury Penthouse Suite",
-    propertyImage:
-      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=300&fit=crop",
-    moveInDate: "2026-03-01",
-    duration: "3 months",
-    totalPrice: 6000,
-    currency: "EGP",
-    roomType: "Penthouse Suite",
-    bedType: "2 Double Beds + Sofa",
-    status: "Cancelled",
-    bookingDate: "2026-02-15",
-    landlordName: "Emma Wilson",
-    propertyAddress: "321 Elite Ave, Boston, MA",
-    timeline: [
-      { step: "Submitted", completed: true, date: "2026-02-15" },
-      { step: "Reviewing", completed: true, date: "2026-02-20" },
-      { step: "Approved", completed: true, date: "2026-02-25" },
-      { step: "Paid", completed: false, date: null },
-    ],
-  },
-  {
-    id: "BK-005",
-    propertyTitle: "Cozy Single Room",
-    propertyImage:
-      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop",
-    moveInDate: "2026-08-01",
-    duration: "12 months",
-    totalPrice: 5400,
-    currency: "EGP",
-    roomType: "Single Room",
-    bedType: "1 Single Bed",
-    status: "Pending",
-    bookingDate: "2026-05-03",
-    landlordName: "David Brown",
-    propertyAddress: "555 Dorm Street, Boston, MA",
-    timeline: [
-      { step: "Submitted", completed: true, date: "2026-05-03" },
-      { step: "Reviewing", completed: false, date: null },
-      { step: "Approved", completed: false, date: null },
-      { step: "Paid", completed: false, date: null },
-    ],
-  },
-];
-
-const FILTER_TABS = ["All", "Pending", "Approved", "Active", "Cancelled"];
-
-// StatusBadge Component
 const StatusBadge = ({ status }) => {
-  const statusConfig = {
-    Pending: {
-      bg: "bg-yellow-100",
-      text: "text-yellow-800",
-      icon: AlertCircle,
-    },
-    Approved: {
-      bg: "bg-green-100",
-      text: "text-green-800",
-      icon: CheckCircle,
-    },
-    Active: {
-      bg: "bg-green-100",
-      text: "text-green-800",
-      icon: CheckCircle,
-    },
-    Cancelled: {
-      bg: "bg-red-100",
-      text: "text-red-800",
-      icon: XCircle,
-    },
-  };
-
-  const config = statusConfig[status];
-  const IconComponent = config.icon;
+  const config = getStudentStatusMeta(status);
 
   return (
     <div
-      className={`${config.bg} ${config.text} px-4 py-2 rounded-full flex items-center gap-2 font-semibold text-sm`}
+      className={`${config.bg} ${config.text} rounded-full px-4 py-2 text-sm font-semibold`}
     >
-      <IconComponent size={18} />
-      <span>{status}</span>
+      {config.label}
     </div>
   );
 };
 
-// CTAButton Component
-const CTAButton = ({ status, bookingId, navigate, onAction }) => {
-  const buttonConfig = {
-    Pending: {
-      label: "Cancel Request",
-      bgColor: "bg-red-500",
-      hoverColor: "hover:bg-red-600",
-      action: "cancel",
-      onClick: () => {
-        if (confirm("Are you sure you want to cancel this booking request?")) {
-          onAction("delete", bookingId);
-        }
-      },
-    },
-    Approved: {
-      label: "Pay Now",
-      bgColor: "bg-green-500",
-      hoverColor: "hover:bg-green-600",
-      action: "pay",
-      onClick: () => navigate("/payments", { state: { bookingId } }),
-    },
-    Active: {
-      label: "View Contract",
-      bgColor: "bg-blue-500",
-      hoverColor: "hover:bg-blue-600",
-      action: "contract",
-      onClick: () => navigate(`/booking/${bookingId}`),
-    },
-    Cancelled: {
-      label: "Book Again",
-      bgColor: "bg-gray-500",
-      hoverColor: "hover:bg-gray-600",
-      action: "rebook",
-      onClick: () => navigate("/find-room"),
-    },
-  };
-
-  const config = buttonConfig[status];
-
-  return (
-    <button
-      onClick={config.onClick}
-      className={`${config.bgColor} ${config.hoverColor} text-white px-6 py-2 rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2`}
-    >
-      {status === "Pending" && <Trash2 size={18} />}
-      {status === "Approved" && <CreditCard size={18} />}
-      {status === "Active" && <FileText size={18} />}
-      {status === "Cancelled" && <Home size={18} />}
-      {config.label}
-    </button>
-  );
-};
-
-// StatusTimeline Component
-const StatusTimeline = ({ timeline }) => {
-  return (
-    <div className="flex items-center justify-between gap-4 py-6 px-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg">
-      {timeline.map((item, index) => (
-        <div key={index} className="flex items-center flex-1">
-          {/* Timeline Step */}
-          <div className="flex flex-col items-center flex-1">
-            <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
-                item.completed
-                  ? "bg-green-500 text-white"
-                  : "bg-gray-300 text-gray-600"
-              }`}
-            >
-              {item.completed ? <CheckCircle size={20} /> : index + 1}
-            </div>
-            <p
-              className={`text-sm font-semibold mt-2 ${item.completed ? "text-green-600" : "text-gray-500"}`}
-            >
-              {item.step}
-            </p>
-            {item.date && (
-              <p className="text-xs text-gray-400 mt-1">
-                {new Date(item.date).toLocaleDateString()}
-              </p>
-            )}
+const StatusTimeline = ({ timeline }) => (
+  <div className="flex items-center justify-between gap-4 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-6">
+    {timeline.map((item, index) => (
+      <div key={item.step} className="flex flex-1 items-center">
+        <div className="flex flex-1 flex-col items-center">
+          <div
+            className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold transition-all ${
+              item.completed
+                ? "bg-green-500 text-white"
+                : "bg-gray-300 text-gray-600"
+            }`}
+          >
+            {item.completed ? <CheckCircle size={20} /> : index + 1}
           </div>
-
-          {/* Connector Line */}
-          {index < timeline.length - 1 && (
-            <div
-              className={`flex-1 h-1 mx-2 ${
-                timeline[index + 1].completed ? "bg-green-500" : "bg-gray-300"
-              }`}
-            />
+          <p
+            className={`mt-2 text-center text-sm font-semibold ${
+              item.completed ? "text-green-600" : "text-gray-500"
+            }`}
+          >
+            {item.step}
+          </p>
+          {item.date && (
+            <p className="mt-1 text-xs text-gray-400">
+              {formatBookingDate(item.date)}
+            </p>
           )}
         </div>
-      ))}
+
+        {index < timeline.length - 1 && (
+          <div
+            className={`mx-2 h-1 flex-1 ${
+              timeline[index + 1].completed ? "bg-green-500" : "bg-gray-300"
+            }`}
+          />
+        )}
+      </div>
+    ))}
+  </div>
+);
+
+const PROPERTY_REVIEW_ROLES = [
+  { value: "landlord", label: "Tenant reviewing landlord/property" },
+  { value: "roommate", label: "Roommate context" },
+  { value: "classmate", label: "Classmate context" },
+  { value: "neighbor", label: "Neighbor context" },
+];
+
+const ReviewModal = ({
+  booking,
+  form,
+  error,
+  success,
+  submitting,
+  onChange,
+  onClose,
+  onSubmit,
+}) => {
+  if (!booking) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 p-4">
+      <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900">Review your stay</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Submit feedback for {booking.propertyTitle} using booking #{booking.id}.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-200"
+          >
+            Close
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="mt-6 space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">
+                Rating
+              </label>
+              <select
+                value={form.rating}
+                onChange={(event) => onChange("rating", event.target.value)}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900"
+              >
+                {[5, 4, 3, 2, 1].map((value) => (
+                  <option key={value} value={value}>
+                    {value} star{value > 1 ? "s" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">
+                Reviewer Role
+              </label>
+              <select
+                value={form.reviewer_role}
+                onChange={(event) =>
+                  onChange("reviewer_role", event.target.value)
+                }
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900"
+              >
+                {PROPERTY_REVIEW_ROLES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">
+              Comment
+            </label>
+            <textarea
+              value={form.comment}
+              onChange={(event) => onChange("comment", event.target.value)}
+              rows={5}
+              maxLength={800}
+              placeholder="How was the property, host, and overall stay?"
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900"
+            />
+          </div>
+
+          {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
+          {success && <p className="text-sm font-medium text-emerald-600">{success}</p>}
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? "Submitting..." : "Submit Review"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
 
-// BookingCard Component
-const BookingCard = ({ booking, navigate, onAction }) => {
+const BookingCard = ({ booking, navigate, onCancel, onOpenReview }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const statusMeta = getStudentStatusMeta(booking.status);
+  const canCancel = ["pending_payment", "deposit_paid"].includes(booking.status);
+  const canContinuePayment = ["pending_payment", "confirmed"].includes(booking.status);
+  const canLeaveReview = Boolean(booking.canReviewProperty);
+  const hasReview = Boolean(booking.hasPropertyReview);
+  const reviewBlockedUntilStay =
+    !hasReview &&
+    !canLeaveReview &&
+    ["pending_payment", "deposit_paid"].includes(booking.status);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden mb-4">
-      {/* Main Card Content */}
+    <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-shadow duration-200 hover:shadow-lg">
       <div className="flex items-center gap-6 p-6">
-        {/* Left: Property Image */}
         <div
-          className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-          onClick={() => navigate(`/property/${booking.id}`)}
+          className="flex-shrink-0 cursor-pointer transition-opacity hover:opacity-80"
+          onClick={() => navigate(`/property/${booking.propertyId}`)}
         >
           <img
             src={booking.propertyImage}
             alt={booking.propertyTitle}
-            className="w-48 h-32 object-cover rounded-lg"
+            className="h-32 w-48 rounded-lg object-cover"
           />
         </div>
 
-        {/* Middle: Property Details */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <h3
-            className="text-xl font-bold text-gray-900 mb-3 cursor-pointer hover:text-blue-600 transition-colors"
-            onClick={() => navigate(`/property/${booking.id}`)}
+            className="mb-3 cursor-pointer text-xl font-bold text-gray-900 transition-colors hover:text-blue-600"
+            onClick={() => navigate(`/property/${booking.propertyId}`)}
           >
             {booking.propertyTitle}
           </h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="flex items-center gap-2 text-gray-600">
-              <FileText size={16} className="text-blue-500 flex-shrink-0" />
+              <FileText size={16} className="flex-shrink-0 text-blue-500" />
               <span>
                 <strong>ID:</strong> {booking.id}
               </span>
             </div>
             <div className="flex items-center gap-2 text-gray-600">
-              <Calendar size={16} className="text-blue-500 flex-shrink-0" />
+              <Calendar size={16} className="flex-shrink-0 text-blue-500" />
               <span>
-                <strong>Move-in:</strong>{" "}
-                {new Date(booking.moveInDate).toLocaleDateString()}
+                <strong>Move-in:</strong> {formatBookingDate(booking.moveInDate)}
               </span>
             </div>
             <div className="flex items-center gap-2 text-gray-600">
-              <Clock size={16} className="text-blue-500 flex-shrink-0" />
+              <Clock size={16} className="flex-shrink-0 text-blue-500" />
               <span>
-                <strong>Duration:</strong> {booking.duration}
+                <strong>Duration:</strong> {booking.durationMonths} months
               </span>
             </div>
             <div className="flex items-center gap-2 text-gray-600">
-              <DollarSign size={16} className="text-green-500 flex-shrink-0" />
+              <CreditCard size={16} className="flex-shrink-0 text-green-500" />
               <span>
-                <strong>Total:</strong> {booking.totalPrice.toLocaleString()}{" "}
-                {booking.currency}
+                <strong>Deposit:</strong> {booking.depositAmount.toLocaleString()} EGP
               </span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600">
-              <Bed size={16} className="text-purple-500 flex-shrink-0" />
-              <span>
-                <strong>Room:</strong> {booking.roomType}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-gray-600">
-              <Bed size={16} className="text-purple-500 flex-shrink-0" />
-              <span>
-                <strong>Bed:</strong> {booking.bedType}
-              </span>
+            <div className="col-span-2 flex items-center gap-2 text-gray-600">
+              <MapPin size={16} className="flex-shrink-0 text-blue-500" />
+              <span>{booking.propertyAddress}</span>
             </div>
           </div>
         </div>
 
-        {/* Right: Status & CTA */}
-        <div className="flex flex-col items-end gap-4 flex-shrink-0">
+        <div className="flex flex-shrink-0 flex-col items-end gap-4">
           <StatusBadge status={booking.status} />
-          <CTAButton
-            status={booking.status}
-            bookingId={booking.id}
-            navigate={navigate}
-            onAction={onAction}
-          />
+
+          <div className="text-right">
+            <p className="text-xs font-semibold text-gray-500">
+              {statusMeta.label}
+            </p>
+            <p className="text-lg font-bold text-gray-900">
+              {booking.totalPrice.toLocaleString()} EGP
+            </p>
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            {canContinuePayment && (
+              <button
+                onClick={() => navigate(`/payments?booking=${booking.id}`)}
+                className="flex items-center gap-2 rounded-lg bg-emerald-500 px-6 py-2 text-white transition-colors duration-200 hover:bg-emerald-600"
+              >
+                <CreditCard size={18} />
+                {booking.status === "pending_payment" ? "Pay Deposit" : "Pay Remaining"}
+              </button>
+            )}
+
+            {canLeaveReview && (
+              <button
+                onClick={() => onOpenReview(booking)}
+                className="flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-2 text-white transition-colors duration-200 hover:bg-amber-600"
+              >
+                <FileText size={18} />
+                Leave Review
+              </button>
+            )}
+
+            {hasReview && (
+              <div className="rounded-lg bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700">
+                Review Submitted
+              </div>
+            )}
+
+            {reviewBlockedUntilStay && (
+              <div className="max-w-[220px] text-right text-xs font-medium text-slate-500">
+                Review opens after the booking becomes confirmed or completed.
+              </div>
+            )}
+
+            {canCancel ? (
+              <button
+                onClick={() => onCancel(booking.id)}
+                className="flex items-center gap-2 rounded-lg bg-red-500 px-6 py-2 text-white transition-colors duration-200 hover:bg-red-600"
+              >
+                <Trash2 size={18} />
+                Cancel Request
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate(`/property/${booking.propertyId}`)}
+                className="flex items-center gap-2 rounded-lg bg-blue-500 px-6 py-2 text-white transition-colors duration-200 hover:bg-blue-600"
+              >
+                <Home size={18} />
+                View Property
+              </button>
+            )}
+          </div>
+
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold text-sm transition-colors"
+            className="flex items-center gap-1 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-800"
           >
             View Details
             {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -366,46 +338,62 @@ const BookingCard = ({ booking, navigate, onAction }) => {
         </div>
       </div>
 
-      {/* Expandable Section */}
       {isExpanded && (
-        <div className="border-t border-gray-200 p-6 bg-gray-50">
-          {/* Status Timeline */}
+        <div className="border-t border-gray-200 bg-gray-50 p-6">
           <div className="mb-6">
-            <h4 className="text-lg font-bold text-gray-900 mb-4">
+            <h4 className="mb-4 text-lg font-bold text-gray-900">
               Booking Progress
             </h4>
             <StatusTimeline timeline={booking.timeline} />
           </div>
 
-          {/* Additional Details */}
-          <div className="grid grid-cols-2 gap-6 mt-6">
+          <div className="mt-6 grid grid-cols-2 gap-6">
             <div>
-              <h5 className="font-semibold text-gray-900 mb-3">
-                Property Address
-              </h5>
-              <div className="flex items-start gap-2 text-gray-600">
-                <MapPin
-                  size={16}
-                  className="text-blue-500 mt-1 flex-shrink-0"
-                />
-                <p>{booking.propertyAddress}</p>
+              <h5 className="mb-3 font-semibold text-gray-900">Payment Snapshot</h5>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>
+                  <strong>Total:</strong> {booking.totalPrice.toLocaleString()} EGP
+                </p>
+                <p>
+                  <strong>Deposit:</strong> {booking.depositAmount.toLocaleString()} EGP
+                </p>
+                <p>
+                  <strong>Remaining:</strong> {booking.remainingAmount.toLocaleString()} EGP
+                </p>
+                {booking.expiresAt && (
+                  <p>
+                    <strong>Expires:</strong> {formatBookingDate(booking.expiresAt)}
+                  </p>
+                )}
               </div>
             </div>
             <div>
-              <h5 className="font-semibold text-gray-900 mb-3">Contact Host</h5>
-              <p className="text-gray-600 font-medium mb-3">
-                {booking.landlordName}
-              </p>
+              <h5 className="mb-3 font-semibold text-gray-900">Review Status</h5>
+              <div className="mb-5 space-y-2 text-sm text-gray-600">
+                {booking.canReviewProperty ? (
+                  <p>You can now leave a property review for this stay.</p>
+                ) : booking.hasPropertyReview ? (
+                  <p>Your property review has already been submitted.</p>
+                ) : (
+                  <p>Property review becomes available once the stay is confirmed or completed.</p>
+                )}
+              </div>
+              <h5 className="mb-3 font-semibold text-gray-900">Contact Host</h5>
+              <p className="mb-3 font-medium text-gray-600">{booking.landlordName}</p>
               <button
                 onClick={() =>
                   navigate("/messages", {
-                    state: {
-                      landlordId: booking.id,
-                      landlordName: booking.landlordName,
-                    },
+                    state: buildDraftChatState({
+                      receiverId: booking.landlordId,
+                      name: booking.landlordName,
+                      bookingId: booking.id,
+                      propertyId: booking.propertyId,
+                      propertyTitle: booking.propertyTitle,
+                      receiverRole: "Host",
+                    }),
                   })
                 }
-                className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+                className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white transition-colors hover:bg-blue-600"
               >
                 <MessageCircle size={16} />
                 Chat with Host
@@ -413,85 +401,219 @@ const BookingCard = ({ booking, navigate, onAction }) => {
             </div>
           </div>
 
-          {/* Booking Date Info */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-gray-600">
-              <strong>Booking Date:</strong>{" "}
-              {new Date(booking.bookingDate).toLocaleDateString()}
-            </p>
-          </div>
+          {booking.message && (
+            <div className="mt-6 rounded-lg bg-blue-50 p-4">
+              <p className="text-sm text-gray-700">
+                <strong>Booking Note:</strong> {booking.message}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 };
 
-// EmptyState Component
-const EmptyState = ({ tabName, navigate }) => {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 px-6">
-      <Home size={64} className="text-gray-300 mb-4" />
-      <h3 className="text-2xl font-bold text-gray-900 mb-2">
-        No bookings found
-      </h3>
-      <p className="text-gray-600 text-lg mb-6">
-        You don't have any {tabName.toLowerCase()} bookings yet.
-      </p>
-      <button
-        onClick={() => navigate("/find-room")}
-        className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
-      >
-        Explore Properties
-      </button>
-    </div>
-  );
-};
+const EmptyState = ({ tabName, navigate }) => (
+  <div className="flex flex-col items-center justify-center px-6 py-16">
+    <Home size={64} className="mb-4 text-gray-300" />
+    <h3 className="mb-2 text-2xl font-bold text-gray-900">No bookings found</h3>
+    <p className="mb-6 text-lg text-gray-600">
+      You don&apos;t have any {tabName.toLowerCase()} bookings yet.
+    </p>
+    <button
+      onClick={() => navigate("/find-room")}
+      className="rounded-lg bg-blue-500 px-8 py-3 font-semibold text-white transition-colors hover:bg-blue-600"
+    >
+      Explore Properties
+    </button>
+  </div>
+);
 
-// Main Component
 export default function MyBookings() {
-  const [activeTab, setActiveTab] = useState("All");
-  const [bookings, setBookings] = useState(MOCK_BOOKINGS);
-  useEffect(() => {
-    fetchMyBookings()
-      .then((data) => {
-        if (!Array.isArray(data) || data.length === 0) return;
-        setBookings(data.map((booking) => ({
-          id: booking.id,
-          propertyTitle: `Property #${booking.property}`,
-          propertyImage: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400&h=300&fit=crop",
-          moveInDate: booking.move_in_date,
-          duration: `${booking.duration_months} months`,
-          totalPrice: Math.round((booking.total_amount_cents || 0) / 100),
-          currency: "EGP",
-          roomType: "Room",
-          bedType: "Bed",
-          status: booking.status,
-          bookingDate: booking.created_at,
-          landlordName: "",
-          propertyAddress: "",
-          timeline: [],
-        })));
-      })
-      .catch(() => {});
-  }, []);
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("All");
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reviewTarget, setReviewTarget] = useState(null);
+  const [reviewForm, setReviewForm] = useState({
+    rating: 5,
+    reviewer_role: "landlord",
+    comment: "",
+  });
+  const [reviewError, setReviewError] = useState("");
+  const [reviewSuccess, setReviewSuccess] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
 
-  // Handle booking actions (delete, etc.)
-  const handleBookingAction = (action, bookingId) => {
-    if (action === "delete") {
-      // Remove booking from list
-      setBookings(bookings.filter((b) => b.id !== bookingId));
-      console.log(`Booking ${bookingId} has been cancelled and removed`);
-    } else {
-      console.log(`Action: ${action} for booking ${bookingId}`);
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBookings = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const rows = await fetchMyBookings();
+        const propertyIds = [...new Set((rows || []).map((booking) => booking.property))];
+        const detailResults = await Promise.allSettled(
+          propertyIds.map(async (propertyId) => [
+            propertyId,
+            await fetchPropertyDetail(propertyId),
+          ]),
+        );
+
+        if (cancelled) return;
+
+        const propertyMap = new Map(
+          detailResults
+            .filter((result) => result.status === "fulfilled")
+            .map((result) => result.value),
+        );
+
+        setBookings(
+          (rows || []).map((booking) => {
+            const property = propertyMap.get(booking.property);
+
+            return {
+              id: booking.id,
+              propertyId: booking.property,
+              propertyTitle: property?.title || `Property #${booking.property}`,
+              propertyImage: property?.images?.[0]?.image
+                ? withApiUrl(property.images[0].image)
+                : "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400&h=300&fit=crop",
+              moveInDate: booking.move_in_date,
+              durationMonths: booking.duration_months,
+              totalPrice: formatMoneyFromCents(booking.total_amount_cents),
+              depositAmount: formatMoneyFromCents(booking.deposit_amount_cents),
+              remainingAmount: formatMoneyFromCents(booking.remaining_amount_cents),
+              status: booking.status,
+              expiresAt: booking.expires_at,
+              bookingDate: booking.created_at,
+              landlordName: property?.landlord_name || "Host",
+              landlordId: property?.landlord_id || null,
+              propertyAddress:
+                property?.address ||
+                [property?.city, property?.district].filter(Boolean).join(" - ") ||
+                "Address not available",
+              message: booking.message || "",
+              timeline: buildBookingTimeline(booking),
+              canReviewProperty: Boolean(booking.can_review_property),
+              hasPropertyReview: Boolean(booking.has_property_review),
+              propertyReviewId: booking.property_review_id || null,
+            };
+          }),
+        );
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(getApiErrorMessage(loadError, "Failed to load bookings"));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadBookings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleCancelBooking = async (bookingId) => {
+    if (!window.confirm("Are you sure you want to cancel this booking request?")) {
+      return;
+    }
+
+    const previous = bookings;
+
+    setBookings((current) =>
+      current.map((booking) =>
+        booking.id === bookingId
+          ? {
+              ...booking,
+              status: "cancelled",
+              timeline: buildBookingTimeline({ ...booking, status: "cancelled" }),
+            }
+          : booking,
+      ),
+    );
+
+    try {
+      await updateBookingStatus(bookingId, "cancelled");
+    } catch (cancelError) {
+      setBookings(previous);
+      setError(getApiErrorMessage(cancelError, "Failed to cancel booking"));
     }
   };
 
-  // Filter bookings based on active tab
-  const filteredBookings =
-    activeTab === "All"
-      ? bookings
-      : bookings.filter((booking) => booking.status === activeTab);
+  const openReviewModal = (booking) => {
+    setReviewTarget(booking);
+    setReviewError("");
+    setReviewSuccess("");
+    setReviewForm({
+      rating: 5,
+      reviewer_role: "landlord",
+      comment: "",
+    });
+  };
+
+  const closeReviewModal = () => {
+    if (submittingReview) return;
+    setReviewTarget(null);
+    setReviewError("");
+    setReviewSuccess("");
+  };
+
+  const handleReviewFieldChange = (field, value) => {
+    if (reviewError) setReviewError("");
+    if (reviewSuccess) setReviewSuccess("");
+    setReviewForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSubmitReview = async (event) => {
+    event.preventDefault();
+
+    if (!reviewTarget) return;
+
+    try {
+      setSubmittingReview(true);
+      setReviewError("");
+      setReviewSuccess("");
+
+      await createPropertyReview(reviewTarget.propertyId, {
+        booking_id: reviewTarget.id,
+        rating: Number(reviewForm.rating),
+        reviewer_role: reviewForm.reviewer_role,
+        comment: reviewForm.comment.trim(),
+      });
+
+      setBookings((current) =>
+        current.map((booking) =>
+          booking.id === reviewTarget.id
+            ? {
+                ...booking,
+                canReviewProperty: false,
+                hasPropertyReview: true,
+              }
+            : booking,
+        ),
+      );
+      notifyPropertyReviewCreated(reviewTarget.propertyId);
+      setReviewSuccess("Review submitted successfully. The booking is now marked as reviewed.");
+    } catch (submitError) {
+      setReviewError(getApiErrorMessage(submitError, "Failed to submit property review"));
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const filteredBookings = useMemo(
+    () => bookings.filter((booking) => matchesStudentBookingTab(booking, activeTab)),
+    [activeTab, bookings],
+  );
 
   return (
     <div
@@ -499,37 +621,46 @@ export default function MyBookings() {
       style={{ scrollBehavior: "smooth" }}
     >
       <Navbar />
+      <ReviewModal
+        booking={reviewTarget}
+        form={reviewForm}
+        error={reviewError}
+        success={reviewSuccess}
+        submitting={submittingReview}
+        onChange={handleReviewFieldChange}
+        onClose={closeReviewModal}
+        onSubmit={handleSubmitReview}
+      />
 
-      {/* Main Content */}
       <main className="w-full">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200">
+        <div className="border-b border-gray-200 bg-white">
           <div className="px-6 py-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              My Bookings
-            </h1>
+            <h1 className="mb-2 text-4xl font-bold text-gray-900">My Bookings</h1>
             <p className="text-gray-600">
-              Manage and track all your accommodation bookings
+              Track your booking requests and current stay status.
             </p>
           </div>
 
-          {/* Filter Tabs - Sticky Navigation */}
-          <div className="border-t border-gray-200 px-6 py-0 overflow-x-auto scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100">
+          <div className="overflow-x-auto border-t border-gray-200 px-6 py-0 scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-blue-400">
             <div className="flex gap-2">
-              {FILTER_TABS.map((tab) => (
+              {STUDENT_BOOKING_TABS.map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-6 py-4 font-semibold text-sm transition-all border-b-4 whitespace-nowrap ${
+                  className={`whitespace-nowrap border-b-4 px-6 py-4 text-sm font-semibold transition-all ${
                     activeTab === tab
-                      ? "border-blue-500 text-blue-600 bg-blue-50"
+                      ? "border-blue-500 bg-blue-50 text-blue-600"
                       : "border-transparent text-gray-600 hover:text-gray-900"
                   }`}
                 >
                   {tab}
                   {tab !== "All" && (
-                    <span className="ml-2 bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs font-bold">
-                      {bookings.filter((b) => b.status === tab).length}
+                    <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-bold text-gray-700">
+                      {
+                        bookings.filter(
+                          (booking) => getStudentStatusMeta(booking.status).label === tab,
+                        ).length
+                      }
                     </span>
                   )}
                 </button>
@@ -538,16 +669,30 @@ export default function MyBookings() {
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="w-full px-6 py-8 overflow-y-auto">
-          {filteredBookings.length > 0 ? (
+        <div className="w-full overflow-y-auto px-6 py-8">
+          {error && (
+            <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="rounded-xl border border-gray-200 bg-white p-10 text-center shadow-sm">
+              <Clock className="mx-auto h-10 w-10 text-gray-300" />
+              <p className="mt-3 text-sm font-bold text-gray-500">
+                Loading your bookings...
+              </p>
+            </div>
+          ) : filteredBookings.length > 0 ? (
             <div className="space-y-4">
               {filteredBookings.map((booking) => (
                 <BookingCard
                   key={booking.id}
                   booking={booking}
                   navigate={navigate}
-                  onAction={handleBookingAction}
+                  onCancel={handleCancelBooking}
+                  onOpenReview={openReviewModal}
                 />
               ))}
             </div>
@@ -556,112 +701,6 @@ export default function MyBookings() {
           )}
         </div>
       </main>
-
-      {/* Footer */}
-      {Boolean(import.meta.env.VITE_SHOW_LEGACY_FOOTER) && (
-      <footer className="bg-[#091E42] px-4 py-12 text-white">
-        <div className="mx-auto grid w-full max-w-[1500px] gap-10 md:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <img
-              src={logoFull}
-              alt="StudentHub"
-              className="h-12 w-auto rounded-lg bg-white px-3 py-2"
-            />
-            <p className="mt-4 text-sm leading-6 text-white/70">
-              Find trusted student accommodation near universities across Egypt.
-            </p>
-            <div className="mt-6 flex gap-3">
-              {[Facebook, Instagram, Twitter].map((Icon, index) => (
-                <a
-                  key={index}
-                  href="https://studenthub.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="grid h-10 w-10 place-items-center rounded-full bg-white/10 transition hover:bg-white/20"
-                  aria-label="Social link"
-                >
-                  <Icon className="h-5 w-5" />
-                </a>
-              ))}
-            </div>
-          </div>
-          <div>
-            <h3 className="text-lg font-extrabold">Quick Links</h3>
-            <div className="mt-5 flex flex-col gap-3 text-sm text-white/70">
-              <button
-                type="button"
-                onClick={() => navigate("/home")}
-                className="text-left transition hover:text-white"
-              >
-                Home
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/find-room")}
-                className="text-left transition hover:text-white"
-              >
-                Find Room
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/my-bookings")}
-                className="text-left transition hover:text-white"
-              >
-                My Bookings
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/favorites")}
-                className="text-left transition hover:text-white"
-              >
-                Favorites
-              </button>
-            </div>
-          </div>
-          <div>
-            <h3 className="text-lg font-extrabold">Contact</h3>
-            <div className="mt-5 space-y-4 text-sm text-white/70">
-              <p className="flex items-center gap-3">
-                <Mail className="h-5 w-5 text-[#A0C4FF]" />{" "}
-                support@studenthub.com
-              </p>
-              <p className="flex items-center gap-3">
-                <Phone className="h-5 w-5 text-[#A0C4FF]" /> +20 100 000 0000
-              </p>
-              <p className="flex items-center gap-3">
-                <Globe className="h-5 w-5 text-[#A0C4FF]" /> www.studenthub.com
-              </p>
-            </div>
-          </div>
-          <div>
-            <h3 className="text-lg font-extrabold">Newsletter</h3>
-            <p className="mt-4 text-sm leading-6 text-white/70">
-              Get new rooms and student offers in your inbox.
-            </p>
-            <div className="mt-5 flex flex-col gap-3">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                className="h-11 rounded-xl border border-white/10 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-white/50"
-              />
-              <button
-                type="button"
-                className="h-11 rounded-xl bg-[#155BC2] text-sm font-bold transition hover:bg-[#0f4699]"
-              >
-                Subscribe
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="mx-auto mt-10 flex w-full max-w-[1500px] flex-col gap-3 border-t border-white/10 pt-6 text-sm text-white/55 md:flex-row md:items-center md:justify-between">
-          <p>© 2026 StudentHub. All rights reserved.</p>
-          <div className="flex gap-5">
-            <span>Privacy Policy</span>
-            <span>Terms of Service</span>
-          </div>
-        </div>
-      </footer>
-      )}
     </div>
   );
 }

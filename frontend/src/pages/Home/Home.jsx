@@ -414,7 +414,13 @@ const Home = () => {
           <div ref={featuredScrollRef} className="scrollbar-hide mt-6 flex gap-6 overflow-x-auto pb-4 scroll-smooth">
             {propertiesList.map((item) => (
               <div key={item.id} className="w-[320px] flex-shrink-0 sm:w-[360px]">
-                <PropertyCard property={item} />
+                <PropertyCard
+                  property={item}
+                  favoriteDisabled={true}
+                  onFavoriteDisabled={() =>
+                    window.alert("Favorites on the home page will work after these cards are connected to live backend listings.")
+                  }
+                />
               </div>
             ))}
           </div>
@@ -456,7 +462,13 @@ const Home = () => {
             {filteredUniProperties.length > 0 ? (
               filteredUniProperties.map((item) => (
                 <div key={item.id} className="w-[320px] flex-shrink-0 sm:w-[360px]">
-                  <PropertyCard property={item} />
+                  <PropertyCard
+                    property={item}
+                    favoriteDisabled={true}
+                    onFavoriteDisabled={() =>
+                      window.alert("Favorites on these home recommendations are not connected yet. Use live listings in Find Room.")
+                    }
+                  />
                 </div>
               ))
             ) : (

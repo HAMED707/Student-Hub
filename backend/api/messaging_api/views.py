@@ -12,6 +12,7 @@ from bookings.models import Booking
 from api.messaging_api.serializers import (
     ConversationSerializer,
     MessageSerializer,
+    SendMessageSerializer,
     StartConversationSerializer,
 )
 
@@ -64,6 +65,7 @@ class ConversationView(APIView):
             sender=request.user,
             body=serializer.validated_data.get("message"),
         )
+        conv.touch()
 
         return Response(
             ConversationSerializer(conv, context={"request": request}).data,
@@ -75,7 +77,8 @@ class ConversationView(APIView):
 
 class MessageView(APIView):
     """
-    GET /api/messages/<id>/ — load conversation history + mark messages read.
+    GET  /api/messages/<id>/ — load conversation history.
+    POST /api/messages/<id>/ — send a message in an existing conversation.
     """
     permission_classes = [IsAuthenticated]
 
@@ -88,12 +91,55 @@ class MessageView(APIView):
         except Conversation.DoesNotExist:
             return Response({"error": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Mark all messages from the other person as read
-        conv.messages.exclude(sender=request.user).update(is_read=True)
-
         messages   = conv.messages.select_related("sender")
         serializer = MessageSerializer(messages, many=True)
         return Response(serializer.data)
+
+    def post(self, request, conversation_id):
+        try:
+            conv = Conversation.objects.get(
+                Q(initiator=request.user) | Q(receiver=request.user),
+                id=conversation_id,
+            )
+        except Conversation.DoesNotExist:
+            return Response({"error": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = SendMessageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        message = Message.objects.create(
+            conversation=conv,
+            sender=request.user,
+            body=serializer.validated_data["body"],
+        )
+        conv.touch()
+
+        return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
+
+
+class MessageReadView(APIView):
+    """
+    POST /api/messages/<id>/read/ — mark incoming messages in one conversation as read.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, conversation_id):
+        try:
+            conv = Conversation.objects.get(
+                Q(initiator=request.user) | Q(receiver=request.user),
+                id=conversation_id,
+            )
+        except Conversation.DoesNotExist:
+            return Response({"error": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        marked_read = (
+            conv.messages
+            .filter(is_read=False)
+            .exclude(sender=request.user)
+            .update(is_read=True)
+        )
+
+        return Response({"marked_read": marked_read}, status=status.HTTP_200_OK)
 
 
     

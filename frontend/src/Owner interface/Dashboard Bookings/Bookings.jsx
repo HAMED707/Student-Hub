@@ -16,6 +16,7 @@ import {
 import { fetchLandlordProperties } from "../../api/properties.js";
 import { fetchPublicProfile } from "../../api/accounts.js";
 import { withApiUrl } from "../../api/client.js";
+import { buildDraftChatState } from "../../utils/messaging.js";
 
 const cx = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -303,7 +304,15 @@ export default function OwnerBookings() {
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => navigate("/owner/messages")}
+                          onClick={() =>
+                            navigate("/owner/messages", {
+                              state: buildDraftChatState({
+                                receiverId: booking.tenantId,
+                                name: booking.student,
+                                receiverRole: "Student",
+                              }),
+                            })
+                          }
                           className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
                         >
                           <MessageSquare className="h-4 w-4" /> Message

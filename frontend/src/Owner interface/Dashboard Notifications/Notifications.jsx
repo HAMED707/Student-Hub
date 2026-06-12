@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, CheckCircle2, Info, Search, Trash2, XCircle, AlertCircle } from "lucide-react";
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "../../api/notifications.js";
+import { buildConversationRouteState } from "../../utils/messaging.js";
 
 const cx = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -30,6 +31,8 @@ export default function OwnerNotifications() {
             title: item.title,
             desc: item.message,
             time: new Date(item.created_at).toLocaleString(),
+            notificationType: item.notification_type,
+            data: item.data || {},
             type: item.notification_type.includes("payment")
               ? "success"
               : item.notification_type.includes("booking")
@@ -66,6 +69,12 @@ export default function OwnerNotifications() {
   const openNotification = (item) => {
     markNotificationRead(item.id).catch(() => {});
     setNotifications((current) => current.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
+    if (item.notificationType.includes("message") && item.data?.conversation_id) {
+      navigate("/owner/messages", {
+        state: buildConversationRouteState(item.data.conversation_id),
+      });
+      return;
+    }
     navigate(item.path || "/owner/overview");
   };
 

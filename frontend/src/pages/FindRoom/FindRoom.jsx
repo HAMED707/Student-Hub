@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
 import {
@@ -13,7 +13,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { fetchProperties } from "../../api/properties.js";
-import { normalizePropertyCard } from "../../utils/properties.js";
+import { useFavorites } from "../../hooks/useFavorites.js";
+import { isPropertyAvailable, normalizePropertyCard } from "../../utils/properties.js";
 
 const generateData = () => {
   const images = [
@@ -175,6 +176,8 @@ const applyFiltersToItems = (items, query, filters) => {
 };
 
 const FindRoom = () => {
+  const navigate = useNavigate();
+  const { favoriteIdSet, toggleFavorite } = useFavorites();
   const [searchParams, setSearchParams] = useSearchParams();
   const [properties, setProperties] = useState(() => generateData());
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
@@ -700,7 +703,19 @@ const FindRoom = () => {
           <>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {paginatedProperties.map((item) => (
-                <PropertyCard key={item.id} property={item} />
+                <PropertyCard
+                  key={item.id}
+                  property={item}
+                  isFavorite={favoriteIdSet.has(item.id)}
+                  favoriteDisabled={!isPropertyAvailable(item)}
+                  onFavoriteDisabled={() => window.alert("Only available properties can be added to favorites.")}
+                  onFavoriteToggle={(property) =>
+                    toggleFavorite(property, {
+                      onRequireAuth: () =>
+                        navigate("/login", { state: { from: { pathname: "/find-room" } } }),
+                    })
+                  }
+                />
               ))}
             </div>
 

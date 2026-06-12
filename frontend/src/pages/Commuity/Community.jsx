@@ -1,49 +1,8 @@
 import React, { useState } from "react";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
-import ChatSidebar from "../../assets/components/ChatSidebar/ChatSidebar.jsx";
 import Groups from "./Groups.jsx";
 import Posts from "./Posts.jsx";
 import Messages from "./Messages.jsx";
-
-const initialChats = [
-  {
-    id: 1,
-    name: "Suzana Colin",
-    lastMsg: "I found a room close to campus.",
-    time: "10:45",
-    avatar: "https://randomuser.me/api/portraits/women/65.jpg",
-    active: true,
-    messages: [
-      { id: 1, from: "them", text: "I found a room close to campus.", time: "10:40" },
-      { id: 2, from: "me", text: "Nice. Is it shared or private?", time: "10:42" },
-      { id: 3, from: "them", text: "Shared, but the price is really good.", time: "10:45" },
-    ],
-  },
-  {
-    id: 2,
-    name: "Christina Ker",
-    lastMsg: "Thanks for the recommendation!",
-    time: "Yesterday",
-    avatar: "https://randomuser.me/api/portraits/women/33.jpg",
-    active: true,
-    messages: [
-      { id: 1, from: "them", text: "Thanks for the recommendation!", time: "Yesterday" },
-      { id: 2, from: "me", text: "Anytime. Tell me if you visit the apartment.", time: "Yesterday" },
-    ],
-  },
-  {
-    id: 3,
-    name: "Hazem",
-    lastMsg: "See you tomorrow!",
-    time: "Mon",
-    avatar: "https://randomuser.me/api/portraits/men/22.jpg",
-    active: false,
-    messages: [
-      { id: 1, from: "them", text: "The group viewing is at 5 PM.", time: "Mon" },
-      { id: 2, from: "me", text: "Perfect, see you tomorrow!", time: "Mon" },
-    ],
-  },
-];
 
 const tabs = [
   { id: "posts", label: "Feed" },
@@ -53,85 +12,6 @@ const tabs = [
 
 const Community = () => {
   const [activeTab, setActiveTab] = useState("posts");
-  const [chats, setChats] = useState(initialChats);
-  const [selectedChatId, setSelectedChatId] = useState(initialChats[0].id);
-
-  const selectedChat = chats.find((chat) => chat.id === selectedChatId) || chats[0];
-
-  const handleChatSelect = (chat) => {
-    setSelectedChatId(chat.id);
-    setActiveTab("messages");
-  };
-
-  const handleSendMessage = (chatId, text) => {
-    const trimmedText = text.trim();
-
-    if (!trimmedText) {
-      return;
-    }
-
-    setChats((currentChats) =>
-      currentChats
-        .map((chat) =>
-          chat.id === chatId
-            ? {
-                ...chat,
-                lastMsg: trimmedText,
-                time: "Just now",
-                messages: [
-                  ...(chat.messages || []),
-                  {
-                    id: Date.now(),
-                    from: "me",
-                    text: trimmedText,
-                    time: "Just now",
-                  },
-                ],
-              }
-            : chat,
-        )
-        .sort((firstChat, secondChat) => {
-          if (firstChat.id === chatId) return -1;
-          if (secondChat.id === chatId) return 1;
-          return 0;
-        }),
-    );
-  };
-
-  const handleOpenGroupChat = (group) => {
-    const chatId = `group-${group.id}`;
-
-    setChats((currentChats) => {
-      const existingChat = currentChats.find((chat) => chat.id === chatId);
-
-      if (existingChat) {
-        return currentChats;
-      }
-
-      return [
-        {
-          id: chatId,
-          name: group.name,
-          lastMsg: "Welcome to the group chat.",
-          time: "Just now",
-          avatar: group.image,
-          active: true,
-          isGroup: true,
-          messages: [
-            {
-              id: Date.now(),
-              from: "them",
-              text: "Welcome to the group chat.",
-              time: "Just now",
-            },
-          ],
-        },
-        ...currentChats,
-      ];
-    });
-    setSelectedChatId(chatId);
-    setActiveTab("messages");
-  };
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-[#0A2647]">
@@ -169,34 +49,13 @@ const Community = () => {
         </header>
 
         <section
-          className={`grid min-h-0 flex-1 gap-4 ${
-            activeTab === "messages" ? "md:grid-cols-[320px_minmax(0,1fr)]" : "md:grid-cols-1"
-          }`}
+          className="grid min-h-0 flex-1 gap-4 md:grid-cols-1"
         >
-          <aside
-            className={`min-h-[520px] overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm ${
-              activeTab === "messages" ? "block" : "hidden"
-            }`}
-          >
-            <ChatSidebar
-              chats={chats}
-              selectedChat={selectedChat}
-              onSelectChat={handleChatSelect}
-            />
-          </aside>
-
           <section className="min-h-0 overflow-hidden rounded-3xl border border-gray-100 bg-[#FAFAFA] shadow-sm">
             <div className="h-full overflow-y-auto p-4 md:p-6">
               {activeTab === "posts" && <Posts />}
-              {activeTab === "groups" && (
-                <Groups onOpenGroupChat={handleOpenGroupChat} />
-              )}
-              {activeTab === "messages" && (
-                <Messages
-                  selectedChat={selectedChat}
-                  onSendMessage={handleSendMessage}
-                />
-              )}
+              {activeTab === "groups" && <Groups />}
+              {activeTab === "messages" && <Messages />}
             </div>
           </section>
         </section>

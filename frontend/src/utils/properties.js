@@ -28,6 +28,28 @@ const toNumber = (value, fallback = 0) => {
   return Number.isFinite(numeric) ? numeric : fallback;
 };
 
+export const isPropertyAvailable = (property) => {
+  if (!property || typeof property !== "object") return true;
+
+  if (property.isAvailable === true) return true;
+  if (property.isAvailable === false) return false;
+
+  const rawStatus = String(
+    property.availabilityStatus ?? property.status ?? "",
+  )
+    .trim()
+    .toLowerCase();
+
+  if (!rawStatus) return true;
+
+  if (rawStatus === "available") return true;
+  if (["reserved", "rented", "unavailable", "booked"].includes(rawStatus)) {
+    return false;
+  }
+
+  return true;
+};
+
 const getDurationLabel = (property) =>
   property?.university_distance?.duration_text ||
   property?.distance_to_university ||
@@ -65,7 +87,7 @@ export const normalizePropertyCard = (property) => ({
   roommates: toNumber(property.num_roommates),
   image: getCoverImage(property),
   availabilityStatus: property.status,
-  isAvailable: property.status === "available",
+  isAvailable: isPropertyAvailable(property),
   amenities: Array.isArray(property.amenities) ? property.amenities : [],
   city: property.city || "Unknown",
   area: property.district || property.city || "Unknown",
@@ -87,7 +109,7 @@ const buildDerivedRooms = (property) => {
     const bedEntries = Array.from({ length: bedsPerRoom }, (_, bedIndex) => ({
       id: `property-${property.id}-room-${index + 1}-bed-${bedIndex + 1}`,
       name: `Bed ${bedIndex + 1}`,
-      status: property.status === "available" ? "AVAILABLE" : "BOOKED",
+      status: isPropertyAvailable(property) ? "AVAILABLE" : "BOOKED",
       price: toNumber(property.price),
     }));
 
@@ -96,7 +118,7 @@ const buildDerivedRooms = (property) => {
       name: `Room ${index + 1}`,
       type: roomType,
       price: toNumber(property.price),
-      status: property.status === "available" ? "AVAILABLE" : "BOOKED",
+      status: isPropertyAvailable(property) ? "AVAILABLE" : "BOOKED",
       capacity: bedsPerRoom,
       beds: bedEntries,
       image: baseImage,
@@ -132,6 +154,14 @@ export const normalizePropertyDetail = (property, reviewsPayload) => {
   const derivedRooms = buildDerivedRooms(property);
   const landlordName = property.landlord_name || "Property owner";
   const reviews = normalizePropertyReviews(reviewsPayload);
+  const rating =
+    reviewsPayload?.average_rating != null
+      ? toNumber(reviewsPayload.average_rating)
+      : toNumber(property.average_rating);
+  const reviewCount =
+    reviewsPayload?.review_count != null
+      ? toNumber(reviewsPayload.review_count)
+      : toNumber(property.review_count);
 
   return {
     id: property.id,
@@ -142,8 +172,8 @@ export const normalizePropertyDetail = (property, reviewsPayload) => {
     address: property.address || buildLocation(property),
     lat: property.latitude ? Number(property.latitude) : 30.0444,
     lng: property.longitude ? Number(property.longitude) : 31.2357,
-    rating: toNumber(property.average_rating),
-    reviewCount: toNumber(property.review_count),
+    rating,
+    reviewCount,
     distance: getDurationLabel(property),
     description:
       property.description ||
@@ -177,6 +207,7 @@ export const normalizePropertyDetail = (property, reviewsPayload) => {
     maxStayMonths: property.max_stay_months || null,
     amenities,
     status: property.status,
+    isAvailable: isPropertyAvailable(property),
     locationLabel: buildLocation(property),
   };
 };

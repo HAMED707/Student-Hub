@@ -273,6 +273,7 @@ class RoommateMatchView(APIView):
             "guests_policy",
             "budget_min",
             "budget_max",
+            "room_type_preference",
         )
 
         # ── Soft Matching (cosine similarity AI) ──────────────

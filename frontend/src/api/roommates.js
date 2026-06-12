@@ -1,12 +1,10 @@
 import { apiJson } from "./client.js";
+export { fetchUserReviews } from "./reviews.js";
 
 export const fetchRoommateProfile = (userId) =>
   apiJson(`/api/roommates/profile/${userId}/`);
 
 export const fetchMyRoommateProfile = () => apiJson("/api/roommates/profile/");
-
-export const fetchUserReviews = (userId) =>
-  apiJson(`/api/reviews/user/${userId}/`);
 
 export const fetchRoommates = (params = {}) => {
   const query = new URLSearchParams();

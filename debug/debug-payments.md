@@ -2,58 +2,59 @@
 
 ## Summary
 - Domain: Payments
-- Gate Verdict: FAIL
-- Status: ⚠ Partial / 🚧 Missing Backend / 🚧 Missing Frontend
-- Audit scope: deposit payment, remaining payment, payment history, landlord payment views, and owner dashboard assumptions.
-- Overall assessment: payment APIs exist for student booking payments, but the frontend does not currently drive those flows and landlord-facing payment visibility is not fully supported by backend capabilities.
+- Gate Verdict: PASS WITH GAPS
+- Status: ✅ Working / ⚠ Partial / 🚧 Missing Backend
+- Audit scope: deposit payment, remaining payment, payment history, landlord payment views, and booking-to-payment handoff.
+- Overall assessment: the student payment journey is now wired to the real backend contract. Booking creation can hand off into live deposit initiation, students have a dedicated payment center backed by `/api/payments/my/`, and confirmed bookings can launch remaining online payment. Landlord payment reporting still lacks a true backend ledger endpoint.
 
 ## Frontend Issues
-- `frontend/src/api/payments.js` exposes payment helpers, but no student-facing page uses deposit or remaining-payment creation in a complete flow.
-- `fetchMyPayments` exists but is not used by any current payments screen.
-- Owner payments views rely on landlord profile/bookings/property summaries rather than live payment records.
-- Payment initiation from booking/property screens is not connected.
+- Deposit and remaining payments depend on opening the hosted Paymob page in a new tab; browser pop-up blocking can interrupt the smoothest handoff.
+- Booking success cannot confirm payment completion immediately because status changes depend on the external webhook callback.
+- Landlord payment screen still shows truthful derived totals, not real transaction rows.
 
 ## Backend Issues
-- `GET /api/payments/my/` is student-only, leaving landlords without a dedicated payment ledger endpoint.
-- Backend supports deposit and remaining payment actions, but current app-wide visibility into transaction history is limited for owner workflows.
+- `GET /api/payments/my/` is effectively student-facing only; landlords still do not have a dedicated payment ledger endpoint.
+- Payment completion state depends on Paymob webhook delivery, so local frontend flow cannot force immediate booking-status transitions.
+- Remaining offline payment is backend-supported for landlords, but there is still no dedicated landlord-side transaction history API.
 
 ## Integration Issues
-- Payment contract exists, but the main user journey into those endpoints is missing.
-- Student payment history is not surfaced despite API support.
-- Owner payment reporting is blocked partly by missing frontend wiring and partly by backend scope limitations.
+- Booking creation and deposit initiation are now connected, but payment completion remains asynchronous by design.
+- Student payment history is now surfaced, but owner payment visibility remains summary-only.
+- The owner dashboard still relies on landlord profile totals plus bookings/properties context because backend scope for owner payments is limited.
 
 ## API Coverage
 | Endpoint | Method | Frontend Status | Backend Status | Result |
 | --- | --- | --- | --- | --- |
-| `/api/payments/deposit/` | POST | Helper exists, not used | Implemented | 🚧 Missing Frontend |
-| `/api/payments/remaining/online/` | POST | Helper exists, not used | Implemented | 🚧 Missing Frontend |
-| `/api/payments/remaining/offline/` | POST | Helper exists, not used | Implemented | 🚧 Missing Frontend |
-| `/api/payments/my/` | GET | Helper exists, not used | Implemented | 🚧 Missing Frontend |
+| `/api/payments/deposit/` | POST | Triggered from property booking flow and payments hub | Implemented | ✅ Working |
+| `/api/payments/remaining/online/` | POST | Triggered from student payments hub for confirmed bookings | Implemented | ✅ Working |
+| `/api/payments/remaining/offline/` | POST | No student usage; owner workflow still separate | Implemented | ⚠ Partial |
+| `/api/payments/my/` | GET | Used by student payments hub | Implemented | ✅ Working |
 | landlord payment ledger endpoint | GET | Owner UI would benefit | Missing | 🚧 Missing Backend |
-| `/api/payments/webhook/stripe/` | POST | Backend-only | Implemented | ⚠ Partial |
+| `/api/payments/webhook/` | POST | Backend-only status sync | Implemented | ⚠ Partial |
 
 ## Production Risks
-- Students cannot complete booking-to-payment flow through the shipped UI.
-- Landlords lack trustworthy payment-history visibility.
-- Payment state may diverge from booking UI because those flows are not coupled in the frontend.
+- Students must still complete the hosted Paymob flow successfully before the booking state advances from `pending_payment`.
+- If webhook delivery or test credentials are misconfigured, the frontend can launch payment but the booking status will not update correctly afterward.
+- Landlords still cannot audit a full payment ledger from a dedicated backend endpoint.
 
 ## Recommendations
-- Trigger deposit payment directly from a successful booking creation flow.
-- Add a student payment-history screen using `/api/payments/my/`.
-- Define whether landlord payment reporting belongs in backend and add a dedicated endpoint if required.
-- Keep owner dashboard summaries clearly labeled as derived estimates until real payment ledger data exists.
+- Keep Paymob test credentials and webhook configuration verified before QA, because payment-state truth depends on them.
+- Add a landlord payment ledger endpoint if owner transaction history is required for production readiness.
+- Add explicit frontend polling or status refresh guidance after returning from Paymob if smoother confirmation UX is desired.
+- Wire landlord offline-payment recording into a clearly labeled owner action once the bookings/payments owner review pass reaches that domain.
 
 ## Manual E2E Checklist
-- Preconditions: authenticated student with a pending-payment booking, one landlord owning the property, payment provider configured for test mode.
-- Deposit flow: initiate deposit payment and verify `/api/payments/deposit/` updates payment and booking states.
-- Remaining payment online: pay the remaining balance and verify backend reflects completion.
-- Remaining payment offline: record offline payment and verify resulting booking/payment status changes.
-- Student history: load a payment history screen and verify `/api/payments/my/` returns the transaction list.
-- Owner visibility: verify whether landlord dashboards intentionally use derived booking totals or a real payment ledger.
+- Preconditions: authenticated student, available property, authenticated landlord, Paymob test mode configured, webhook reachable.
+- Deposit handoff: create a booking from `frontend/src/pages/FindRoom/PropertyDetails.jsx`, confirm `/api/bookings/` succeeds, then confirm `/api/payments/deposit/` returns an `iframe_url`.
+- Deposit completion: finish payment on Paymob and verify webhook updates booking status from `pending_payment` to `deposit_paid`.
+- Student payment hub: open `/payments` and verify pending bookings, confirmed remaining-payment actions, and `/api/payments/my/` history render correctly.
+- Booking shortcut: open `/bookings`, use the pay-now shortcut, and confirm it lands on the correct payment action for that booking.
+- Remaining online payment: for a landlord-confirmed booking, start `/api/payments/remaining/online/`, complete the hosted payment, and verify booking status becomes `completed`.
+- Remaining offline payment: as landlord, call `/api/payments/remaining/offline/` through an API client and verify booking completion until a dedicated owner UI is added.
 
 ## Overall Status
-- Working: 15%
+- Working: 60%
 - Partial: 25%
-- Missing Frontend: 40%
-- Missing Backend: 20%
-- Checkpoint: FAIL until student payment flows and owner payment visibility are defined and connected.
+- Missing Frontend: 0%
+- Missing Backend: 15%
+- Checkpoint: PASS WITH GAPS — student payment flow is connected end to end at the code/API level; landlord ledger/reporting remains backend-limited.

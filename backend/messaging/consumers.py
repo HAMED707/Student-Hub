@@ -60,11 +60,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.room_group_name,
             {
                 "type":       "chat_message",
-                "id":          message.id,
-                "body":        message.body,
-                "sender_id":   self.user.id, 
+                "conversation_id": int(self.conversation_id),
+                "id": message.id,
+                "sender": self.user.id,
                 "sender_name": await self._get_full_name(),
-                "created_at" : str(message.created_at), 
+                "body": message.body,
+                "is_read": message.is_read,
+                "created_at": message.created_at.isoformat(),
             },
         )
 
@@ -91,11 +93,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def _save_message(self,body):
         from .models import Conversation ,Message
         conversation=Conversation.objects.get(id=self.conversation_id)
-        return Message.objects.create( 
+        message = Message.objects.create(
             conversation=conversation,
             sender=self.user,
             body=body,
         )
+        conversation.touch()
+        return message
 
     @database_sync_to_async
     def _get_full_name(self):

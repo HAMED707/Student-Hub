@@ -1,10 +1,9 @@
-import React, { useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
 import { ChevronRight, ChevronLeft, ArrowRight } from "lucide-react";
-import { useEffect, useState } from "react";
-import { fetchFavorites } from "../../api/favorites.js";
+import { useFavorites } from "../../hooks/useFavorites.js";
 
 const fallbackFavoriteProperties = [
   {
@@ -47,16 +46,19 @@ const fallbackFavoriteProperties = [
 
 const Like = () => {
   const navigate = useNavigate();
-  const [favoriteProperties, setFavoriteProperties] = useState([]);
+  const [favoriteBusyId, setFavoriteBusyId] = useState(null);
+  const {
+    favoriteItems,
+    favoriteIdSet,
+    loading,
+    error,
+    refreshFavorites,
+    toggleFavorite,
+  } = useFavorites();
+
   useEffect(() => {
-    fetchFavorites()
-      .then((data) =>
-        setFavoriteProperties(
-          (Array.isArray(data) ? data : []).map((item) => item.property_detail || item.property),
-        ),
-      )
-      .catch(() => setFavoriteProperties(fallbackFavoriteProperties));
-  }, []);
+    refreshFavorites().catch(() => {});
+  }, [refreshFavorites]);
   // 1. تعريف المرجع للسكرول
   const scrollRef = useRef(null);
 
@@ -76,6 +78,18 @@ const Like = () => {
     navigate("/find-room");
   };
 
+  const handleFavoriteToggle = useCallback(
+    async (property) => {
+      setFavoriteBusyId(property.id);
+      await toggleFavorite(property, {
+        onRequireAuth: () =>
+          navigate("/login", { state: { from: { pathname: "/favorites" } } }),
+      });
+      setFavoriteBusyId(null);
+    },
+    [navigate, toggleFavorite],
+  );
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans pb-20">
       <Navbar />
@@ -85,15 +99,47 @@ const Like = () => {
         <div className="mb-6">
           <h1 className="text-3xl font-extrabold text-[#091E42]">Shortlist</h1>
           <p className="text-gray-500 font-medium mt-1">
-            {favoriteProperties.length} properties shortlisted
+            {favoriteItems.length} properties shortlisted
           </p>
         </div>
 
+        {error && (
+          <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+            {error}
+          </div>
+        )}
+
         {/* === Favorites Grid (Main List) === */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-16 justify-items-center">
-          {favoriteProperties.map((item) => (
-            <PropertyCard key={item.id} property={item} isFavorite={true} />
-          ))}
+          {loading ? (
+            <div className="col-span-full rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-sm font-bold text-slate-500">
+              Loading your shortlist...
+            </div>
+          ) : favoriteItems.length > 0 ? (
+            favoriteItems.map((item) => (
+              <PropertyCard
+                key={item.id}
+                property={item}
+                isFavorite={true}
+                onFavoriteToggle={handleFavoriteToggle}
+                favoriteLoading={favoriteBusyId === item.id}
+              />
+            ))
+          ) : (
+            <div className="col-span-full rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center">
+              <h2 className="text-2xl font-black text-[#091E42]">Your shortlist is empty</h2>
+              <p className="mt-2 text-sm font-medium text-slate-500">
+                Save a few properties from the listings page and they will appear here.
+              </p>
+              <button
+                type="button"
+                onClick={handleViewAll}
+                className="mt-5 rounded-full bg-[#155BC2] px-6 py-3 text-sm font-black text-white transition hover:bg-[#0f4699]"
+              >
+                Browse properties
+              </button>
+            </div>
+          )}
         </div>
 
         {/* === Suggestions Section (New Slider Style) === */}
@@ -142,14 +188,22 @@ const Like = () => {
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {/* قمت بتكرار القائمة لزيادة عدد العناصر للتجربة */}
-            {[...(favoriteProperties.length ? favoriteProperties : fallbackFavoriteProperties), ...(favoriteProperties.length ? favoriteProperties : fallbackFavoriteProperties)].map(
+            {[...(favoriteItems.length ? favoriteItems : fallbackFavoriteProperties), ...(favoriteItems.length ? favoriteItems : fallbackFavoriteProperties)].map(
               (item, index) => (
                 <div
                   key={`suggest-${index}`}
                   className="flex-shrink-0 w-full max-w-sm"
                 >
-                  {/* تأكدنا من تمرير property بشكل صحيح */}
-                  <PropertyCard property={item} isFavorite={false} />
+                  {favoriteItems.length > 0 ? (
+                    <PropertyCard
+                      property={item}
+                      isFavorite={favoriteIdSet.has(item.id)}
+                      onFavoriteToggle={handleFavoriteToggle}
+                      favoriteLoading={favoriteBusyId === item.id}
+                    />
+                  ) : (
+                    <PropertyCard property={item} isFavorite={false} />
+                  )}
                 </div>
               ),
             )}

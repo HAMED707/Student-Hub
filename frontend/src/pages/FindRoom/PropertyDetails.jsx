@@ -45,10 +45,24 @@ import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import PropertyCard from "../../assets/components/PropertyCard/PropertyCard.jsx";
 import { fetchProperties, fetchPropertyDetail } from "../../api/properties.js";
 import { fetchPropertyReviews } from "../../api/reviews.js";
+import { fetchMyProfile } from "../../api/accounts.js";
+import { createBooking } from "../../api/bookings.js";
+import { initiateDepositPayment } from "../../api/payments.js";
+import { useFavorites } from "../../hooks/useFavorites.js";
 import {
+  isPropertyAvailable,
   normalizePropertyCard,
   normalizePropertyDetail,
 } from "../../utils/properties.js";
+import {
+  consumePropertyReviewUpdate,
+  PROPERTY_REVIEW_CREATED_EVENT,
+} from "../../utils/reviews.js";
+import {
+  getApiErrorMessage,
+  getStoredUser,
+} from "../../utils/auth.js";
+import { buildDraftChatState } from "../../utils/messaging.js";
 
 const propertyData = {
   id: 1,
@@ -359,9 +373,13 @@ const PropertyDetails = () => {
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("rooms");
   const [visibleReviews, setVisibleReviews] = useState(2);
-  const [isSaved, setIsSaved] = useState(false);
   const [notice, setNotice] = useState("");
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [bookingError, setBookingError] = useState("");
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [paymentLaunchUrl, setPaymentLaunchUrl] = useState("");
+  const [createdBookingId, setCreatedBookingId] = useState(null);
+  const { favoriteIdSet, toggleFavorite } = useFavorites();
   const similarScrollRef = useRef(null);
   const sectionRefs = useRef({});
 
@@ -373,6 +391,7 @@ const PropertyDetails = () => {
     moveInDate: "",
     duration: "6 months",
     paymentMethod: "card",
+    phone: "",
     fullName: "",
     age: "",
     university: "",
@@ -381,75 +400,120 @@ const PropertyDetails = () => {
     agreed: false,
   });
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadProperty = useCallback(async () => {
+    setIsLoading(true);
+    setNotFound(false);
 
-    const loadProperty = async () => {
-      setIsLoading(true);
-      setNotFound(false);
+    try {
+      const detail = await fetchPropertyDetail(id);
+      const reviewsPayload = await fetchPropertyReviews(id).catch(() => null);
 
-      try {
-        const detail = await fetchPropertyDetail(id);
-        const reviewsPayload = await fetchPropertyReviews(id).catch(() => null);
+      setDynamicProperty(normalizePropertyDetail(detail, reviewsPayload));
 
-        if (cancelled) return;
+      const similar = await fetchProperties({
+        city: detail.city,
+        university: detail.nearby_university,
+        status: "available",
+      }).catch(() => []);
 
-        setDynamicProperty(normalizePropertyDetail(detail, reviewsPayload));
+      if (Array.isArray(similar)) {
+        const normalized = similar
+          .filter((property) => property.id !== detail.id)
+          .slice(0, 4)
+          .map(normalizePropertyCard);
 
-        const similar = await fetchProperties({
-          city: detail.city,
-          university: detail.nearby_university,
-          status: "available",
-        }).catch(() => []);
-
-        if (!cancelled && Array.isArray(similar)) {
-          const normalized = similar
-            .filter((property) => property.id !== detail.id)
-            .slice(0, 4)
-            .map(normalizePropertyCard);
-
-          if (normalized.length > 0) {
-            setLiveSimilarProperties(normalized);
-          }
+        if (normalized.length > 0) {
+          setLiveSimilarProperties(normalized);
         }
-      } catch (error) {
-        if (cancelled) return;
+      }
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        setNotFound(true);
+      } else {
+        const numericId = parseInt(id, 10);
+        const fallback = generateProperties().find((property) => property.id === numericId);
 
-        if (error?.response?.status === 404) {
-          setNotFound(true);
+        if (fallback) {
+          setDynamicProperty({
+            ...propertyData,
+            id: fallback.id,
+            title: fallback.title,
+            price: fallback.price,
+            rating: fallback.rating,
+            reviewCount: fallback.reviews,
+            address: fallback.location,
+            distance: fallback.universityDistance,
+            images: fallback.image ? [fallback.image, ...propertyData.images.slice(1)] : propertyData.images,
+          });
         } else {
-          const numericId = parseInt(id, 10);
-          const fallback = generateProperties().find((property) => property.id === numericId);
+          setNotFound(true);
+        }
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
 
-          if (fallback) {
-            setDynamicProperty({
-              ...propertyData,
-              id: fallback.id,
-              title: fallback.title,
-              price: fallback.price,
-              rating: fallback.rating,
-              reviewCount: fallback.reviews,
-              address: fallback.location,
-              distance: fallback.universityDistance,
-              images: fallback.image ? [fallback.image, ...propertyData.images.slice(1)] : propertyData.images,
-            });
-          } else {
-            setNotFound(true);
-          }
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
+  useEffect(() => {
+    const safeLoad = async () => {
+      await loadProperty();
+    };
+
+    safeLoad();
+  }, [id, loadProperty]);
+
+  useEffect(() => {
+    const handleReviewCreated = (event) => {
+      if (String(event?.detail?.propertyId || "") === String(id)) {
+        loadProperty();
       }
     };
 
-    loadProperty();
+    const handleFocus = () => {
+      if (consumePropertyReviewUpdate(id)) {
+        loadProperty();
+      }
+    };
+
+    window.addEventListener(PROPERTY_REVIEW_CREATED_EVENT, handleReviewCreated);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener(PROPERTY_REVIEW_CREATED_EVENT, handleReviewCreated);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [id, loadProperty]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fillStudentProfile = async () => {
+      const user = getStoredUser();
+      if (!user || user.role !== "student") return;
+
+      try {
+        const profile = await fetchMyProfile();
+        if (cancelled) return;
+
+        setBookingData((prev) => ({
+          ...prev,
+          fullName:
+            [profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
+            prev.fullName,
+          university: profile.student_profile?.university || prev.university,
+          faculty: profile.student_profile?.faculty || prev.faculty,
+        }));
+      } catch {
+        // keep manual entry
+      }
+    };
+
+    fillStudentProfile();
 
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, []);
 
   const currentProperty = useMemo(
     () => (dynamicProperty ? { ...propertyData, ...dynamicProperty } : propertyData),
@@ -487,8 +551,6 @@ const PropertyDetails = () => {
   }, [availableRooms, bookingData.bookingType]);
 
   const selectedRoom = currentProperty.rooms.find((room) => room.id === bookingData.selectedRoomId);
-  const selectedBed = selectedRoom?.beds.find((bedItem) => bedItem.id === bookingData.selectedBedId);
-  const selectedPrice = selectedBed?.price || selectedRoom?.price || currentProperty.price;
 
   const highlights = useMemo(
     () => [
@@ -558,8 +620,25 @@ const PropertyDetails = () => {
     setCurrentImageIndex((prev) => (prev === 0 ? currentProperty.images.length - 1 : prev - 1));
   }, [currentProperty.images.length]);
 
+  const showNotice = useCallback((message) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 2200);
+  }, []);
+
   const openBooking = useCallback((roomId = "") => {
+    const user = getStoredUser();
+    if (!user) {
+      navigate("/login", { state: { from: { pathname: `/find-room/${id}` } } });
+      return;
+    }
+
+    if (user.role !== "student") {
+      showNotice("Only students can create bookings");
+      return;
+    }
+
     setBookingStep(1);
+    setBookingError("");
     setBookingData({
       bookingType: "bed",
       selectedRoomId: roomId,
@@ -567,6 +646,7 @@ const PropertyDetails = () => {
       moveInDate: "",
       duration: "6 months",
       paymentMethod: "card",
+      phone: "",
       fullName: "",
       age: "",
       university: "",
@@ -574,12 +654,15 @@ const PropertyDetails = () => {
       idUploaded: false,
       agreed: false,
     });
+    setPaymentLaunchUrl("");
+    setCreatedBookingId(null);
     setIsBookingOpen(true);
-  }, []);
+  }, [id, navigate, showNotice]);
 
   const updateBooking = useCallback((patch) => {
+    if (bookingError) setBookingError("");
     setBookingData((prev) => ({ ...prev, ...patch }));
-  }, []);
+  }, [bookingError]);
 
   const canContinue = useMemo(() => {
     if (bookingStep === 1) {
@@ -595,14 +678,57 @@ const PropertyDetails = () => {
     return true;
   }, [bookingData, bookingStep]);
 
-  const handleNextBooking = useCallback(() => {
-    setBookingStep((prev) => Math.min(prev + 1, 4));
-  }, []);
+  const handleNextBooking = useCallback(async () => {
+    if (bookingStep < 3) {
+      setBookingStep((prev) => Math.min(prev + 1, 4));
+      return;
+    }
 
-  const showNotice = useCallback((message) => {
-    setNotice(message);
-    window.setTimeout(() => setNotice(""), 2200);
-  }, []);
+    try {
+      setIsSubmittingBooking(true);
+      setBookingError("");
+      setPaymentLaunchUrl("");
+      setCreatedBookingId(null);
+
+      const createdBooking = await createBooking({
+        property: currentProperty.id,
+        move_in_date: bookingData.moveInDate,
+        duration_months: Number.parseInt(bookingData.duration, 10) || 6,
+        message: [
+          bookingData.bookingType === "room" ? "Requested full room" : "Requested bed",
+          bookingData.selectedRoomId ? `Room: ${bookingData.selectedRoomId}` : null,
+          bookingData.selectedBedId ? `Bed: ${bookingData.selectedBedId}` : null,
+          bookingData.fullName ? `Student: ${bookingData.fullName}` : null,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+      });
+
+      setCreatedBookingId(createdBooking.id);
+
+      try {
+        const paymentSession = await initiateDepositPayment({
+          booking_id: createdBooking.id,
+          phone: bookingData.phone?.trim() || "NA",
+        });
+
+        if (paymentSession?.iframe_url) {
+          setPaymentLaunchUrl(paymentSession.iframe_url);
+          window.open(paymentSession.iframe_url, "_blank", "noopener,noreferrer");
+        }
+      } catch (paymentError) {
+        setBookingError(
+          `${getApiErrorMessage(paymentError, "Booking created, but payment session failed")} You can retry from the payments page.`,
+        );
+      }
+
+      setBookingStep(4);
+    } catch (error) {
+      setBookingError(getApiErrorMessage(error, "Booking request failed"));
+    } finally {
+      setIsSubmittingBooking(false);
+    }
+  }, [bookingData, bookingStep, currentProperty.id]);
 
   const handleShare = useCallback(async () => {
     const shareData = {
@@ -622,23 +748,36 @@ const PropertyDetails = () => {
     }
   }, [currentProperty.title, showNotice]);
 
-  const handleSave = useCallback(() => {
-    setIsSaved((prev) => {
-      const next = !prev;
-      showNotice(next ? "Property saved" : "Property removed from saved");
-      return next;
+  const isSaved = favoriteIdSet.has(currentProperty.id);
+
+  const handleSave = useCallback(async () => {
+    if (!isPropertyAvailable(currentProperty)) {
+      showNotice("Only available properties can be added to favorites");
+      return;
+    }
+
+    const wasSaved = favoriteIdSet.has(currentProperty.id);
+    const next = await toggleFavorite(currentProperty, {
+      onRequireAuth: () =>
+        navigate("/login", { state: { from: { pathname: `/find-room/${id}` } } }),
+      onError: (message) => showNotice(message),
     });
-  }, [showNotice]);
+
+    if (next !== wasSaved) {
+      showNotice(next ? "Property saved" : "Property removed from saved");
+    }
+  }, [currentProperty, favoriteIdSet, id, navigate, showNotice, toggleFavorite]);
 
   const handleContactOwner = useCallback(() => {
     navigate("/messages", {
-      state: {
-        ownerName: currentProperty.landlord.name,
-        ownerAvatar: currentProperty.landlord.image,
-        ownerId: currentProperty.landlord.id,
+      state: buildDraftChatState({
+        receiverId: currentProperty.landlord.id,
+        name: currentProperty.landlord.name,
+        avatar: currentProperty.landlord.image,
         propertyId: currentProperty.id,
         propertyTitle: currentProperty.title,
-      },
+        receiverRole: "Host",
+      }),
     });
   }, [currentProperty.id, currentProperty.landlord.id, currentProperty.landlord.image, currentProperty.landlord.name, currentProperty.title, navigate]);
 
@@ -995,7 +1134,19 @@ const PropertyDetails = () => {
           <div ref={similarScrollRef} className="scrollbar-hide flex gap-6 overflow-x-auto pb-6 scroll-smooth">
             {liveSimilarProperties.map((item) => (
               <div key={item.id} className="w-[320px] shrink-0 sm:w-[360px]">
-                <PropertyCard property={item} />
+                <PropertyCard
+                  property={item}
+                  isFavorite={favoriteIdSet.has(item.id)}
+                  favoriteDisabled={!isPropertyAvailable(item)}
+                  onFavoriteDisabled={() => showNotice("Only available properties can be added to favorites")}
+                  onFavoriteToggle={(property) =>
+                    toggleFavorite(property, {
+                      onRequireAuth: () =>
+                        navigate("/login", { state: { from: { pathname: `/find-room/${id}` } } }),
+                      onError: (message) => showNotice(message),
+                    })
+                  }
+                />
               </div>
             ))}
           </div>
@@ -1230,6 +1381,11 @@ const PropertyDetails = () => {
 
               {bookingStep === 3 && (
                 <div className="mx-auto max-w-3xl space-y-4">
+                  {bookingError && (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                      {bookingError}
+                    </div>
+                  )}
                   <div className="rounded-lg bg-white p-5 shadow-sm">
                     <h3 className="mb-5 flex items-center gap-2 text-lg font-black text-[#091E42]">Booking summary</h3>
                     <div className="grid gap-5 md:grid-cols-[120px_1fr]">
@@ -1246,58 +1402,35 @@ const PropertyDetails = () => {
                     </div>
                   </div>
                   <div className="rounded-2xl bg-white p-5 shadow-sm">
-                    <h3 className="mb-5 flex items-center gap-2 text-lg font-black"><CreditCard className="h-5 w-5 text-[#155BC2]" /> Payment method</h3>
+                    <h3 className="mb-5 flex items-center gap-2 text-lg font-black"><CreditCard className="h-5 w-5 text-[#155BC2]" /> Deposit payment</h3>
                     <div className="grid gap-3 md:grid-cols-3">
-                      {[{ id: "card", label: "Credit Card" }, { id: "wallet", label: "E-Wallet" }, { id: "instapay", label: "InstaPay" }].map((method) => (
+                      {[{ id: "card", label: "Card" }, { id: "wallet", label: "Wallet" }, { id: "instapay", label: "InstaPay" }].map((method) => (
                         <button key={method.id} type="button" onClick={() => updateBooking({ paymentMethod: method.id })} className={`rounded-2xl border p-4 font-black transition ${bookingData.paymentMethod === method.id ? "border-[#155BC2] bg-blue-50 text-[#155BC2]" : "border-slate-200 bg-white text-slate-600 hover:border-[#155BC2]/50"}`}>
                           {method.label}
                         </button>
                       ))}
                     </div>
-                    {bookingData.paymentMethod === "card" && (
-                      <div className="mt-4 rounded-lg bg-[#F3F6FA] p-4">
-                        <div className="grid gap-4">
-                          <input placeholder="Cardholder name" className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]" />
-                          <input placeholder="0000 0000 0000 0000" className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]" />
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <input placeholder="MM/YY" className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]" />
-                            <input placeholder="CVV" className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]" />
-                          </div>
-                        </div>
+                    <div className="mt-4 rounded-lg bg-[#F3F6FA] p-4">
+                      <div className="grid gap-4">
+                        <p className="text-sm leading-6 text-slate-600">
+                          Student Hub now starts a real Paymob session after the booking is created. You will finish the secure payment details on Paymob&apos;s hosted page.
+                        </p>
+                        <input
+                          value={bookingData.phone}
+                          onChange={(event) => updateBooking({ phone: event.target.value })}
+                          placeholder="Phone number for the payment receipt (optional)"
+                          className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]"
+                        />
                       </div>
-                    )}
-                    {bookingData.paymentMethod === "wallet" && (
-                      <div className="mt-4 rounded-lg bg-[#F3F6FA] p-4">
-                        <div className="grid gap-4">
-                          <select className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]">
-                            <option>Choose wallet provider</option>
-                            <option>Vodafone Cash</option>
-                            <option>Orange Cash</option>
-                            <option>Etisalat Cash</option>
-                            <option>WE Pay</option>
-                          </select>
-                          <input placeholder="Wallet account number" className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]" />
-                          <input placeholder="Transaction reference number" className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]" />
-                        </div>
-                      </div>
-                    )}
-                    {bookingData.paymentMethod === "instapay" && (
-                      <div className="mt-4 rounded-lg bg-[#F3F6FA] p-4">
-                        <div className="grid gap-4">
-                          <input placeholder="InstaPay IPA or username" className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]" />
-                          <input placeholder="Bank account holder name" className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]" />
-                          <input placeholder="Transaction reference number" className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]" />
-                        </div>
-                      </div>
-                    )}
+                    </div>
                     <div className="mt-5 rounded-2xl bg-[#F8FAFC] p-4">
-                      <div className="flex justify-between text-sm"><span className="text-slate-500">Deposit due today</span><span className="font-black">EGP {selectedPrice}</span></div>
+                      <div className="flex justify-between text-sm"><span className="text-slate-500">Deposit due today</span><span className="font-black">EGP {currentProperty.deposit}</span></div>
                       <div className="mt-2 flex justify-between text-sm"><span className="text-slate-500">Monthly rent</span><span className="font-black text-slate-400">Paid after approval</span></div>
                     </div>
                   </div>
                   <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-white p-4 shadow-sm">
                     <input type="checkbox" checked={bookingData.agreed} onChange={(event) => updateBooking({ agreed: event.target.checked })} className="mt-1 h-5 w-5 accent-[#155BC2]" />
-                    <span className="text-sm leading-6 text-slate-600">I agree to the booking terms and understand that the request will be sent to the owner after payment confirmation.</span>
+                    <span className="text-sm leading-6 text-slate-600">I agree to the booking terms and understand that the booking will be created first, then I must complete the deposit payment to move it into landlord review.</span>
                   </label>
                 </div>
               )}
@@ -1307,9 +1440,40 @@ const PropertyDetails = () => {
                   <div className="grid h-24 w-24 place-items-center rounded-full bg-emerald-50 text-[#10B981]">
                     <Check className="h-12 w-12" />
                   </div>
-                  <h3 className="mt-6 text-3xl font-black">Booking request sent</h3>
-                  <p className="mt-3 max-w-md text-sm leading-6 text-slate-500">Your request has been sent to {currentProperty.landlord.name}. The owner will review it and reply soon.</p>
-                  <button type="button" onClick={() => setIsBookingOpen(false)} className="mt-8 rounded-full bg-[#155BC2] px-8 py-3 font-black text-white transition hover:bg-[#0f4699]">Close</button>
+                  <h3 className="mt-6 text-3xl font-black">
+                    {paymentLaunchUrl ? "Booking created — complete your deposit" : "Booking created"}
+                  </h3>
+                  <p className="mt-3 max-w-md text-sm leading-6 text-slate-500">
+                    {paymentLaunchUrl
+                      ? `We started your live payment session for ${currentProperty.title}. Finish the deposit in the payment tab, then return to Student Hub and refresh your payments page.`
+                      : `Your booking was created for ${currentProperty.title}. If the payment tab did not open, continue from your payments page and retry the deposit there.`}
+                  </p>
+                  {bookingError && (
+                    <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                      {bookingError}
+                    </div>
+                  )}
+                  <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                    {paymentLaunchUrl && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(paymentLaunchUrl, "_blank", "noopener,noreferrer")}
+                        className="rounded-full border border-slate-300 bg-white px-6 py-3 font-black text-[#091E42] transition hover:border-[#155BC2] hover:text-[#155BC2]"
+                      >
+                        Open payment page
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => navigate(createdBookingId ? `/payments?booking=${createdBookingId}` : "/payments")}
+                      className="rounded-full bg-[#155BC2] px-8 py-3 font-black text-white transition hover:bg-[#0f4699]"
+                    >
+                      Go to payments
+                    </button>
+                    <button type="button" onClick={() => setIsBookingOpen(false)} className="rounded-full border border-slate-300 bg-white px-6 py-3 font-black text-[#091E42] transition hover:border-[#155BC2] hover:text-[#155BC2]">
+                      Close
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1320,7 +1484,7 @@ const PropertyDetails = () => {
                   <ChevronLeft className="h-4 w-4" /> {bookingStep === 1 ? "Cancel" : "Back"}
                 </button>
                 <button type="button" onClick={handleNextBooking} disabled={!canContinue} className="inline-flex items-center gap-2 rounded-full bg-[#155BC2] px-7 py-3 font-black text-white shadow-lg transition hover:bg-[#0f4699] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none">
-                  {bookingStep === 3 ? "Submit booking request" : "Next"} <ArrowRight className="h-4 w-4" />
+                  {bookingStep === 3 ? (isSubmittingBooking ? "Submitting..." : "Submit booking request") : "Next"} <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             )}
