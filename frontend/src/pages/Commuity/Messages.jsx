@@ -1,436 +1,275 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import {
-  CheckCheck,
-  MessageCircle,
-  MoreVertical,
-  Search,
-  Send,
-  ShieldAlert,
-  Smile,
-  Trash2,
-  User,
-  X,
-} from "lucide-react";
-import { useMessagingInbox } from "../../hooks/useMessagingInbox.js";
-import { getStoredUser } from "../../utils/auth.js";
-
-const fallbackChat = {
-  id: "demo",
-  name: "Student Hub",
-  role: "Support",
-  avatar: "https://ui-avatars.com/api/?name=Student+Hub&background=0A2647&color=fff",
-};
-
-const currentUserAvatar =
-  "https://ui-avatars.com/api/?name=Me&background=155BC2&color=fff&bold=true";
-
-const emojis = ["😀", "😂", "😍", "👍", "🔥", "❤️", "🙏", "🎓", "🏠", "✅"];
+import { useNavigate } from "react-router-dom";
+import { CheckCheck, Search, Send, Users } from "lucide-react";
+import { useCommunityGroupChat } from "../../hooks/useCommunityGroupChat.jsx";
 
 const connectionMeta = {
-  idle: { label: "Select a conversation", tone: "text-gray-400" },
+  idle: { label: "Select a group", tone: "text-gray-400" },
   connecting: { label: "Connecting…", tone: "text-gray-400" },
   connected: { label: "Live", tone: "text-green-500" },
   reconnecting: { label: "Reconnecting…", tone: "text-amber-500" },
   degraded: { label: "Offline fallback", tone: "text-rose-500" },
 };
 
-const Messages = () => {
-  const { state } = useLocation();
+const renderStatus = (status) => (
+  <span className="inline-flex items-center gap-1 text-blue-500">
+    <CheckCheck className="h-3 w-3" />
+    {status === "sending" ? "Sending…" : "Sent"}
+  </span>
+);
+
+export default function Messages({ selectedGroupId = "", onSelectGroup }) {
   const navigate = useNavigate();
-  const storedUser = getStoredUser();
   const {
-    activeConversation,
+    chats,
+    activeChat,
     activeMessages,
     connectionState,
-    conversations,
     error,
-    selectConversation,
-    sendMessage,
     setError,
-  } = useMessagingInbox(state);
+    loadingChats,
+    loadingMessages,
+    selectGroup,
+    sendMessage,
+  } = useCommunityGroupChat(selectedGroupId);
 
   const [messageText, setMessageText] = useState("");
-  const [notice, setNotice] = useState("");
-  const [isActionsOpen, setIsActionsOpen] = useState(false);
-  const [isEmojiOpen, setIsEmojiOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [showProfile, setShowProfile] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isImportant, setIsImportant] = useState(false);
   const scrollRef = useRef(null);
 
-  const chat = activeConversation || fallbackChat;
   const statusMeta = connectionMeta[connectionState] || connectionMeta.idle;
 
-  const filteredMessages = useMemo(() => {
-    if (!searchTerm.trim()) return activeMessages;
-    return activeMessages.filter((message) =>
-      message.text?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
-  }, [activeMessages, searchTerm]);
+  const filteredChats = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return chats;
+    return chats.filter((chat) => chat.name.toLowerCase().includes(search));
+  }, [chats, searchTerm]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [filteredMessages.length, chat.id]);
-
-  const showNotice = (text) => {
-    setNotice(text);
-    window.setTimeout(() => setNotice(""), 1800);
-  };
+  }, [activeMessages.length, activeChat?.id]);
 
   const handleSend = async () => {
-    const trimmedText = messageText.trim();
-    if (!trimmedText) return;
+    const trimmed = messageText.trim();
+    if (!trimmed) return;
 
     try {
-      await sendMessage(trimmedText);
+      await sendMessage(trimmed);
       setMessageText("");
-      setIsEmojiOpen(false);
     } catch (sendError) {
       setError(sendError.message || "Failed to send message");
     }
   };
 
-  const handleViewProfile = () => {
-    if (!activeConversation?.receiverId) return;
-    navigate(`/profile/${activeConversation.receiverId}`);
-  };
-
-  const renderStatus = (status) => (
-    <span className="inline-flex items-center gap-1 text-blue-500">
-      <CheckCheck className="h-3 w-3" />
-      {status === "sending" ? "Sending…" : "Sent"}
-    </span>
-  );
-
   return (
-    <div className="relative flex h-full min-h-[520px] flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
-      <style>{`
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
-
-      {notice && (
-        <div className="absolute right-4 top-16 z-30 rounded-full bg-[#091E42] px-4 py-2 text-xs font-bold text-white shadow-lg">
-          {notice}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between border-b border-gray-100 bg-white p-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="relative shrink-0">
-            <img
-              src={chat.avatar}
-              alt={chat.name}
-              className="h-11 w-11 rounded-full border border-gray-100 object-cover"
-            />
-          </span>
-
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="truncate font-black text-[#091E42]">{chat.name}</h3>
-              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-[#155BC2]">
-                {chat.role || "Student"}
-              </span>
-              {isImportant && (
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-600">
-                  Important
-                </span>
-              )}
-              {isMuted && (
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-black text-gray-500">
-                  Muted
-                </span>
-              )}
-            </div>
-
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-bold text-gray-400">
-              <span className={`flex items-center gap-1 ${statusMeta.tone}`}>
-                <span className={`h-2 w-2 rounded-full ${
-                  connectionState === "connected"
-                    ? "bg-green-500"
-                    : connectionState === "degraded"
-                      ? "bg-rose-500"
-                      : "bg-amber-400"
-                }`} />
-                {statusMeta.label}
-              </span>
-              <span>{activeMessages.length} messages</span>
-              <span>{conversations.length} threads</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setSearchOpen((current) => !current)}
-            className="rounded-full p-2 text-gray-400 transition hover:bg-gray-50 hover:text-[#155BC2]"
-            aria-label="Search messages"
-          >
-            <Search className="h-5 w-5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsActionsOpen((current) => !current)}
-            className="rounded-full p-2 text-gray-400 transition hover:bg-gray-50 hover:text-[#155BC2]"
-            aria-label="More chat actions"
-          >
-            <MoreVertical className="h-5 w-5" />
-          </button>
-
-          {isActionsOpen && (
-            <div className="absolute right-0 top-11 z-30 w-56 rounded-2xl border border-gray-100 bg-white p-2 text-sm font-bold text-gray-600 shadow-xl">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowProfile(true);
-                  setIsActionsOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-gray-50"
-              >
-                <User className="h-4 w-4" /> View Profile
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsImportant((current) => !current);
-                  showNotice(!isImportant ? "Chat marked important" : "Important removed");
-                  setIsActionsOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-gray-50"
-              >
-                <MessageCircle className="h-4 w-4" />
-                {isImportant ? "Remove Important" : "Mark Important"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMuted((current) => !current);
-                  showNotice(!isMuted ? "Chat muted" : "Chat unmuted");
-                  setIsActionsOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-gray-50"
-              >
-                <ShieldAlert className="h-4 w-4" />
-                {isMuted ? "Unmute Chat" : "Mute Chat"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm("");
-                  showNotice("Search cleared");
-                  setIsActionsOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-red-500 hover:bg-red-50"
-              >
-                <Trash2 className="h-4 w-4" /> Clear Search
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {searchOpen && (
-        <div className="border-b border-gray-100 bg-[#F8FAFC] p-3">
-          <div className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-3 py-2">
-            <Search className="h-4 w-4 text-gray-400" />
+    <div className="grid min-h-[640px] gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <aside className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-4">
+          <h2 className="text-lg font-black text-[#091E42]">Group Chats</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Joined group summaries from `/api/community/chats/`.
+          </p>
+          <label className="relative mt-4 block">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search inside conversation..."
-              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+              placeholder="Search groups"
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-[#F8FAFC] pl-11 pr-4 text-sm outline-none focus:border-[#155BC2] focus:bg-white"
             />
-            <button
-              type="button"
-              onClick={() => {
-                setSearchTerm("");
-                setSearchOpen(false);
-              }}
-              className="rounded-full p-1 text-gray-400 hover:bg-gray-50"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="border-b border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-          {error}
-        </div>
-      )}
-
-      {conversations.length > 0 && (
-        <div className="hide-scrollbar flex gap-2 overflow-x-auto border-b border-gray-100 bg-white px-4 py-3">
-          {conversations.map((conversation) => (
-            <button
-              key={conversation.id}
-              type="button"
-              onClick={() => selectConversation(conversation.id)}
-              className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm font-bold transition ${
-                conversation.id === activeConversation?.id
-                  ? "border-[#155BC2] bg-blue-50 text-[#155BC2]"
-                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
-              }`}
-            >
-              <span>{conversation.name}</span>
-              {conversation.unreadCount ? (
-                <span className="rounded-full bg-[#155BC2] px-2 py-0.5 text-[10px] text-white">
-                  {conversation.unreadCount}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="hide-scrollbar flex-1 space-y-4 overflow-y-auto bg-[#F8FAFC] p-4 md:p-6">
-        {filteredMessages.length === 0 ? (
-          <div className="flex h-full min-h-[280px] items-center justify-center text-sm font-medium text-gray-400">
-            {activeConversation ? "No messages yet." : "Select a conversation to start messaging."}
-          </div>
-        ) : (
-          filteredMessages.map((message, index) => {
-            const isMine = message.from === "me";
-            const previous = filteredMessages[index - 1];
-            const isGrouped = previous && previous.from === message.from;
-
-            return (
-              <div
-                key={message.id}
-                className={`flex max-w-[90%] gap-3 ${isMine ? "ml-auto flex-row-reverse" : ""}`}
-              >
-                {!isGrouped ? (
-                  <img
-                    src={isMine ? storedUser?.avatarUrl || currentUserAvatar : chat.avatar}
-                    className="mt-1 h-8 w-8 rounded-full object-cover"
-                    alt={isMine ? "me" : chat.name}
-                  />
-                ) : (
-                  <div className="h-8 w-8 shrink-0" />
-                )}
-
-                <div className="min-w-0">
-                  <div
-                    className={`rounded-3xl p-3 text-sm shadow-sm ${
-                      isMine
-                        ? "rounded-tr-none bg-[#155BC2] text-white"
-                        : "rounded-tl-none border border-gray-100 bg-white text-gray-700"
-                    }`}
-                  >
-                    {message.text}
-                  </div>
-
-                  <span className={`mt-1 block text-[10px] text-gray-400 ${isMine ? "text-right" : ""}`}>
-                    {message.time}
-                    {isMine && <> · {renderStatus(message.status)}</>}
-                  </span>
-                </div>
-              </div>
-            );
-          })
-        )}
-
-        <div ref={scrollRef} />
-      </div>
-
-      <div className="border-t border-gray-100 bg-white p-4">
-        <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-700">
-          Text chat is live now. File, image, and voice sending stay disabled in this phase.
+          </label>
         </div>
 
-        <div className="relative flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2">
-          <input
-            type="text"
-            value={messageText}
-            onChange={(event) => setMessageText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") handleSend();
-            }}
-            placeholder={
-              connectionState === "degraded"
-                ? "Connection degraded. REST fallback is available."
-                : "Type a message..."
-            }
-            className="min-w-0 flex-1 bg-transparent text-sm text-gray-700 outline-none"
-          />
-
-          <button
-            type="button"
-            onClick={() => setIsEmojiOpen((current) => !current)}
-            className="rounded-full p-2 text-gray-400 hover:bg-white hover:text-[#155BC2]"
-          >
-            <Smile className="h-5 w-5" />
-          </button>
-
-          {isEmojiOpen && (
-            <div className="absolute bottom-14 right-16 z-30 grid w-52 grid-cols-5 gap-1 rounded-2xl border border-gray-100 bg-white p-3 shadow-xl">
-              {emojis.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => {
-                    setMessageText((current) => `${current}${emoji}`);
-                    setIsEmojiOpen(false);
-                  }}
-                  className="rounded-xl p-2 text-lg hover:bg-gray-50"
-                >
-                  {emoji}
-                </button>
-              ))}
+        <div className="max-h-[560px] space-y-2 overflow-y-auto p-4">
+          {loadingChats ? (
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-500">
+              Loading group chats...
             </div>
+          ) : filteredChats.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              Join a group to unlock community chat.
+            </div>
+          ) : (
+            filteredChats.map((chat) => (
+              <button
+                key={chat.id}
+                type="button"
+                onClick={() => {
+                  selectGroup(chat.id);
+                  onSelectGroup?.(chat.id);
+                }}
+                className={`flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                  chat.id === activeChat?.id
+                    ? "border-blue-200 bg-blue-50"
+                    : "border-slate-100 bg-white hover:bg-slate-50"
+                }`}
+              >
+                <img
+                  src={chat.coverImage}
+                  alt={chat.name}
+                  className="h-14 w-14 rounded-2xl object-cover"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate font-black text-[#091E42]">{chat.name}</span>
+                    {chat.unreadCount ? (
+                      <span className="rounded-full bg-[#155BC2] px-2 py-0.5 text-[10px] font-black text-white">
+                        {chat.unreadCount}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mt-1 block truncate text-sm text-slate-500">
+                    {chat.lastMessagePreview}
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold text-slate-400">
+                    {chat.memberCount} members · {chat.lastMessageTime || chat.latestActivityLabel}
+                  </span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </aside>
+
+      <section className="relative flex min-h-[640px] flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 p-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              {activeChat ? (
+                <img
+                  src={activeChat.coverImage}
+                  alt={activeChat.name}
+                  className="h-12 w-12 rounded-2xl object-cover"
+                />
+              ) : (
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-400">
+                  <Users className="h-5 w-5" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <h2 className="truncate text-lg font-black text-[#091E42]">
+                  {activeChat?.name || "Community group chat"}
+                </h2>
+                <p className={`mt-1 text-xs font-bold ${statusMeta.tone}`}>
+                  {statusMeta.label}
+                  {activeChat ? ` · ${activeChat.memberCount} members` : ""}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {activeChat ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/community/groups/${activeChat.id}`)}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700"
+            >
+              <Users className="h-4 w-4" />
+              Group details
+            </button>
+          ) : null}
+        </div>
+
+        {error ? (
+          <div className="border-b border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="flex-1 space-y-4 overflow-y-auto bg-[#F8FAFC] p-4 md:p-6">
+          {loadingMessages ? (
+            <div className="flex h-full min-h-[280px] items-center justify-center text-sm text-slate-500">
+              Loading messages...
+            </div>
+          ) : activeMessages.length === 0 ? (
+            <div className="flex h-full min-h-[280px] items-center justify-center text-sm text-slate-400">
+              {activeChat
+                ? "No messages yet in this group."
+                : "Select a joined group to open its live chat."}
+            </div>
+          ) : (
+            activeMessages.map((message, index) => {
+              const isMine = message.from === "me";
+              const previous = activeMessages[index - 1];
+              const isGrouped = previous && previous.from === message.from;
+
+              return (
+                <div
+                  key={message.id}
+                  className={`flex max-w-[90%] gap-3 ${isMine ? "ml-auto flex-row-reverse" : ""}`}
+                >
+                  {!isGrouped ? (
+                    <img
+                      src={message.avatar}
+                      alt={message.senderName}
+                      className="mt-1 h-8 w-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 shrink-0" />
+                  )}
+
+                  <div className="min-w-0">
+                    {!isMine && !isGrouped ? (
+                      <p className="mb-1 text-xs font-bold text-slate-400">
+                        {message.senderName}
+                      </p>
+                    ) : null}
+                    <div
+                      className={`rounded-3xl p-3 text-sm shadow-sm ${
+                        isMine
+                          ? "rounded-tr-none bg-[#155BC2] text-white"
+                          : "rounded-tl-none border border-gray-100 bg-white text-gray-700"
+                      }`}
+                    >
+                      {message.text}
+                    </div>
+
+                    <span className={`mt-1 block text-[10px] text-gray-400 ${isMine ? "text-right" : ""}`}>
+                      {message.time}
+                      {isMine && <> · {renderStatus(message.status)}</>}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
           )}
 
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={!messageText.trim() || !activeConversation}
-            className="rounded-full bg-[#155BC2] p-2 text-white hover:bg-[#0f4aa0] disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            <Send className="h-5 w-5" />
-          </button>
+          <div ref={scrollRef} />
         </div>
-      </div>
 
-      {showProfile && (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-black/30 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
-            <img src={chat.avatar} alt={chat.name} className="mx-auto h-20 w-20 rounded-full" />
-            <h3 className="mt-4 text-xl font-black text-[#091E42]">{chat.name}</h3>
-            <p className="mt-1 text-sm text-gray-500">{chat.role || "Student"}</p>
-            <div className="mt-5 flex justify-center gap-3">
-              <button
-                type="button"
-                onClick={handleViewProfile}
-                className="rounded-xl bg-[#155BC2] px-5 py-2 text-sm font-bold text-white"
-              >
-                Open Profile
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowProfile(false)}
-                className="rounded-xl border border-gray-200 px-5 py-2 text-sm font-bold text-gray-600"
-              >
-                Close
-              </button>
-            </div>
+        <div className="border-t border-gray-100 bg-white p-4">
+          <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-700">
+            Community chat is text-only in this pass. Attachments, voice, and local-only reactions stay disabled until backend support exists.
+          </div>
+
+          <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2">
+            <input
+              type="text"
+              value={messageText}
+              onChange={(event) => setMessageText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleSend();
+              }}
+              placeholder={
+                connectionState === "degraded"
+                  ? "Connection degraded. HTTP fallback is available."
+                  : "Type a group message..."
+              }
+              disabled={!activeChat}
+              className="min-w-0 flex-1 bg-transparent text-sm text-gray-700 outline-none disabled:cursor-not-allowed"
+            />
+
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!messageText.trim() || !activeChat}
+              className="rounded-full bg-[#155BC2] p-2 text-white hover:bg-[#0f4aa0] disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              <Send className="h-5 w-5" />
+            </button>
           </div>
         </div>
-      )}
+      </section>
     </div>
   );
-};
-
-export default Messages;
+}

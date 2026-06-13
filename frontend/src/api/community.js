@@ -4,6 +4,16 @@ export const fetchGroups = () => apiJson("/api/community/groups/");
 export const fetchMyGroups = () => apiJson("/api/community/groups/my/");
 export const fetchGroupDetail = (id) => apiJson(`/api/community/groups/${id}/`);
 export const fetchPosts = (groupId) => apiJson(`/api/community/posts/?group=${groupId}`);
+export const fetchGroupChats = () => apiJson("/api/community/chats/");
+export const fetchGroupMessages = (groupId) =>
+  apiJson(`/api/community/groups/${groupId}/messages/`);
+export const markGroupMessagesRead = (groupId) =>
+  apiJson(`/api/community/groups/${groupId}/messages/read/`, { method: "POST" });
+export const sendGroupMessage = (groupId, body) =>
+  apiJson(`/api/community/groups/${groupId}/messages/`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
 export const createPost = ({ group, content, image }) => {
   const body = new FormData();
   body.append("group", group);
@@ -15,6 +25,11 @@ export const createPost = ({ group, content, image }) => {
     body,
   });
 };
+export const createGroup = (payload) =>
+  apiJson("/api/community/groups/create/", {
+    method: "POST",
+    body: payload instanceof FormData ? payload : JSON.stringify(payload),
+  });
 export const joinGroup = (groupId) =>
   apiJson(`/api/community/groups/${groupId}/join/`, { method: "POST" });
 export const leaveGroup = (groupId) =>

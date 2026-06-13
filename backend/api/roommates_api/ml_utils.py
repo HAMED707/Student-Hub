@@ -104,6 +104,7 @@ def process_and_match(current_user_username: str, profiles_queryset, top_n: int 
 
     return [
         {
+            "user_id": int(row["user__id"]),
             "username": row["user__username"],
             "compatibility_score": row["compatibility_score"],
         }

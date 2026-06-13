@@ -1,43 +1,60 @@
 """
 Community API views.
-
-GroupListView          GET  /api/community/groups/
-MyGroupsView           GET  /api/community/groups/my/
-GroupDetailView        GET  /api/community/groups/<id>/
-GroupCreateView        POST /api/community/groups/create/
-GroupJoinView          POST /api/community/groups/<id>/join/
-GroupLeaveView         POST /api/community/groups/<id>/leave/
-PostListView           GET  /api/community/posts/?group=<id>
-PostCreateView         POST /api/community/posts/
 """
-from django.db.models import Exists, OuterRef 
-from rest_framework.views import APIView
-from rest_framework.response import Response
+
+from __future__ import annotations
+
+from django.db.models import Exists, OuterRef, Prefetch
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from community.models import Group, GroupMembership, Post
+from community.models import Group, GroupChatMessage, GroupChatReadState, GroupMembership, Post
 from api.community_api.serializers import (
+    GroupChatMessageCreateSerializer,
+    GroupChatMessageSerializer,
+    GroupChatSummarySerializer,
+    GroupCreateSerializer,
     GroupListSerializer,
     GroupSerializer,
-    GroupCreateSerializer,
-    PostSerializer,
     PostCreateSerializer,
+    PostSerializer,
 )
 
 
-class GroupListView(APIView):
-    """
-    GET /api/community/groups/
-    Returns all groups as lightweight cards.
-    Optional filter: ?category=university|housing|social|study|other
+def get_group_or_404(group_id):
+    try:
+        return Group.objects.get(id=group_id)
+    except Group.DoesNotExist:
+        return None
 
-    Open to all authenticated users (students + landlords can browse).
-    """
+
+def is_member(user, group):
+    return GroupMembership.objects.filter(user=user, group=group).exists()
+
+
+def community_group_queryset(user):
+    return Group.objects.select_related("creator").prefetch_related(
+        Prefetch(
+            "memberships",
+            queryset=GroupMembership.objects.filter(user=user),
+            to_attr="request_user_memberships",
+        ),
+        Prefetch(
+            "chat_read_states",
+            queryset=GroupChatReadState.objects.filter(user=user),
+            to_attr="request_user_read_states",
+        ),
+    )
+
+
+class GroupListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        queryset = Group.objects.all()
+        queryset = community_group_queryset(request.user).order_by("-updated_at", "-created_at")
 
         category = request.query_params.get("category")
         if category:
@@ -45,7 +62,7 @@ class GroupListView(APIView):
 
         queryset = queryset.annotate(
             is_member=Exists(
-                GroupMembership.objects.filter(group=OuterRef('pk'), user=request.user)
+                GroupMembership.objects.filter(group=OuterRef("pk"), user=request.user)
             )
         )
 
@@ -54,30 +71,24 @@ class GroupListView(APIView):
 
 
 class MyGroupsView(APIView):
-    """
-    GET /api/community/groups/my/
-    Returns all groups the requesting user has joined.
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         group_ids = GroupMembership.objects.filter(user=request.user).values_list("group_id", flat=True)
-        queryset  = Group.objects.filter(id__in=group_ids)
+        queryset = community_group_queryset(request.user).filter(id__in=group_ids).order_by(
+            "-updated_at",
+            "-created_at",
+        )
         serializer = GroupSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class GroupDetailView(APIView):
-    """
-    GET /api/community/groups/<id>/
-    Returns full group detail including membership status of the requester.
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, group_id):
-        try:
-            group = Group.objects.get(id=group_id)
-        except Group.DoesNotExist:
+        group = community_group_queryset(request.user).filter(id=group_id).first()
+        if not group:
             return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = GroupSerializer(group, context={"request": request})
@@ -85,11 +96,6 @@ class GroupDetailView(APIView):
 
 
 class GroupCreateView(APIView):
-    """
-    POST /api/community/groups/create/
-    Creates a new group and auto-enrolls the creator as admin.
-    Any authenticated user can create a group.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -105,16 +111,11 @@ class GroupCreateView(APIView):
 
 
 class GroupJoinView(APIView):
-    """
-    POST /api/community/groups/<id>/join/
-    Join a group.  Returns 400 if already a member.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, group_id):
-        try:
-            group = Group.objects.get(id=group_id)
-        except Group.DoesNotExist:
+        group = get_group_or_404(group_id)
+        if not group:
             return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if GroupMembership.objects.filter(user=request.user, group=group).exists():
@@ -128,18 +129,11 @@ class GroupJoinView(APIView):
 
 
 class GroupLeaveView(APIView):
-    """
-    POST /api/community/groups/<id>/leave/
-    Leave a group.
-    - Returns 400 if the user is not a member.
-    - Prevents the last admin from leaving (they must first promote another member).
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, group_id):
-        try:
-            group = Group.objects.get(id=group_id)
-        except Group.DoesNotExist:
+        group = get_group_or_404(group_id)
+        if not group:
             return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
 
         try:
@@ -147,7 +141,6 @@ class GroupLeaveView(APIView):
         except GroupMembership.DoesNotExist:
             return Response({"error": "You are not a member of this group."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Guard: don't let the last admin abandon the group
         if membership.role == "admin":
             other_admins = GroupMembership.objects.filter(group=group, role="admin").exclude(user=request.user)
             if not other_admins.exists():
@@ -161,11 +154,6 @@ class GroupLeaveView(APIView):
 
 
 class PostListView(APIView):
-    """
-    GET /api/community/posts/?group=<id>
-    Returns all posts for a group, newest first.
-    The requesting user must be a member of the group to view its posts.
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -173,31 +161,22 @@ class PostListView(APIView):
         if not group_id:
             return Response({"error": "Query param 'group' is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            group = Group.objects.get(id=group_id)
-        except Group.DoesNotExist:
+        group = get_group_or_404(group_id)
+        if not group:
             return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Only members can read posts
-        if not GroupMembership.objects.filter(user=request.user, group=group).exists():
+        if not is_member(request.user, group):
             return Response(
                 {"error": "You must join this group to view its posts."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         posts = Post.objects.filter(group=group).select_related("author")
-        serializer = PostSerializer(posts, many=True,context={"request": request})
+        serializer = PostSerializer(posts, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class PostCreateView(APIView):
-    """
-    POST /api/community/posts/
-    Body: { "group": <id>, "content": "...", "image": <optional file> }
-
-    The user must be a member of the group to post.
-    author is always the requesting user — never trusted from request body.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -205,13 +184,11 @@ class PostCreateView(APIView):
         if not group_id:
             return Response({"error": "Field 'group' is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            group = Group.objects.get(id=group_id)
-        except Group.DoesNotExist:
+        group = get_group_or_404(group_id)
+        if not group:
             return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Must be a member to post
-        if not GroupMembership.objects.filter(user=request.user, group=group).exists():
+        if not is_member(request.user, group):
             return Response(
                 {"error": "You must join this group before posting."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -222,7 +199,75 @@ class PostCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         post = serializer.save(author=request.user, group=group)
-        return Response(
-            PostSerializer(post,context={"request": request}).data
-                        , status=status.HTTP_201_CREATED
-                        )
+        Group.objects.filter(id=group.id).update(updated_at=timezone.now())
+        return Response(PostSerializer(post, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class GroupChatListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        group_ids = GroupMembership.objects.filter(user=request.user).values_list("group_id", flat=True)
+        queryset = community_group_queryset(request.user).filter(id__in=group_ids).order_by(
+            "-updated_at",
+            "-created_at",
+        )
+        serializer = GroupChatSummarySerializer(queryset, many=True, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class GroupChatMessageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id):
+        group = get_group_or_404(group_id)
+        if not group:
+            return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not is_member(request.user, group):
+            return Response({"error": "You must join this group to open its chat."}, status=status.HTTP_403_FORBIDDEN)
+
+        messages = group.chat_messages.select_related("sender", "group")
+        serializer = GroupChatMessageSerializer(messages, many=True, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, group_id):
+        group = get_group_or_404(group_id)
+        if not group:
+            return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not is_member(request.user, group):
+            return Response({"error": "You must join this group to send messages."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = GroupChatMessageCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        message = GroupChatMessage.objects.create(
+            group=group,
+            sender=request.user,
+            body=serializer.validated_data["body"],
+        )
+        Group.objects.filter(id=group.id).update(updated_at=timezone.now())
+        return Response(GroupChatMessageSerializer(message, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class GroupChatReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id):
+        group = get_group_or_404(group_id)
+        if not group:
+            return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not is_member(request.user, group):
+            return Response({"error": "You must join this group to read its chat."}, status=status.HTTP_403_FORBIDDEN)
+
+        read_state, _ = GroupChatReadState.objects.get_or_create(group=group, user=request.user)
+        unread_qs = group.chat_messages.exclude(sender=request.user)
+        if read_state.last_read_at:
+            unread_qs = unread_qs.filter(created_at__gt=read_state.last_read_at)
+
+        marked_read = unread_qs.count()
+        latest_message_time = group.chat_messages.order_by("-created_at").values_list("created_at", flat=True).first()
+        read_state.last_read_at = latest_message_time or timezone.now()
+        read_state.save(update_fields=["last_read_at"])
+
+        return Response({"marked_read": marked_read}, status=status.HTTP_200_OK)

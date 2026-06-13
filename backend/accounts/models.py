@@ -26,8 +26,13 @@ class Users(AbstractUser):
     """
 
     # ── Role ────────────────────────────────────────────────
-    ROLE_CHOICES = [("student", "Student"), ("landlord", "Landlord")]
+    ROLE_CHOICES = [
+        ("pending", "Pending"),
+        ("student", "Student"),
+        ("landlord", "Landlord"),
+    ]
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default="student")
+    google_sub = models.CharField(max_length=255, unique=True, blank=True, null=True)
 
     # ── Personal Info (shared by both roles) ────────────────
     GENDER_CHOICES = [("M", "Male"), ("F", "Female")]
@@ -61,6 +66,11 @@ class Users(AbstractUser):
     def is_landlord(self):
         """Returns True if this user is a landlord."""
         return self.role == "landlord"
+
+    @property
+    def is_pending(self):
+        """Returns True if this user still needs to finish onboarding."""
+        return self.role == "pending"
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────────
@@ -198,6 +208,41 @@ class LandlordProfile(models.Model):
         return f"{self.user.username} - Landlord Profile"
 
 
+class UserSettings(models.Model):
+    """
+    Shared per-user settings used by both student and landlord experiences.
+    """
+
+    LANGUAGE_CHOICES = [
+        ("en", "English"),
+        ("ar", "Arabic"),
+    ]
+
+    user = models.OneToOneField(
+        Users,
+        on_delete=models.CASCADE,
+        related_name="settings",
+    )
+    language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default="en")
+    profile_visible = models.BooleanField(default=True)
+
+    booking_requests = models.BooleanField(default=True)
+    new_messages = models.BooleanField(default=True)
+    booking_updates = models.BooleanField(default=True)
+    payment_issues = models.BooleanField(default=False)
+    roommate_matches = models.BooleanField(default=True)
+
+    email_notifications = models.BooleanField(default=True)
+    sms_notifications = models.BooleanField(default=False)
+    in_app_notifications = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - Settings"
+
+
 class VerificationDocument(models.Model):
     """
     Documents students upload to get verified.
@@ -214,6 +259,14 @@ class VerificationDocument(models.Model):
         ("national_id", "National ID"),
         ("student_id", "Student ID"),
         ("university_email", "University Email"),
+        ("ownership", "Property Ownership Contract"),
+        ("commercial", "Commercial Registration"),
+    ]
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
     ]
 
     user = models.ForeignKey(
@@ -221,8 +274,51 @@ class VerificationDocument(models.Model):
     )  # one user has many docs
     doc_type = models.CharField(max_length=20, choices=DOC_TYPES)
     file = models.FileField(upload_to="verifications/", null=True, blank=True)
-    is_verified = models.BooleanField(default=False)  # (Admin) sets this after review
+    is_verified = models.BooleanField(default=False)  # maintained for backward compatibility
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default="pending")
+    review_note = models.TextField(blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.doc_type}"
+
+    def save(self, *args, **kwargs):
+        self.is_verified = self.status == "approved"
+        super().save(*args, **kwargs)
+
+
+class SupportRequest(models.Model):
+    """
+    Lightweight support ticket created from the profile/settings flows.
+    """
+
+    ISSUE_TYPE_CHOICES = [
+        ("bug", "Bug"),
+        ("billing", "Billing"),
+        ("verification", "Verification"),
+        ("other", "Other"),
+    ]
+
+    STATUS_CHOICES = [
+        ("open", "Open"),
+        ("in_progress", "In Progress"),
+        ("closed", "Closed"),
+    ]
+
+    user = models.ForeignKey(
+        Users,
+        on_delete=models.CASCADE,
+        related_name="support_requests",
+    )
+    issue_type = models.CharField(max_length=20, choices=ISSUE_TYPE_CHOICES, default="bug")
+    description = models.TextField()
+    attachment = models.FileField(upload_to="support_requests/", blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.issue_type} ({self.status})"

@@ -1,16 +1,15 @@
 """
 Notifications app services.
-Single entry point for creating notifications.
-
-Import this function in any signal or view that needs to fire a notification:
-
-    from notifications.services import push_notification
 """
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
+from api.notifications_api.serializers import NotificationSerializer
 from notifications.models import Notification
 
 
-def push_notification(recipient, notification_type, title, message, actor=None, data=None):
+def push_notification(recipient, notification_type, title, message, actor=None, data=None, broadcast=False):
     """
     Create and persist a single notification.
 
@@ -25,7 +24,7 @@ def push_notification(recipient, notification_type, title, message, actor=None, 
     Returns:
         Notification instance
     """
-    return Notification.objects.create(
+    notification = Notification.objects.create(
         recipient=recipient,
         actor=actor,
         notification_type=notification_type,
@@ -33,3 +32,14 @@ def push_notification(recipient, notification_type, title, message, actor=None, 
         message=message,
         data=data or {},
     )
+    if broadcast:
+        channel_layer = get_channel_layer()
+        if channel_layer is not None:
+            async_to_sync(channel_layer.group_send)(
+                f"notifications_{notification.recipient.id}",
+                {
+                    "type": "notify",
+                    **NotificationSerializer(notification).data,
+                },
+            )
+    return notification

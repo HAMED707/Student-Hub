@@ -121,9 +121,20 @@ export function useMessagingInbox(routeState) {
 
         setActiveConversationId((current) => {
           if (preferredConversationId) return String(preferredConversationId);
+          // Keep current selection if it is a real (non-draft) conversation
           if (current && mapped.some((conversation) => conversation.id === current)) return current;
           if (requestedConversationId && mapped.some((conversation) => conversation.id === requestedConversationId)) {
             return requestedConversationId;
+          }
+          // When arriving from another page with a draft, find the matching real conversation
+          // by receiverId so the correct thread opens automatically.
+          if (draftConversation?.receiverId) {
+            const matched = mapped.find(
+              (conversation) => String(conversation.receiverId) === String(draftConversation.receiverId),
+            );
+            if (matched) return matched.id;
+            // No real conversation exists yet — keep the draft active
+            return current || draftConversation.id;
           }
           return mapped[0]?.id || draftConversation?.id || null;
         });

@@ -44,7 +44,11 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_other_user(self, obj):
         user = self.context["request"].user
         other = obj.receiver if obj.initiator == user else obj.initiator
-        return {"id": other.id, "name": other.get_full_name(), "profile_picture": str(other.profile_picture) if other.profile_picture else None}
+        return {
+            "id": other.id,
+            "name": other.get_full_name() or other.username,
+            "profile_picture": str(other.profile_picture) if other.profile_picture else None,
+        }
 
 #────────────────────────────────────────────────────────────────────────────────────────────
 

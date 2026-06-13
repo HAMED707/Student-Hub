@@ -1,61 +1,140 @@
 """
 Community API serializers.
-
-GroupSerializer          — full group detail (used in detail + my-groups)
-GroupListSerializer      — lightweight card for browse list
-GroupCreateSerializer    — POST create group
-PostSerializer           — full post response
-PostCreateSerializer     — POST new post
 """
 
+from __future__ import annotations
+
+from django.db.models import Q
 from rest_framework import serializers
-from community.models import Group, GroupMembership, Post
 
+from community.models import Group, GroupChatMessage, GroupChatReadState, GroupMembership, Post
 
-# ── Shared author snippet ─────────────────────────────────────────────────────
 
 class _AuthorSerializer(serializers.Serializer):
-    """Minimal author info embedded in Post responses."""
-    id         = serializers.IntegerField(read_only=True)
+    id = serializers.IntegerField(read_only=True)
+    username = serializers.CharField(read_only=True)
     first_name = serializers.CharField(read_only=True)
-    last_name  = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+    profile_picture = serializers.ImageField(read_only=True)
 
 
-# ── Group serializers ─────────────────────────────────────────────────────────
+class _SenderSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    username = serializers.CharField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+    profile_picture = serializers.ImageField(read_only=True)
+
 
 class GroupListSerializer(serializers.ModelSerializer):
-    """
-    Lightweight serializer for the group browse list.
-    Adds `is_member` so the frontend can show Join / Leave immediately.
-    """
+    description = serializers.CharField(read_only=True)
+    creator_name = serializers.SerializerMethodField()
     is_member = serializers.BooleanField(read_only=True)
+    unread_count = serializers.SerializerMethodField()
+    recent_posts_count = serializers.SerializerMethodField()
+    latest_post_excerpt = serializers.SerializerMethodField()
+    latest_activity_at = serializers.SerializerMethodField()
 
     class Meta:
-        model  = Group
+        model = Group
         fields = [
-            "id", "name", "category", "cover_image",
-            "member_count", "is_private", "is_member", "created_at",
+            "id",
+            "name",
+            "description",
+            "category",
+            "cover_image",
+            "member_count",
+            "is_private",
+            "creator_name",
+            "is_member",
+            "created_at",
+            "updated_at",
+            "unread_count",
+            "recent_posts_count",
+            "latest_post_excerpt",
+            "latest_activity_at",
         ]
 
-    
+    def _get_read_state(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        prefetched = getattr(obj, "request_user_read_states", None)
+        if prefetched is not None:
+            return prefetched[0] if prefetched else None
+        return GroupChatReadState.objects.filter(group=obj, user=request.user).first()
+
+    def _get_membership(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        prefetched = getattr(obj, "request_user_memberships", None)
+        if prefetched is not None:
+            return prefetched[0] if prefetched else None
+        return obj.memberships.filter(user=request.user).first()
+
+    def get_creator_name(self, obj):
+        if obj.creator:
+            return f"{obj.creator.first_name} {obj.creator.last_name}".strip()
+        return None
+
+    def get_unread_count(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return 0
+        if not self._get_membership(obj):
+            return 0
+        read_state = self._get_read_state(obj)
+        messages = obj.chat_messages.exclude(sender=request.user)
+        if not read_state or not read_state.last_read_at:
+            return messages.count()
+        return messages.filter(created_at__gt=read_state.last_read_at).count()
+
+    def get_recent_posts_count(self, obj):
+        return obj.posts.count()
+
+    def get_latest_post_excerpt(self, obj):
+        latest_post = obj.posts.order_by("-created_at").first()
+        if not latest_post:
+            return ""
+        return latest_post.content[:140]
+
+    def get_latest_activity_at(self, obj):
+        latest_post = obj.posts.order_by("-created_at").values_list("created_at", flat=True).first()
+        latest_message = obj.chat_messages.order_by("-created_at").values_list("created_at", flat=True).first()
+        return max(filter(None, [latest_post, latest_message, obj.updated_at]), default=obj.updated_at)
 
 
 class GroupSerializer(serializers.ModelSerializer):
-    """
-    Full group detail — used for the group detail page and my-groups list.
-    Includes creator name and the requesting user's membership role.
-    """
-    is_member   = serializers.SerializerMethodField()
+    is_member = serializers.SerializerMethodField()
     member_role = serializers.SerializerMethodField()
     creator_name = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    recent_posts_count = serializers.SerializerMethodField()
+    latest_post_excerpt = serializers.SerializerMethodField()
+    latest_activity_at = serializers.SerializerMethodField()
+    latest_chat_message = serializers.SerializerMethodField()
 
     class Meta:
-        model  = Group
+        model = Group
         fields = [
-            "id", "name", "description", "category", "cover_image",
-            "member_count", "is_private",
-            "creator_name", "is_member", "member_role",
-            "created_at", "updated_at",
+            "id",
+            "name",
+            "description",
+            "category",
+            "cover_image",
+            "member_count",
+            "is_private",
+            "creator_name",
+            "is_member",
+            "member_role",
+            "created_at",
+            "updated_at",
+            "unread_count",
+            "recent_posts_count",
+            "latest_post_excerpt",
+            "latest_activity_at",
+            "latest_chat_message",
         ]
 
     def get_creator_name(self, obj):
@@ -64,25 +143,40 @@ class GroupSerializer(serializers.ModelSerializer):
         return None
 
     def get_is_member(self, obj):
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False
-        return obj.memberships.filter(user=request.user).exists()
+        return bool(GroupListSerializer(context=self.context)._get_membership(obj))
 
     def get_member_role(self, obj):
-        """Returns 'admin', 'member', or None if not a member."""
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return None
-        membership = obj.memberships.filter(user=request.user).first()
+        membership = GroupListSerializer(context=self.context)._get_membership(obj)
         return membership.role if membership else None
+
+    def get_unread_count(self, obj):
+        return GroupListSerializer(context=self.context).get_unread_count(obj)
+
+    def get_recent_posts_count(self, obj):
+        return obj.posts.count()
+
+    def get_latest_post_excerpt(self, obj):
+        return GroupListSerializer(context=self.context).get_latest_post_excerpt(obj)
+
+    def get_latest_activity_at(self, obj):
+        return GroupListSerializer(context=self.context).get_latest_activity_at(obj)
+
+    def get_latest_chat_message(self, obj):
+        latest = obj.chat_messages.select_related("sender").order_by("-created_at").first()
+        if not latest:
+            return None
+        return {
+            "id": latest.id,
+            "body": latest.body,
+            "sender_id": latest.sender_id,
+            "sender_name": latest.sender.get_full_name() or latest.sender.username,
+            "created_at": latest.created_at,
+        }
 
 
 class GroupCreateSerializer(serializers.ModelSerializer):
-    """Accepts name, description, category, cover_image, is_private."""
-
     class Meta:
-        model  = Group
+        model = Group
         fields = ["name", "description", "category", "cover_image", "is_private"]
 
     def validate_name(self, value):
@@ -91,35 +185,23 @@ class GroupCreateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        """
-        Create the group and automatically enrol the creator as admin.
-        member_count signal will fire and set count to 1.
-        """
         creator = validated_data.pop("creator")
-        group   = Group.objects.create(creator=creator, **validated_data)
+        group = Group.objects.create(creator=creator, **validated_data)
         GroupMembership.objects.create(user=creator, group=group, role="admin")
         return group
 
 
-# ── Post serializers ──────────────────────────────────────────────────────────
-
 class PostSerializer(serializers.ModelSerializer):
-    """Full post response with nested author info."""
     author = _AuthorSerializer(read_only=True)
 
     class Meta:
-        model  = Post
+        model = Post
         fields = ["id", "author", "group", "content", "image", "created_at", "updated_at"]
 
 
 class PostCreateSerializer(serializers.ModelSerializer):
-    """
-    Accepts content and optional image.
-    author and group are injected server-side — never trusted from request body.
-    """
-
     class Meta:
-        model  = Post
+        model = Post
         fields = ["content", "image"]
 
     def validate_content(self, value):
@@ -128,5 +210,80 @@ class PostCreateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        """author and group are passed via save(author=..., group=...)."""
         return Post.objects.create(**validated_data)
+
+
+class GroupChatMessageSerializer(serializers.ModelSerializer):
+    sender = _SenderSerializer(read_only=True)
+    sender_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GroupChatMessage
+        fields = [
+            "id",
+            "group",
+            "sender",
+            "sender_name",
+            "body",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_sender_name(self, obj):
+        return obj.sender.get_full_name() or obj.sender.username
+
+
+class GroupChatSummarySerializer(serializers.ModelSerializer):
+    is_member = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+    last_message_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Group
+        fields = [
+            "id",
+            "name",
+            "category",
+            "cover_image",
+            "member_count",
+            "is_member",
+            "unread_count",
+            "last_message",
+            "last_message_at",
+        ]
+
+    def get_is_member(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.memberships.filter(user=request.user).exists()
+
+    def get_unread_count(self, obj):
+        return GroupListSerializer(context=self.context).get_unread_count(obj)
+
+    def get_last_message(self, obj):
+        latest = obj.chat_messages.select_related("sender").order_by("-created_at").first()
+        if not latest:
+            return None
+        return {
+            "id": latest.id,
+            "body": latest.body,
+            "sender_id": latest.sender_id,
+            "sender_name": latest.sender.get_full_name() or latest.sender.username,
+            "created_at": latest.created_at,
+        }
+
+    def get_last_message_at(self, obj):
+        return obj.chat_messages.order_by("-created_at").values_list("created_at", flat=True).first()
+
+
+class GroupChatMessageCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupChatMessage
+        fields = ["body"]
+
+    def validate_body(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Message body cannot be empty.")
+        return value

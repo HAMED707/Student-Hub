@@ -24,12 +24,18 @@ class RoommateProfileSerializer(serializers.ModelSerializer):
     profile_picture = serializers.ImageField(source="user.profile_picture", read_only=True)
     gender          = serializers.CharField(source="user.gender",           read_only=True)
     user_id         = serializers.IntegerField(source="user.id",            read_only=True)
+    first_name      = serializers.CharField(source="user.first_name",       read_only=True)
+    last_name       = serializers.CharField(source="user.last_name",        read_only=True)
+    full_name       = serializers.SerializerMethodField()
+    faculty         = serializers.CharField(source="user.student_profile.faculty", read_only=True)
+    year_of_study   = serializers.CharField(source="user.student_profile.year_of_study", read_only=True)
     match_score     = serializers.SerializerMethodField()
 
     class Meta:
         model  = RoommateProfile
         fields = [
-            "id", "user_id", "username", "profile_picture", "gender",
+            "id", "user_id", "username", "first_name", "last_name", "full_name",
+            "profile_picture", "gender", "faculty", "year_of_study",
             "is_active",
             "bio", "university", "city", "move_in_date",
             "budget_min", "budget_max",
@@ -41,6 +47,10 @@ class RoommateProfileSerializer(serializers.ModelSerializer):
             "match_score",
             "created_at", "updated_at",
         ]
+
+    def get_full_name(self, obj):
+        full_name = f"{obj.user.first_name or ''} {obj.user.last_name or ''}".strip()
+        return full_name or obj.user.username
 
     def get_match_score(self, obj):
         """
@@ -145,6 +155,16 @@ class RoommateRequestCreateSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        sender   = validated_data["sender"]
+        receiver = validated_data["receiver"]
+        existing = RoommateRequest.objects.filter(
+            sender=sender, receiver=receiver, status="withdrawn"
+        ).first()
+        if existing:
+            existing.status  = "pending"
+            existing.message = validated_data.get("message", "")
+            existing.save(update_fields=["status", "message", "updated_at"])
+            return existing
         return RoommateRequest.objects.create(**validated_data)
 
 

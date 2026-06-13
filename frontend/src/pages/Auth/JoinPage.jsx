@@ -1,9 +1,23 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GraduationCap, Briefcase, ArrowLeft } from 'lucide-react';
+import GoogleSignInButton from '../../assets/components/Auth/GoogleSignInButton.jsx';
+import { loginWithGoogle } from '../../api/accounts.js';
+import { getApiErrorMessage, getDefaultRouteForRole } from '../../utils/auth.js';
 
 const JoinPage = () => {
     const navigate = useNavigate();
+    const [error, setError] = React.useState("");
+
+    const handleGoogleSignup = async (credential) => {
+        try {
+            setError("");
+            const data = await loginWithGoogle(credential);
+            navigate(getDefaultRouteForRole(data.user?.role), { replace: true });
+        } catch (requestError) {
+            setError(getApiErrorMessage(requestError, "Google sign-up failed"));
+        }
+    };
 
     return (
         <div className="flex h-screen w-full bg-white overflow-hidden font-sans">
@@ -60,6 +74,11 @@ const JoinPage = () => {
                         <button onClick={() => navigate('/login')} className="text-blue-600 font-bold ml-1 hover:underline">
                             Sign In
                         </button>
+                    </div>
+
+                    <div className="mt-6">
+                        <GoogleSignInButton onCredential={handleGoogleSignup} text="signup_with" />
+                        {error ? <p className="mt-2 text-xs text-red-500">{error}</p> : null}
                     </div>
                 </div>
             </div>

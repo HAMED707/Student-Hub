@@ -11,8 +11,6 @@ from roommates.models import RoommateProfile
 
 @receiver(post_save, sender=Users)
 def create_roommate_profile(sender, instance, created, **kwargs):
-    """Only fires on creation and only for students."""
-    if not created:
-        return
+    """Keeps the roommate profile in sync for student-role users."""
     if instance.role == "student":
-        RoommateProfile.objects.create(user=instance)
+        RoommateProfile.objects.get_or_create(user=instance)

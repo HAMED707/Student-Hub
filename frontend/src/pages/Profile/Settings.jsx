@@ -1,329 +1,554 @@
-import React, { useState } from "react";
-import Navbar from "../../assets/components/Navbar/Navbar.jsx";
-import { 
-  Save, 
-  Lock, 
-  Shield, 
-  Eye, 
-  EyeOff, 
-  Mail,
-  AlertCircle,
-  LogOut,
-  Globe,
-  CheckCircle,
-  UploadCloud,
+import React, { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  AlertTriangle,
+  Bell,
   CreditCard,
-  Plus,
-  Receipt
+  ExternalLink,
+  FileUp,
+  Lock,
+  Send,
+  Trash2,
+  UploadCloud,
 } from "lucide-react";
-import { apiJson } from "../../api/client.js";
-import { fetchMyProfile } from "../../api/accounts.js";
+import Navbar from "../../assets/components/Navbar/Navbar.jsx";
+import {
+  changePassword,
+  deleteMyAccount,
+  fetchMySettings,
+  fetchVerificationDocuments,
+  submitSupportRequest,
+  updateMySettings,
+  uploadVerificationDocument,
+} from "../../api/accounts.js";
+import { withApiUrl } from "../../api/client.js";
+import { clearSession } from "../../utils/auth.js";
 
+const fieldClassName =
+  "mt-1 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#155BC2]";
 
-const ToggleSwitch = ({ checked, onChange }) => (
+const Toggle = ({ checked, onChange }) => (
   <button
     type="button"
     onClick={() => onChange(!checked)}
-    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-      checked ? "bg-blue-600" : "bg-gray-200"
+    className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+      checked ? "bg-[#155BC2]" : "bg-slate-300"
     }`}
   >
     <span
-      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-        checked ? "translate-x-5" : "translate-x-0"
+      className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
+        checked ? "translate-x-5" : "translate-x-1"
       }`}
     />
   </button>
 );
 
-const Settings = () => {
-  // الحالات (States) الأساسية
-  const [email, setEmail] = useState("student@example.com");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  
-  // حالات الإعدادات والتفضيلات
-  const [profileVisible, setProfileVisible] = useState(true);
-  const [matchNotifications, setMatchNotifications] = useState(true);
-  const [language, setLanguage] = useState("English");
-  
-  // حالة رسائل الإشعارات الداخلية
-  const [notification, setNotification] = useState({ show: false, message: "", type: "" });
+const Section = ({ title, description, children }) => (
+  <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+    <h2 className="text-lg font-black text-[#091E42]">{title}</h2>
+    {description ? (
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
+    ) : null}
+    <div className="mt-5">{children}</div>
+  </section>
+);
 
-  React.useEffect(() => {
-    fetchMyProfile()
-      .then((data) => setEmail(data.email || ""))
-      .catch(() => {});
+export default function Settings() {
+  const navigate = useNavigate();
+  const [settingsForm, setSettingsForm] = useState({
+    language: "en",
+    profile_visible: true,
+    booking_requests: true,
+    new_messages: true,
+    booking_updates: true,
+    payment_issues: false,
+    roommate_matches: true,
+    email_notifications: true,
+    sms_notifications: false,
+    in_app_notifications: true,
+  });
+  const [documents, setDocuments] = useState([]);
+  const [documentForm, setDocumentForm] = useState({
+    docType: "student_id",
+    file: null,
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+    confirm_password: "",
+  });
+  const [supportForm, setSupportForm] = useState({
+    issue_type: "verification",
+    description: "",
+    attachment: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState({ type: "", message: "" });
+
+  const pushNotice = (type, message) => setNotice({ type, message });
+
+  const loadSettings = useCallback(async () => {
+    setLoading(true);
+    pushNotice("", "");
+
+    try {
+      const [settings, docs] = await Promise.all([
+        fetchMySettings(),
+        fetchVerificationDocuments(),
+      ]);
+      setSettingsForm(settings);
+      setDocuments(Array.isArray(docs) ? docs : []);
+    } catch (loadError) {
+      pushNotice("error", loadError.message || "Unable to load settings.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const showMessage = (msg, type = "success") => {
-    setNotification({ show: true, message: msg, type });
-    setTimeout(() => setNotification({ show: false, message: "", type: "" }), 3000);
-  };
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
-  
-  const saveAccount = async () => {
+  const handleSettingsSave = async () => {
+    setSaving(true);
+    pushNotice("", "");
+
     try {
-      await apiJson("/api/auth/profile/", {
-        method: "PATCH",
-        body: JSON.stringify({ email }),
-      });
-      showMessage("Account settings updated successfully!");
-    } catch (error) {
-      showMessage(error.message || "Failed to update account", "error");
+      await updateMySettings(settingsForm);
+      pushNotice("success", "Settings saved.");
+    } catch (saveError) {
+      pushNotice("error", saveError.message || "Failed to save settings.");
+    } finally {
+      setSaving(false);
     }
   };
-  const savePreferences = () => showMessage("Preferences saved successfully!");
 
-  const changePassword = () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      return showMessage("Please fill all password fields", "error");
+  const handleDocumentUpload = async () => {
+    if (!documentForm.file) {
+      pushNotice("error", "Choose a document before uploading.");
+      return;
     }
-    if (newPassword !== confirmPassword) {
-      return showMessage("New passwords do not match", "error");
+
+    setSaving(true);
+    pushNotice("", "");
+
+    try {
+      const body = new FormData();
+      body.append("doc_type", documentForm.docType);
+      body.append("file", documentForm.file);
+      await uploadVerificationDocument(body);
+      setDocumentForm((current) => ({ ...current, file: null }));
+      pushNotice("success", "Document uploaded.");
+      await loadSettings();
+    } catch (uploadError) {
+      pushNotice("error", uploadError.message || "Failed to upload document.");
+    } finally {
+      setSaving(false);
     }
-    if (newPassword.length < 6) {
-      return showMessage("Password must be at least 6 characters", "error");
+  };
+
+  const handlePasswordSave = async () => {
+    setSaving(true);
+    pushNotice("", "");
+
+    try {
+      await changePassword(passwordForm);
+      setPasswordForm({
+        current_password: "",
+        new_password: "",
+        confirm_password: "",
+      });
+      pushNotice("success", "Password updated.");
+    } catch (passwordError) {
+      pushNotice("error", passwordError.message || "Failed to update password.");
+    } finally {
+      setSaving(false);
     }
-    
-    showMessage("Password changed successfully!");
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
+  };
+
+  const handleSupportSubmit = async () => {
+    if (!supportForm.description.trim()) {
+      pushNotice("error", "Support description is required.");
+      return;
+    }
+
+    setSaving(true);
+    pushNotice("", "");
+
+    try {
+      const body = new FormData();
+      body.append("issue_type", supportForm.issue_type);
+      body.append("description", supportForm.description);
+      if (supportForm.attachment) {
+        body.append("attachment", supportForm.attachment);
+      }
+      await submitSupportRequest(body);
+      setSupportForm({
+        issue_type: supportForm.issue_type,
+        description: "",
+        attachment: null,
+      });
+      pushNotice("success", "Support request sent.");
+    } catch (supportError) {
+      pushNotice("error", supportError.message || "Failed to submit support request.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeactivate = async () => {
+    const confirmed = window.confirm(
+      "Deactivate this account? This is a soft deactivation and may be blocked if you have active bookings.",
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    pushNotice("", "");
+
+    try {
+      await deleteMyAccount();
+      clearSession();
+      navigate("/login");
+    } catch (deleteError) {
+      pushNotice("error", deleteError.message || "Failed to deactivate account.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f7f9] font-sans pb-20">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-[#091E42]">
       <Navbar />
 
-      <div className="w-full px-4 md:px-8 py-6 max-w-5xl mx-auto mt-16 md:mt-6">
-        
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Settings</h1>
-          <p className="text-gray-500 mt-1.5 text-sm font-medium">
-            Manage your account preferences, security, and billing.
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        <header className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <h1 className="text-3xl font-black">Settings</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+            Fake toggles, password changes, and local document state have been replaced with the real account settings APIs.
           </p>
-        </div>
+        </header>
 
-    
-        {notification.show && (
-          <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 font-medium text-sm transition-all animate-fade-in-down ${
-            notification.type === "error" ? "bg-red-50 text-red-700 border border-red-200" : "bg-green-50 text-green-700 border border-green-200"
-          }`}>
-            <AlertCircle className="w-5 h-5" />
-            {notification.message}
+        {notice.message ? (
+          <div
+            className={`mt-6 rounded-3xl border p-4 text-sm font-semibold shadow-sm ${
+              notice.type === "error"
+                ? "border-rose-100 bg-white text-rose-600"
+                : "border-emerald-100 bg-white text-emerald-600"
+            }`}
+          >
+            {notice.message}
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="mt-6 rounded-3xl border border-slate-100 bg-white p-6 text-sm text-slate-500 shadow-sm">
+            Loading settings...
+          </div>
+        ) : (
+          <div className="mt-6 space-y-6">
+            <Section title="Preferences & Alerts" description="Shared user settings for language, visibility, and notification preferences.">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-bold text-slate-600">Language</span>
+                  <select
+                    value={settingsForm.language}
+                    onChange={(event) =>
+                      setSettingsForm((current) => ({
+                        ...current,
+                        language: event.target.value,
+                      }))
+                    }
+                    className={fieldClassName}
+                  >
+                    <option value="en">English</option>
+                    <option value="ar">Arabic</option>
+                  </select>
+                </label>
+
+                {[
+                  ["profile_visible", "Profile visible"],
+                  ["roommate_matches", "Roommate match alerts"],
+                  ["new_messages", "New messages"],
+                  ["booking_updates", "Booking updates"],
+                  ["booking_requests", "Booking requests"],
+                  ["email_notifications", "Email notifications"],
+                  ["sms_notifications", "SMS notifications"],
+                  ["in_app_notifications", "In-app notifications"],
+                ].map(([key, label]) => (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3"
+                  >
+                    <span className="text-sm font-bold text-slate-600">{label}</span>
+                    <Toggle
+                      checked={Boolean(settingsForm[key])}
+                      onChange={(value) =>
+                        setSettingsForm((current) => ({
+                          ...current,
+                          [key]: value,
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSettingsSave}
+                disabled={saving}
+                className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#155BC2] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Bell className="h-4 w-4" />
+                Save settings
+              </button>
+            </Section>
+
+            <Section title="Verification Documents" description="Student verification documents now persist through the backend.">
+              <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)_auto]">
+                <select
+                  value={documentForm.docType}
+                  onChange={(event) =>
+                    setDocumentForm((current) => ({
+                      ...current,
+                      docType: event.target.value,
+                    }))
+                  }
+                  className={fieldClassName}
+                >
+                  <option value="student_id">Student ID</option>
+                  <option value="national_id">National ID</option>
+                  <option value="university_email">University Email</option>
+                </select>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
+                  <UploadCloud className="h-4 w-4" />
+                  {documentForm.file ? documentForm.file.name : "Choose file"}
+                  <input
+                    type="file"
+                    onChange={(event) =>
+                      setDocumentForm((current) => ({
+                        ...current,
+                        file: event.target.files?.[0] || null,
+                      }))
+                    }
+                    className="hidden"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleDocumentUpload}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-[#155BC2] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  <FileUp className="h-4 w-4" />
+                  Upload
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {documents.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+                    No documents uploaded yet.
+                  </div>
+                ) : (
+                  documents.map((document) => (
+                    <div
+                      key={document.id}
+                      className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-black text-[#091E42]">
+                            {document.doc_type.replaceAll("_", " ")}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Status: {document.status}
+                          </p>
+                          {document.review_note ? (
+                            <p className="mt-2 text-sm text-slate-600">
+                              {document.review_note}
+                            </p>
+                          ) : null}
+                        </div>
+                        <a
+                          href={withApiUrl(document.file)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm font-black text-[#155BC2]"
+                        >
+                          Open file
+                        </a>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Section>
+
+            <Section title="Password" description="Password changes now validate against your current password on the backend.">
+              <div className="grid gap-4 md:grid-cols-3">
+                <input
+                  type="password"
+                  placeholder="Current password"
+                  value={passwordForm.current_password}
+                  onChange={(event) =>
+                    setPasswordForm((current) => ({
+                      ...current,
+                      current_password: event.target.value,
+                    }))
+                  }
+                  className={fieldClassName}
+                />
+                <input
+                  type="password"
+                  placeholder="New password"
+                  value={passwordForm.new_password}
+                  onChange={(event) =>
+                    setPasswordForm((current) => ({
+                      ...current,
+                      new_password: event.target.value,
+                    }))
+                  }
+                  className={fieldClassName}
+                />
+                <input
+                  type="password"
+                  placeholder="Confirm password"
+                  value={passwordForm.confirm_password}
+                  onChange={(event) =>
+                    setPasswordForm((current) => ({
+                      ...current,
+                      confirm_password: event.target.value,
+                    }))
+                  }
+                  className={fieldClassName}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handlePasswordSave}
+                disabled={saving}
+                className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#155BC2] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Lock className="h-4 w-4" />
+                Update password
+              </button>
+            </Section>
+
+            <Section title="Support" description="Create a real support request with an optional attachment.">
+              <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+                <select
+                  value={supportForm.issue_type}
+                  onChange={(event) =>
+                    setSupportForm((current) => ({
+                      ...current,
+                      issue_type: event.target.value,
+                    }))
+                  }
+                  className={fieldClassName}
+                >
+                  <option value="bug">Bug</option>
+                  <option value="billing">Billing</option>
+                  <option value="verification">Verification</option>
+                  <option value="other">Other</option>
+                </select>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
+                  <UploadCloud className="h-4 w-4" />
+                  {supportForm.attachment ? supportForm.attachment.name : "Optional attachment"}
+                  <input
+                    type="file"
+                    onChange={(event) =>
+                      setSupportForm((current) => ({
+                        ...current,
+                        attachment: event.target.files?.[0] || null,
+                      }))
+                    }
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              <textarea
+                rows={5}
+                value={supportForm.description}
+                onChange={(event) =>
+                  setSupportForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                placeholder="Describe the issue."
+                className={`${fieldClassName} mt-4`}
+              />
+              <button
+                type="button"
+                onClick={handleSupportSubmit}
+                disabled={saving}
+                className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#155BC2] px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Send className="h-4 w-4" />
+                Send support request
+              </button>
+            </Section>
+
+            <Section title="Billing & Payments" description="Stored cards are intentionally out of scope, so this page links to truthful payment flows instead.">
+              <div className="grid gap-4 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => navigate("/payments")}
+                  className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-left"
+                >
+                  <span>
+                    <span className="block font-black text-[#091E42]">Payments</span>
+                    <span className="mt-1 block text-sm text-slate-500">
+                      View real payment attempts and booking-related transactions.
+                    </span>
+                  </span>
+                  <CreditCard className="h-5 w-5 text-[#155BC2]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/my-bookings")}
+                  className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-left"
+                >
+                  <span>
+                    <span className="block font-black text-[#091E42]">My Bookings</span>
+                    <span className="mt-1 block text-sm text-slate-500">
+                      Follow real booking, payment, and review status there.
+                    </span>
+                  </span>
+                  <ExternalLink className="h-5 w-5 text-[#155BC2]" />
+                </button>
+              </div>
+            </Section>
+
+            <Section title="Danger Zone" description="Account deletion is a soft deactivation and may be blocked by active business rules.">
+              <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 text-rose-600" />
+                  <div>
+                    <p className="font-black text-rose-700">Deactivate account</p>
+                    <p className="mt-1 text-sm text-rose-600">
+                      This does not hard-delete your row. The backend decides whether deactivation is allowed right now.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleDeactivate}
+                  disabled={saving}
+                  className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-white px-5 py-3 text-sm font-black text-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Deactivate account
+                </button>
+              </div>
+            </Section>
           </div>
         )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-        
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* Account Settings */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900 mb-5 flex items-center gap-2">
-                <Mail className="w-5 h-5 text-blue-600" /> Email Address
-              </h2>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all text-sm"
-                />
-                <button
-                  onClick={saveAccount}
-                  className="px-6 py-2.5 bg-[#0A2647] hover:bg-blue-900 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shrink-0"
-                >
-                  <Save className="w-4 h-4" /> Save
-                </button>
-              </div>
-            </div>
-
-            {/* Security / Password */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900 mb-5 flex items-center gap-2">
-                <Lock className="w-5 h-5 text-blue-600" /> Security
-              </h2>
-              
-              <div className="space-y-4 max-w-md">
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Current password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 text-sm"
-                  />
-                </div>
-                
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="New password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 text-sm"
-                  />
-                </div>
-
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Confirm new password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 text-sm"
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-
-                <div className="flex justify-end pt-2">
-                  <button
-                    onClick={changePassword}
-                    className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors flex items-center gap-2 text-sm shadow-sm hover:shadow-md"
-                  >
-                    Update Password
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Payment Methods & Billing */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <CreditCard className="w-5 h-5 text-blue-600" /> Payment Methods & Billing
-                </h2>
-                <button className="text-xs font-bold text-blue-600 hover:text-blue-800 px-3 py-1.5 border border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1">
-                  <Plus className="w-3.5 h-3.5" /> Add Card
-                </button>
-              </div>
-              
-              <p className="text-xs text-gray-500 mb-4">Manage your payment methods for housing bookings and deposits.</p>
-              
-              {/* Saved Card */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-xl hover:border-gray-200 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-8 bg-[#1434CB] rounded flex items-center justify-center text-white font-bold text-[11px] italic shadow-sm">
-                    VISA
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">Visa ending in 4242</p>
-                    <p className="text-[11px] text-gray-500">Expires 12/28</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md uppercase tracking-wide">
-                  Default
-                </span>
-              </div>
-
-              <div className="mt-5 pt-4 border-t border-gray-100">
-                <button className="text-sm font-semibold text-gray-600 hover:text-[#0A2647] transition-colors flex items-center gap-2">
-                  <Receipt className="w-4 h-4" /> View Billing History
-                </button>
-              </div>
-            </div>
-
-          </div>
-
-          <div className="space-y-6">
-            
-            {/* Preferences (Language Only) */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900 mb-5 flex items-center gap-2">
-                <Globe className="w-5 h-5 text-blue-600" /> Preferences
-              </h2>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm font-medium text-gray-700">Language</span>
-                </div>
-                <select 
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
-                >
-                  <option value="English">English</option>
-                  <option value="Arabic">العربية</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Verification Widget */}
-            <div className="bg-gradient-to-br from-[#0A2647] to-blue-900 p-6 rounded-2xl shadow-sm border border-blue-800 text-white">
-              <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-400" /> Identity Verification
-              </h2>
-              <p className="text-xs text-blue-200 mb-5 leading-relaxed">
-                Verified students get 3x more housing matches. Upload your student ID to get the verification badge.
-              </p>
-              <button className="w-full py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-xl transition-colors text-sm flex items-center justify-center gap-2">
-                <UploadCloud className="w-4 h-4" /> Upload Student ID
-              </button>
-            </div>
-
-            {/* Privacy & Notifications */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900 mb-5 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-blue-600" /> Privacy & Alerts
-              </h2>
-              
-              <div className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-gray-800">Profile Visibility</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">Let others find your profile</div>
-                  </div>
-                  <ToggleSwitch checked={profileVisible} onChange={setProfileVisible} />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-gray-800">Match Alerts</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">Push notifications for matches</div>
-                  </div>
-                  <ToggleSwitch checked={matchNotifications} onChange={setMatchNotifications} />
-                </div>
-              </div>
-
-              <div className="mt-6 pt-5 border-t border-gray-100">
-                <button
-                  onClick={savePreferences}
-                  className="w-full px-4 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-semibold rounded-xl transition-colors text-sm flex items-center justify-center gap-2"
-                >
-                  <Save className="w-4 h-4" /> Save Preferences
-                </button>
-              </div>
-            </div>
-
-            {/* Danger Zone */}
-            <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
-              <h2 className="text-lg font-bold text-red-700 mb-2">Danger Zone</h2>
-              <p className="text-xs text-red-600/80 mb-5 leading-relaxed">
-                Once you delete your account, there is no going back. Please be certain.
-              </p>
-              <button className="w-full px-4 py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-600 hover:text-white font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-sm">
-                <LogOut className="w-4 h-4" /> Delete Account
-              </button>
-            </div>
-
-          </div>
-        </div>
-      </div>
+      </main>
     </div>
   );
-};
-
-export default Settings;
+}

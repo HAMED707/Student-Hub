@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework import status
-from django.db.models import Q
+from django.db.models import Count, Q
 from properties.models import Property, PropertyImage
 from api.accounts_api.permissions import IsLandlord
 from api.properties_api.serializers import (
@@ -221,6 +221,23 @@ class PropertyDetailView(APIView):
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    def delete(self, request, property_id):
+        if not request.user.is_authenticated:
+            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        if request.user.role != "landlord":
+            return Response({"error": "Only landlords can delete properties."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            prop = Property.objects.get(id=property_id)
+        except Property.DoesNotExist:
+            return Response({"error": "Property not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if prop.landlord != request.user:
+            return Response({"error": "You do not own this property."}, status=status.HTTP_403_FORBIDDEN)
+
+        prop.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class PropertyCreateView(APIView):
     """
@@ -358,3 +375,96 @@ class LandlordPropertiesView(APIView):
         )
         serializer = PropertyListSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class LandlordDashboardView(APIView):
+    """
+    GET /api/properties/landlord/dashboard/
+    Returns aggregate owner dashboard data backed by live properties/bookings.
+    """
+
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        properties = (
+            Property.objects
+            .filter(landlord=request.user)
+            .prefetch_related("images")
+        )
+        booking_qs = (
+            request.user.landlord_properties
+            .prefetch_related("bookings")
+            .values_list("bookings__id", flat=True)
+        )
+
+        from bookings.models import Booking
+
+        bookings = (
+            Booking.objects
+            .filter(id__in=booking_qs)
+            .select_related("tenant", "property")
+            .order_by("-created_at")
+        )
+
+        total_properties = properties.count()
+        total_views = sum(property_obj.view_count for property_obj in properties)
+        booked_units = bookings.filter(status__in=["confirmed", "completed"]).count()
+        pending_requests = bookings.filter(status="deposit_paid").count()
+        booked_progress = round((booked_units / total_properties) * 100) if total_properties else 0
+
+        recent_bookings = []
+        for booking in bookings[:6]:
+            tenant_name = (
+                f"{booking.tenant.first_name or ''} {booking.tenant.last_name or ''}".strip()
+                or booking.tenant.username
+            )
+            recent_bookings.append(
+                {
+                    "id": booking.id,
+                    "tenant_id": booking.tenant_id,
+                    "tenant_name": tenant_name,
+                    "tenant_avatar": request.build_absolute_uri(booking.tenant.profile_picture.url)
+                    if booking.tenant.profile_picture
+                    else None,
+                    "property_id": booking.property_id,
+                    "property_title": booking.property.title,
+                    "property_type": booking.property.property_type,
+                    "status": booking.status,
+                    "move_in_date": booking.move_in_date,
+                    "duration_months": booking.duration_months,
+                    "message": booking.message or "",
+                    "created_at": booking.created_at,
+                }
+            )
+
+        top_properties = []
+        for property_obj in (
+            properties.annotate(booking_count=Count("bookings")).order_by("-view_count", "-created_at")[:5]
+        ):
+            serializer = PropertyListSerializer(property_obj, context={"request": request})
+            top_properties.append(
+                {
+                    **serializer.data,
+                    "booking_count": property_obj.booking_count,
+                }
+            )
+
+        return Response(
+            {
+                "summary": {
+                    "total_properties": total_properties,
+                    "available_properties": properties.filter(status="available").count(),
+                    "reserved_properties": properties.filter(status="reserved").count(),
+                    "rented_properties": properties.filter(status="rented").count(),
+                    "total_views": total_views,
+                    "booked_units": booked_units,
+                    "booked_progress": booked_progress,
+                    "pending_requests": pending_requests,
+                    "wallet_balance": str(getattr(request.user.landlord_profile, "available_balance", 0)),
+                    "total_income": str(getattr(request.user.landlord_profile, "total_income", 0)),
+                },
+                "recent_bookings": recent_bookings,
+                "top_properties": top_properties,
+            },
+            status=status.HTTP_200_OK,
+        )

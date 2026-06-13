@@ -9,12 +9,14 @@ import {
 } from "react-router-dom";
 import {
   AUTH_CHANGE_EVENT,
+  clearSession,
   getAuthSnapshot,
   getDefaultRouteForRole,
 } from "./utils/auth.js";
 
 import JoinPage from "./pages/Auth/JoinPage.jsx";
 import Login from "./pages/Auth/Login/login.jsx";
+import CompleteOnboarding from "./pages/Auth/CompleteOnboarding.jsx";
 import StudentRegister from "./pages/Auth/StudentRegister/StudentRegister.jsx";
 import LandlordRegister from "./pages/Auth/LandlordRegister/LandlordRegister.jsx";
 import PasswordRecovery from "./pages/Auth/PasswordRecovery/PasswordRecovery.jsx";
@@ -25,8 +27,8 @@ import PropertyDetails from "./pages/FindRoom/PropertyDetails.jsx";
 import Community from "./pages/Commuity/Community.jsx";
 import Groups from "./pages/Commuity/Groups.jsx";
 import GroupDetails from "./pages/Commuity/GroupDetails.jsx";
-import CommunityMessages from "./pages/Commuity/Messages.jsx";
 import Posts from "./pages/Commuity/Posts.jsx";
+import StudentMessages from "./pages/Messaging/Messages.jsx";
 
 import Like from "./pages/Like/Like.jsx";
 import MyBookings from "./pages/MyBookings/MyBookings.jsx";
@@ -56,6 +58,7 @@ import OwnerSettings from "./Owner interface/OwnerProfile/Setting-Profile.jsx";
 import Sidebar from "./assets/components/Sidebar/Sidebar.jsx";
 import Footer from "./assets/components/Footer/Footer.jsx";
 import logo from "./assets/brand/icons/logo.svg";
+import { CommunityProvider } from "./hooks/useCommunityData.jsx";
 import { NotificationsProvider } from "./hooks/useNotifications.jsx";
 
 import {
@@ -114,6 +117,10 @@ function RequireAuth({ allowedRoles = null }) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
+  if (user.role === "pending" && location.pathname !== "/complete-onboarding") {
+    return <Navigate to="/complete-onboarding" replace />;
+  }
+
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
   }
@@ -125,6 +132,7 @@ function RequireAuth({ allowedRoles = null }) {
 function OwnerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuthState();
 
   const menuItems = useMemo(
     () => [
@@ -158,11 +166,19 @@ function OwnerLayout() {
 
   const profile = useMemo(
     () => ({
-      name: "Mohamed Ahmed",
-      email: "owner@studenthub.com",
-      avatarUrl: "https://randomuser.me/api/portraits/men/32.jpg",
+      name:
+        user?.fullName ||
+        user?.name ||
+        [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
+        user?.username ||
+        "Owner",
+      email: user?.email || "owner@studenthub.com",
+      avatarUrl:
+        user?.avatarUrl ||
+        user?.profile_picture ||
+        "https://ui-avatars.com/api/?name=Owner&background=0A2647&color=fff",
     }),
-    [],
+    [user],
   );
 
   // ✅ Dropdown (3 dots) — لازم يكون Route URL
@@ -184,7 +200,10 @@ function OwnerLayout() {
         id: "logout",
         label: "Logout",
         icon: <LogOut size={16} />,
-        onClick: () => navigate("/login"),
+        onClick: () => {
+          clearSession();
+          navigate("/login");
+        },
       },
     ],
     [navigate],
@@ -221,6 +240,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       <NotificationsProvider>
+        <CommunityProvider>
         <Routes>
           <Route index element={<Navigate to="/home" replace />} />
 
@@ -245,19 +265,23 @@ export default function App() {
 
         <Route element={<StudentLayout />}>
           <Route element={<RequireAuth />}>
+          <Route path="/complete-onboarding" element={<CompleteOnboarding />} />
           <Route path="/community" element={<Community />} />
           <Route path="/community/groups/:id" element={<GroupDetails />} />
           <Route path="/groups" element={<Groups />} />
-          <Route path="/messages" element={<CommunityMessages />} />
-          <Route path="/chat/:id" element={<CommunityMessages />} />
+          <Route path="/messages" element={<StudentMessages />} />
+          <Route path="/chat/:id" element={<StudentMessages />} />
           <Route path="/posts" element={<Posts />} />
 
-          <Route path="/roommate" element={<Roommate />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/profile/:id" element={<PublicProfile />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/edit-profile" element={<EditProfile />} />
           <Route path="/settings" element={<Settings />} />
+          </Route>
+
+          <Route element={<RequireAuth allowedRoles={["student"]} />}>
+          <Route path="/roommate" element={<Roommate />} />
           </Route>
 
           <Route element={<RequireAuth allowedRoles={["student"]} />}>
@@ -296,6 +320,7 @@ export default function App() {
         {/* 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </CommunityProvider>
       </NotificationsProvider>
     </div>
   );

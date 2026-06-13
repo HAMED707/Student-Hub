@@ -1,531 +1,415 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom"; // ✅ لاستخدام التنقل
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, Save, UploadCloud } from "lucide-react";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import {
-  User,
-  MapPin,
-  School,
-  GraduationCap,
-  Calendar,
-  Save,
-  X,
-  Camera,
-  Globe,
-  Mail,
-  Phone,
-  Heart,
-  Coffee,
-  Upload,
-} from "lucide-react";
-import { apiJson } from "../../api/client.js";
-import { fetchMyProfile } from "../../api/accounts.js";
+  fetchMyProfile,
+  updateMyProfile,
+} from "../../api/accounts.js";
+import {
+  fetchMyRoommateProfile,
+  updateMyRoommateProfile,
+} from "../../api/roommates.js";
+import {
+  CLEANLINESS_OPTIONS,
+  GENDER_OPTIONS,
+  GUEST_POLICY_OPTIONS,
+  PERSONALITY_OPTIONS,
+  ROOM_TYPE_OPTIONS,
+  SLEEP_OPTIONS,
+  SMOKING_OPTIONS,
+  buildRoommatePayloadFromForm,
+  buildStudentAccountForm,
+  buildStudentAccountPayload,
+} from "../../utils/profile.js";
 
-const EditProfile = () => {
-  const navigate = useNavigate(); // ✅ هوك التنقل
-  const fileInputRef = useRef(null); // ✅ مرجع لزر رفع الملفات
+const fieldClassName =
+  "mt-1 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#155BC2]";
 
-  // الحالة المبدئية (نفس بيانات البروفايل)
-  const [formData, setFormData] = useState({
-    name: "Mathew Perry",
-    role: "Student",
-    bio: "Computer Science student at EELU. I am a quiet person who loves coding and coffee.",
-    email: "mathewperry@xyz.com",
-    phone: "+20 123 456 7890",
-    avatar:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80", // الصورة الحالية
-    cover:
-      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2000&auto=format&fit=crop",
+const Section = ({ title, children }) => (
+  <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+    <h2 className="text-lg font-black text-[#091E42]">{title}</h2>
+    <div className="mt-5 grid gap-4 md:grid-cols-2">{children}</div>
+  </section>
+);
 
-    location: "Nasr City, Cairo",
-    university: "EELU",
-    faculty: "Computers & IT",
-    year: "4th Year",
+export default function EditProfile() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const onboarding = Boolean(location.state?.onboarding);
 
-    sleepingTime: "Normal (11 PM)",
-    studyEnv: "With Music",
-    music: "Morning Person",
-    smoking: "Non-Smoker",
-
-    budgetRange: "1000 - 2000 EGP",
-    roomType: "Single",
-    cleanliness: "Medium",
-  });
+  const [formState, setFormState] = useState(() => buildStudentAccountForm());
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchMyProfile()
-      .then((data) => {
-        const student = data.student_profile || {};
-        setFormData((prev) => ({
-          ...prev,
-          name: [data.first_name, data.last_name].filter(Boolean).join(" ") || prev.name,
-          email: data.email || prev.email,
-          phone: data.phone_number || prev.phone,
-          avatar: data.profile_picture || prev.avatar,
-          location: data.city || prev.location,
-          university: student.university || prev.university,
-          faculty: student.faculty || prev.faculty,
-          year: student.year_of_study || prev.year,
-          bio: student.bio || prev.bio,
-          sleepingTime: student.sleeping_time || prev.sleepingTime,
-          studyEnv: student.study_environment || prev.studyEnv,
-          music: student.music_preference || prev.music,
-          smoking: student.smoking || prev.smoking,
-          budgetRange: `${student.budget_min || ""}${student.budget_max ? ` - ${student.budget_max}` : ""}` || prev.budgetRange,
-          roomType: student.preferred_room_type || prev.roomType,
-          cleanliness: student.cleanliness || prev.cleanliness,
-        }));
-      })
-      .catch(() => {});
+    const loadProfile = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const profile = await fetchMyProfile();
+        const roommateProfile = await fetchMyRoommateProfile().catch(() => null);
+        setFormState(buildStudentAccountForm(profile, roommateProfile || {}));
+      } catch (loadError) {
+        setError(loadError.message || "Unable to load profile form.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
   }, []);
 
-  // التعامل مع تغيير النصوص
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const updateField = (key, value) => {
+    setFormState((current) => ({
+      ...current,
+      [key]: value,
+    }));
   };
 
-  // ✅ التعامل مع رفع الصورة
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file); // إنشاء رابط مؤقت للصورة
-      setFormData((prev) => ({ ...prev, avatar: imageUrl }));
-    }
-  };
+  const handleSave = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
 
-  // ✅ دالة لمحاكاة الضغط على زر Input المخفي
-  const triggerFileInput = () => {
-    fileInputRef.current.click();
-  };
-
-  const coverInputRef = useRef(null);
-  const triggerCoverInput = () => coverInputRef.current.click();
-  const handleCoverUpload = (e) => {
-    const file = e.target.files[0];
-    if (file)
-      setFormData((prev) => ({ ...prev, cover: URL.createObjectURL(file) }));
-  };
-
-  // ✅ زر الحفظ: يعرض رسالة ثم يعود للبروفايل
-  const handleSave = async (e) => {
-    e.preventDefault();
     try {
-      const [minBudget, maxBudget] = formData.budgetRange.split("-").map((value) => Number(value.trim()));
-      await apiJson("/api/auth/profile/", {
-        method: "PATCH",
-        body: JSON.stringify({
-          email: formData.email,
-          phone_number: formData.phone,
-          city: formData.location,
-          profile_picture: formData.avatar,
-          first_name: formData.name.split(" ")[0] || formData.name,
-          last_name: formData.name.split(" ").slice(1).join(" "),
-          student_profile: {
-            bio: formData.bio,
-            university: formData.university,
-            faculty: formData.faculty,
-            year_of_study: formData.year,
-            sleeping_time: formData.sleepingTime,
-            music_preference: formData.studyEnv,
-            smoking: formData.smoking,
-            budget_min: Number.isFinite(minBudget) ? minBudget : undefined,
-            budget_max: Number.isFinite(maxBudget) ? maxBudget : undefined,
-            preferred_room_type: formData.roomType,
-            cleanliness: formData.cleanliness,
-          },
-        }),
-      });
+      await Promise.all([
+        updateMyProfile(buildStudentAccountPayload(formState)),
+        updateMyRoommateProfile(buildRoommatePayloadFromForm(formState)),
+      ]);
+
+      if (avatarFile) {
+        const body = new FormData();
+        body.append("profile_picture", avatarFile);
+        await updateMyProfile(body);
+      }
+
       navigate("/profile");
-    } catch {
-      alert("Failed to update profile");
+    } catch (saveError) {
+      setError(saveError.message || "Failed to update profile.");
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ✅ زر الإلغاء: يعود للبروفايل فوراً
-  const handleCancel = () => {
-    if (window.confirm("Are you sure you want to discard changes?")) {
-      navigate("/profile"); // 👈 العودة لصفحة البروفايل
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] font-sans">
+        <Navbar />
+        <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-slate-500">
+          Loading profile form...
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] font-sans pb-20">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-[#091E42]">
       <Navbar />
 
-      <div className="w-full px-4 md:px-8 py-6 max-w-5xl mx-auto">
-        {/* Header Title */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-[#0A2647]">
-              Edit Profile
-            </h1>
-            <p className="text-gray-500 mt-1 text-sm">
-              Update your personal information and preferences.
-            </p>
-          </div>
-          <div className="flex gap-3 w-full md:w-auto">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="flex-1 md:flex-none px-6 py-2.5 rounded-lg border-2 border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="flex-1 md:flex-none px-6 py-2.5 rounded-lg bg-[#0A2647] text-white font-bold hover:bg-[#153a69] shadow-lg flex justify-center items-center gap-2 transition"
-            >
-              <Save className="w-4 h-4" /> Save Changes
-            </button>
-          </div>
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => navigate("/profile")}
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to profile
+          </button>
+          <button
+            type="submit"
+            form="student-profile-form"
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#155BC2] px-5 py-3 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            <Save className="h-4 w-4" />
+            {saving ? "Saving..." : onboarding ? "Finish setup" : "Save changes"}
+          </button>
         </div>
 
-        <form
-          onSubmit={handleSave}
-          className="grid grid-cols-1 lg:grid-cols-3 gap-8"
-        >
-          {/* --- LEFT COLUMN (Images & Bio) --- */}
-          <div className="lg:col-span-1 space-y-8">
-            {/* Cover Image */}
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold text-[#0A2647] mb-3 text-left">
-                Cover Photo
-              </h3>
-              <div className="relative rounded-lg overflow-hidden">
-                <img
-                  src={formData.cover}
-                  alt="cover"
-                  className="w-full h-36 object-cover rounded-md"
-                />
-                <input
-                  ref={coverInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleCoverUpload}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={triggerCoverInput}
-                  className="absolute right-3 bottom-3 bg-white px-3 py-1 rounded-md text-sm font-bold"
-                >
-                  Change Cover
-                </button>
-              </div>
-            </div>
+        {onboarding ? (
+          <div className="mt-6 rounded-3xl border border-blue-100 bg-white p-5 text-sm text-slate-600 shadow-sm">
+            Finish your student setup here. The same form updates your account profile and your roommate listing preferences together.
+          </div>
+        ) : null}
 
-            {/* Profile Image Card */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              <h3 className="text-lg font-bold text-[#0A2647] mb-4 text-left">
-                Profile Photo
-              </h3>
+        {error ? (
+          <div className="mt-6 rounded-3xl border border-rose-100 bg-white p-5 text-sm font-semibold text-rose-600 shadow-sm">
+            {error}
+          </div>
+        ) : null}
 
-              <div
-                className="relative inline-block group cursor-pointer"
-                onClick={triggerFileInput}
-              >
-                <img
-                  src={formData.avatar}
-                  alt="profile"
-                  className="w-40 h-40 rounded-full object-cover border-4 border-gray-50 shadow-md group-hover:opacity-75 transition duration-300"
-                />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-300">
-                  <div className="bg-black/50 p-3 rounded-full text-white">
-                    <Camera className="w-6 h-6" />
-                  </div>
-                </div>
-              </div>
-
-              {/* حقل رفع الملفات المخفي */}
+        <form id="student-profile-form" onSubmit={handleSave} className="mt-6 space-y-6">
+          <Section title="Basic Information">
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">First name</span>
               <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleImageUpload}
-                accept="image/*"
-                className="hidden"
+                value={formState.firstName}
+                onChange={(event) => updateField("firstName", event.target.value)}
+                className={fieldClassName}
               />
-
-              <button
-                type="button"
-                onClick={triggerFileInput}
-                className="mt-4 w-full py-2.5 rounded-lg border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 hover:text-[#0A2647] transition flex justify-center items-center gap-2"
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Last name</span>
+              <input
+                value={formState.lastName}
+                onChange={(event) => updateField("lastName", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Email</span>
+              <input
+                type="email"
+                value={formState.email}
+                onChange={(event) => updateField("email", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Phone</span>
+              <input
+                value={formState.phoneNumber}
+                onChange={(event) => updateField("phoneNumber", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Gender</span>
+              <select
+                value={formState.gender}
+                onChange={(event) => updateField("gender", event.target.value)}
+                className={fieldClassName}
               >
-                <Upload className="w-4 h-4" /> Change Avatar
-              </button>
-            </div>
-
-            {/* Bio Card */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold text-[#0A2647] mb-4">
-                Short Bio
-              </h3>
-              <textarea
-                name="bio"
-                value={formData.bio}
-                onChange={handleChange}
-                rows="5"
-                className="w-full p-4 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#0A2647] focus:ring-1 focus:ring-[#0A2647] outline-none text-sm text-gray-700 leading-relaxed resize-none transition"
-                placeholder="Tell us about yourself..."
-              ></textarea>
-              <div className="flex justify-end mt-2">
-                <span
-                  className={`text-xs font-bold ${formData.bio.length > 300 ? "text-red-500" : "text-gray-400"}`}
-                >
-                  {formData.bio.length}/300
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* --- RIGHT COLUMN (Form Fields) --- */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* 1. Basic Information */}
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-              <h2 className="text-xl font-bold text-[#0A2647] mb-6 flex items-center gap-2">
-                <User className="w-5 h-5" /> Basic Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Full Name
-                  </label>
-                  <div className="relative">
-                    <User className="w-4 h-4 absolute left-4 top-3.5 text-gray-400" />
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#0A2647] outline-none text-sm font-medium transition"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Role
-                  </label>
-                  <select
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#0A2647] outline-none text-sm font-medium transition cursor-pointer"
-                  >
-                    <option>Student</option>
-                    <option>Fresh Grad</option>
-                    <option>Employee</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 absolute left-4 top-3.5 text-gray-400" />
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#0A2647] outline-none text-sm font-medium transition"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Phone
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 absolute left-4 top-3.5 text-gray-400" />
-                    <input
-                      type="text"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#0A2647] outline-none text-sm font-medium transition"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Education & Location */}
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-              <h2 className="text-xl font-bold text-[#0A2647] mb-6 flex items-center gap-2">
-                <School className="w-5 h-5" /> Education & Location
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    University
-                  </label>
-                  <div className="relative">
-                    <School className="w-4 h-4 absolute left-4 top-3.5 text-gray-400" />
-                    <input
-                      type="text"
-                      name="university"
-                      value={formData.university}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#0A2647] outline-none text-sm font-medium transition"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Faculty / Major
-                  </label>
-                  <div className="relative">
-                    <GraduationCap className="w-4 h-4 absolute left-4 top-3.5 text-gray-400" />
-                    <input
-                      type="text"
-                      name="faculty"
-                      value={formData.faculty}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#0A2647] outline-none text-sm font-medium transition"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Academic Year
-                  </label>
-                  <div className="relative">
-                    <Calendar className="w-4 h-4 absolute left-4 top-3.5 text-gray-400" />
-                    <select
-                      name="year"
-                      value={formData.year}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#0A2647] outline-none text-sm font-medium transition cursor-pointer"
-                    >
-                      <option>1st Year</option>
-                      <option>2nd Year</option>
-                      <option>3rd Year</option>
-                      <option>4th Year</option>
-                      <option>Graduated</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Current Location
-                  </label>
-                  <div className="relative">
-                    <MapPin className="w-4 h-4 absolute left-4 top-3.5 text-gray-400" />
-                    <input
-                      type="text"
-                      name="location"
-                      value={formData.location}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-[#0A2647] outline-none text-sm font-medium transition"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Interests & Lifestyle */}
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-              <h2 className="text-xl font-bold text-[#0A2647] mb-6 flex items-center gap-2">
-                <Heart className="w-5 h-5" /> Interests & Habits
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Sleeping Time
-                  </label>
-                  <select
-                    name="sleepingTime"
-                    value={formData.sleepingTime}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:border-[#0A2647] outline-none transition cursor-pointer"
-                  >
-                    <option>Early Bird (9-10 PM)</option>
-                    <option>Normal (11 PM)</option>
-                    <option>Night Owl (After 1 AM)</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Smoking
-                  </label>
-                  <select
-                    name="smoking"
-                    value={formData.smoking}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:border-[#0A2647] outline-none transition cursor-pointer"
-                  >
-                    <option>Non-Smoker</option>
-                    <option>Smoker</option>
-                    <option>Outside Only</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Study Env
-                  </label>
-                  <select
-                    name="studyEnv"
-                    value={formData.studyEnv}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:border-[#0A2647] outline-none transition cursor-pointer"
-                  >
-                    <option>Quiet</option>
-                    <option>With Music</option>
-                    <option>Group Study</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* 4. Housing Preferences */}
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-              <h2 className="text-xl font-bold text-[#0A2647] mb-6 flex items-center gap-2">
-                <Coffee className="w-5 h-5" /> Housing Preferences
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Budget Range (EGP)
-                  </label>
+                {GENDER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Date of birth</span>
+              <input
+                type="date"
+                value={formState.dateOfBirth}
+                onChange={(event) => updateField("dateOfBirth", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">City</span>
+              <input
+                value={formState.city}
+                onChange={(event) => updateField("city", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-sm font-bold text-slate-600">Avatar</p>
+              <div className="mt-4 flex items-center gap-4">
+                <img
+                  src={formState.avatarUrl}
+                  alt="Profile"
+                  className="h-16 w-16 rounded-full object-cover"
+                />
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#155BC2] shadow-sm">
+                  <UploadCloud className="h-4 w-4" />
+                  Change avatar
                   <input
-                    type="text"
-                    name="budgetRange"
-                    value={formData.budgetRange}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 outline-none text-sm font-medium focus:border-[#0A2647] transition"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      setAvatarFile(file);
+                      if (file) {
+                        updateField("avatarUrl", URL.createObjectURL(file));
+                      }
+                    }}
+                    className="hidden"
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">
-                    Preferred Room Type
-                  </label>
-                  <div className="flex gap-4 pt-1">
-                    {["Single", "Shared"].map((type) => (
-                      <label
-                        key={type}
-                        className="flex items-center gap-2 cursor-pointer group"
-                      >
-                        <input
-                          type="radio"
-                          name="roomType"
-                          value={type}
-                          checked={formData.roomType === type}
-                          onChange={handleChange}
-                          className="w-4 h-4 text-[#0A2647] focus:ring-[#0A2647] cursor-pointer"
-                        />
-                        <span className="text-sm text-gray-700 group-hover:text-[#0A2647] transition">
-                          {type}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                </label>
               </div>
             </div>
-          </div>
+          </Section>
+
+          <Section title="Student Details">
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">University</span>
+              <input
+                value={formState.university}
+                onChange={(event) => updateField("university", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Faculty</span>
+              <input
+                value={formState.faculty}
+                onChange={(event) => updateField("faculty", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Year of study</span>
+              <input
+                value={formState.yearOfStudy}
+                onChange={(event) => updateField("yearOfStudy", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Languages</span>
+              <input
+                value={formState.languages}
+                onChange={(event) => updateField("languages", event.target.value)}
+                className={fieldClassName}
+                placeholder="English, Arabic"
+              />
+            </label>
+            <label className="block md:col-span-2">
+              <span className="text-sm font-bold text-slate-600">Bio</span>
+              <textarea
+                rows={5}
+                value={formState.bio}
+                onChange={(event) => updateField("bio", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+          </Section>
+
+          <Section title="Roommate Preferences">
+            <label className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 md:col-span-2">
+              <span className="text-sm font-bold text-slate-600">
+                Looking for a roommate
+              </span>
+              <input
+                type="checkbox"
+                checked={Boolean(formState.isLookingForRoom)}
+                onChange={(event) => updateField("isLookingForRoom", event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-[#155BC2]"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Move-in date</span>
+              <input
+                type="date"
+                value={formState.moveInDate}
+                onChange={(event) => updateField("moveInDate", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Budget min</span>
+              <input
+                type="number"
+                min="0"
+                value={formState.budgetMin}
+                onChange={(event) => updateField("budgetMin", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Budget max</span>
+              <input
+                type="number"
+                min="0"
+                value={formState.budgetMax}
+                onChange={(event) => updateField("budgetMax", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Sleep schedule</span>
+              <select
+                value={formState.sleepingTime}
+                onChange={(event) => updateField("sleepingTime", event.target.value)}
+                className={fieldClassName}
+              >
+                {SLEEP_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Cleanliness</span>
+              <select
+                value={formState.cleanliness}
+                onChange={(event) => updateField("cleanliness", event.target.value)}
+                className={fieldClassName}
+              >
+                {CLEANLINESS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Personality</span>
+              <select
+                value={formState.personality}
+                onChange={(event) => updateField("personality", event.target.value)}
+                className={fieldClassName}
+              >
+                {PERSONALITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Smoking</span>
+              <select
+                value={formState.smoking}
+                onChange={(event) => updateField("smoking", event.target.value)}
+                className={fieldClassName}
+              >
+                {SMOKING_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Guests policy</span>
+              <select
+                value={formState.guestsPolicy}
+                onChange={(event) => updateField("guestsPolicy", event.target.value)}
+                className={fieldClassName}
+              >
+                {GUEST_POLICY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Room type</span>
+              <select
+                value={formState.roomTypePreference}
+                onChange={(event) => updateField("roomTypePreference", event.target.value)}
+                className={fieldClassName}
+              >
+                {ROOM_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </Section>
         </form>
-      </div>
+      </main>
     </div>
   );
-};
-
-export default EditProfile;
+}

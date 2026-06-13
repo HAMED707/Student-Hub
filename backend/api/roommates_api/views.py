@@ -27,6 +27,7 @@ from api.roommates_api.serializers import (
 )
 from api.accounts_api.permissions import IsStudent
 from api.roommates_api.ml_utils import process_and_match
+from notifications.services import push_notification
 
 
 class RoommateListView(APIView):
@@ -143,6 +144,15 @@ class RoommateRequestCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         roommate_request = serializer.save(sender=request.user)
+        push_notification(
+            recipient=roommate_request.receiver,
+            actor=request.user,
+            notification_type="roommate_request",
+            title="New roommate request",
+            message=f"{request.user.username} sent you a roommate request.",
+            data={"request_id": roommate_request.id, "sender_id": request.user.id},
+            broadcast=True,
+        )
         return Response(
             RoommateRequestSerializer(roommate_request).data,
             status=status.HTTP_201_CREATED,
@@ -211,6 +221,21 @@ class RoommateRequestStatusView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
+        recipient = roommate_request.sender if user == roommate_request.receiver else roommate_request.receiver
+        push_notification(
+            recipient=recipient,
+            actor=user,
+            notification_type="roommate_update",
+            title="Roommate request updated",
+            message=f"Your roommate request is now '{roommate_request.status}'.",
+            data={
+                "request_id": roommate_request.id,
+                "sender_id": roommate_request.sender_id,
+                "receiver_id": roommate_request.receiver_id,
+                "status": roommate_request.status,
+            },
+            broadcast=True,
+        )
         return Response(RoommateRequestSerializer(roommate_request).data, status=status.HTTP_200_OK)
 
 
@@ -256,15 +281,21 @@ class RoommateMatchView(APIView):
             )
 
         # ── Hard Constraints (DB-level, fast) ─────────────────
-        compatible_profiles = RoommateProfile.objects.filter(
-            is_active=True,
-            user__gender=current_user.gender,       # gender lives on Users
-            university=current_profile.university,  # university on RoommateProfile
-            city=current_profile.city,              # city on RoommateProfile
-        )
+        # Only apply a constraint when the current user's field is filled in.
+        # Applying an empty/null constraint would silently return zero results.
+        filters = {"is_active": True}
+        if current_user.gender:
+            filters["user__gender"] = current_user.gender
+        if current_profile.university:
+            filters["university"] = current_profile.university
+        if current_profile.city:
+            filters["city"] = current_profile.city
+
+        compatible_profiles = RoommateProfile.objects.filter(**filters).select_related("user")
 
         # Only pull the columns the AI actually needs
         profiles_data = compatible_profiles.values(
+            "user__id",
             "user__username",
             "sleeping_time",
             "cleanliness",
@@ -283,7 +314,27 @@ class RoommateMatchView(APIView):
             top_n=5,
         )
 
+        # Enrich each match with the full serialized profile so the frontend
+        # can display lifestyle fields without a second round-trip.
+        if matches:
+            match_user_ids = [m["user_id"] for m in matches]
+            profile_map = {
+                p.user.id: RoommateProfileSerializer(
+                    p, context={"request": request, "requesting_user": current_user}
+                ).data
+                for p in RoommateProfile.objects.filter(
+                    user__id__in=match_user_ids
+                ).select_related("user", "user__student_profile")
+            }
+            enriched = []
+            for m in matches:
+                profile_data = dict(profile_map.get(m["user_id"], {}))
+                profile_data["compatibility_score"] = m["compatibility_score"]
+                enriched.append(profile_data)
+        else:
+            enriched = []
+
         return Response(
-            {"status": "success", "matches": matches},
+            {"status": "success", "matches": enriched},
             status=status.HTTP_200_OK,
         )

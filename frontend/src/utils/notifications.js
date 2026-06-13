@@ -108,6 +108,7 @@ export const resolveNotificationDestination = (notification, role) => {
   const bookingId = notification.data?.booking_id;
   const conversationId = notification.data?.conversation_id;
   const propertyId = notification.data?.property_id;
+  const roommateRequestId = notification.data?.request_id;
 
   if (notification.notificationType === "new_message" && conversationId) {
     return {
@@ -149,6 +150,20 @@ export const resolveNotificationDestination = (notification, role) => {
   if (notification.notificationType === "welcome") {
     return {
       path: isOwner ? "/owner/overview" : "/home",
+    };
+  }
+
+  if (
+    !isOwner &&
+    (notification.notificationType === "roommate_request" ||
+      notification.notificationType === "roommate_update")
+  ) {
+    return {
+      path: "/roommate",
+      state: {
+        tab: "requests",
+        requestId: roommateRequestId ? String(roommateRequestId) : undefined,
+      },
     };
   }
 

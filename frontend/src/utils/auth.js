@@ -91,7 +91,11 @@ export const clearSession = () => {
 };
 
 export const getDefaultRouteForRole = (role) =>
-  role === "landlord" ? "/owner/overview" : "/home";
+  role === "pending"
+    ? "/complete-onboarding"
+    : role === "landlord"
+      ? "/owner/overview"
+      : "/home";
 
 export const mapGenderToBackend = (value) => {
   if (!value) return value;

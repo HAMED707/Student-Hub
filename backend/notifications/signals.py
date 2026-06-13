@@ -40,7 +40,7 @@ def _broadcast(notification):
 
 @receiver(post_save, sender=Users)
 def welcome_notification(sender, instance, created, **kwargs):
-    if not created:
+    if not created or instance.role == "pending":
         return
     n = push_notification(
         recipient=instance,

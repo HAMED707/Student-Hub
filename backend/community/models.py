@@ -1,5 +1,5 @@
 """
-Community models: Group, GroupMembership, Post.
+Community models: Group, GroupMembership, Post, and live group chat state.
 
 Groups are student-created spaces (e.g. "Cairo University 2025", "Engineers Only").
 Any authenticated user can browse groups; students join/post.
@@ -105,3 +105,49 @@ class Post(models.Model):
 
     def __str__(self):
         return f"Post by {self.author} in {self.group} @ {self.created_at:%Y-%m-%d}"
+
+
+class GroupChatMessage(models.Model):
+    """A text message sent inside a community group chat."""
+
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="chat_messages",
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sent_group_messages",
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.sender} in {self.group}: {self.body[:40]}"
+
+
+class GroupChatReadState(models.Model):
+    """Tracks the latest read point for one user in one group chat."""
+
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name="chat_read_states",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="group_chat_read_states",
+    )
+    last_read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("group", "user")
+
+    def __str__(self):
+        return f"{self.user} read {self.group}"

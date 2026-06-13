@@ -25,6 +25,7 @@ from channels.security.websocket import AllowedHostsOriginValidator
 from messaging.middleware import JWTAuthMiddleware
 from messaging.routing      import websocket_urlpatterns as chat_patterns
 from notifications.routing  import websocket_urlpatterns as notification_patterns
+from community.routing import websocket_urlpatterns as community_patterns
 
 application = ProtocolTypeRouter({
     # All normal HTTP traffic goes through Django as usual
@@ -34,7 +35,7 @@ application = ProtocolTypeRouter({
     "websocket":# AllowedHostsOriginValidator(
         JWTAuthMiddleware(
             URLRouter(
-                chat_patterns + notification_patterns   
+                chat_patterns + notification_patterns + community_patterns
             )
         )
     #),
