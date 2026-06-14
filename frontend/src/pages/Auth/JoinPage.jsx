@@ -77,7 +77,7 @@ const JoinPage = () => {
                     </div>
 
                     <div className="mt-6">
-                        <GoogleSignInButton onCredential={handleGoogleSignup} text="signup_with" />
+                        <GoogleSignInButton onCredential={handleGoogleSignup} text="Sign up with Google" />
                         {error ? <p className="mt-2 text-xs text-red-500">{error}</p> : null}
                     </div>
                 </div>

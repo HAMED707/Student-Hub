@@ -1,9 +1,19 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { User, Eye, EyeOff, Lock, AlertCircle } from 'lucide-react';
+import { User, Eye, EyeOff, Lock, AlertCircle, Home, Users, ShieldCheck } from 'lucide-react';
 import GoogleSignInButton from "../../../assets/components/Auth/GoogleSignInButton.jsx";
 import { loginUser, loginWithGoogle } from "../../../api/accounts.js";
 import { getApiErrorMessage, getDefaultRouteForRole } from "../../../utils/auth.js";
+import logoSvg from '../../../assets/brand/icons/logo.svg';
+
+function FeaturePill({ icon, text }) {
+    return (
+        <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3">
+            <span className="text-white/70 shrink-0">{icon}</span>
+            <span className="text-white text-sm font-medium">{text}</span>
+        </div>
+    );
+}
 
 const Login = () => {
     const navigate = useNavigate();
@@ -198,37 +208,41 @@ const Login = () => {
 
                     <div className="relative flex py-6 items-center">
                         <div className="flex-grow border-t border-gray-200"></div>
-                        <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-semibold uppercase tracking-wider">Login with Others</span>
+                        <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-semibold uppercase tracking-wider">Or continue with</span>
                         <div className="flex-grow border-t border-gray-200"></div>
                     </div>
 
-                    <div className="flex flex-col gap-3">
-                        {/* Facebook Button */}
-                        <button className="flex items-center justify-center gap-3 w-full h-12 bg-[#1877F2] text-white font-semibold rounded-xl hover:bg-[#166fe5] transition shadow-sm hover:shadow-md active:scale-[0.98]">
-                            <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
-                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                            </svg>
-                            Log In with Facebook
-                        </button>
-                        
-                        <GoogleSignInButton onCredential={handleGoogleLogin} />
-                    </div>
+                    <GoogleSignInButton onCredential={handleGoogleLogin} text="Continue with Google" />
                 </div>
             </div>
 
-            {/* ================= اليمين: الصورة ================= */}
+            {/* ================= اليمين: اللوجو ================= */}
             <div className="hidden lg:flex w-[40%] bg-[#3245FF] relative items-center justify-center overflow-hidden">
-                <div className="absolute inset-0 opacity-20"><svg viewBox="0 0 500 500" className="w-full h-full"><path d="M0,100 C150,200 350,0 500,100 L500,500 L0,500 Z" fill="white" /></svg></div>
-                <div className="relative z-10 w-[80%] h-[75%]">
-                    <div className="absolute inset-0 bg-white/10 backdrop-blur-md rounded-[45px] border border-white/20"></div>
-                    <div className="absolute top-12 left-10 z-30 max-w-[280px]">
-                        <h2 className="text-2xl font-bold text-white mb-4 leading-relaxed">"Find your next room or roommate - <br/> Login to get started!"</h2>
+                {/* Background decorations */}
+                <div className="absolute inset-0 opacity-10">
+                    <svg viewBox="0 0 500 500" className="w-full h-full">
+                        <path d="M0,100 C150,200 350,0 500,100 L500,500 L0,500 Z" fill="white" />
+                    </svg>
+                </div>
+                <div className="absolute -top-32 -right-32 w-72 h-72 rounded-full bg-white/5 z-0" />
+                <div className="absolute -bottom-28 -left-28 w-56 h-56 rounded-full bg-white/5 z-0" />
+
+                {/* Content */}
+                <div className="relative z-10 flex flex-col items-center text-center px-10 w-full">
+                    <div className="bg-white rounded-2xl px-8 py-5 mb-6 shadow-xl w-[85%] max-w-sm flex items-center justify-center">
+                        <img src={logoSvg} alt="Student Hub" className="w-full" />
                     </div>
-                    <div className="relative w-full h-full overflow-hidden rounded-[45px] flex items-end justify-center">
-                        <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=1200&auto=format&fit=crop" alt="Login" className="w-[90%] h-[85%] object-cover object-top rounded-t-[30px]" />
-                    </div>
-                    <div className="absolute -left-8 bottom-24 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-2xl z-40">
-                        <div className="w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center text-white"><svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M13,10V3L4,14H11V21L20,10H13Z" /></svg></div>
+
+                    <div className="w-12 h-0.5 bg-white/30 mb-6" />
+
+                    <p className="text-white/80 text-sm leading-relaxed mb-8 max-w-[260px]">
+                        Your platform for finding the perfect room and the ideal roommate.
+                    </p>
+
+                    <div className="flex flex-col gap-3 w-full max-w-[280px]">
+                        <FeaturePill icon={<Home className="w-4 h-4" />} text="Browse verified listings" />
+                        <FeaturePill icon={<Users className="w-4 h-4" />} text="AI-powered roommate matching" />
+                        <FeaturePill icon={<ShieldCheck className="w-4 h-4" />} text="Verified students & landlords" />
                     </div>
                 </div>
             </div>

@@ -6,15 +6,15 @@ from __future__ import annotations
 
 from typing import Any
 
-import requests
 from django.conf import settings
 from django.contrib.auth import authenticate
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 
 from accounts.models import Users
 from bookings.models import Booking
 from properties.models import Property
 
-GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
 ACTIVE_BOOKING_STATUSES = ["pending_payment", "deposit_paid", "confirmed"]
 
 
@@ -58,26 +58,22 @@ def generate_unique_username(email: str = "", first_name: str = "", last_name: s
 
 def verify_google_id_token(id_token: str) -> dict[str, Any]:
     """
-    Verifies a Google ID token using Google's tokeninfo endpoint.
+    Verifies a Google ID token using the google-auth library (local JWT verification).
     """
-    response = requests.get(
-        GOOGLE_TOKENINFO_URL,
-        params={"id_token": id_token},
-        timeout=10,
-    )
-    if not response.ok:
+    client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
+    if not client_id:
+        raise ValueError("GOOGLE_OAUTH_CLIENT_ID is not configured.")
+
+    try:
+        payload = google_id_token.verify_oauth2_token(
+            id_token,
+            google_requests.Request(),
+            client_id,
+        )
+    except Exception:
         raise ValueError("Unable to verify Google token.")
 
-    payload = response.json()
-    issuer = payload.get("iss")
-    if issuer not in {"accounts.google.com", "https://accounts.google.com"}:
-        raise ValueError("Invalid Google token issuer.")
-
-    expected_audience = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
-    if expected_audience and payload.get("aud") != expected_audience:
-        raise ValueError("Google token audience mismatch.")
-
-    if str(payload.get("email_verified", "")).lower() != "true":
+    if not payload.get("email_verified"):
         raise ValueError("Google account email is not verified.")
 
     if not payload.get("sub"):
