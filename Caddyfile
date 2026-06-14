@@ -1,0 +1,34 @@
+{$DOMAIN} {
+    # WebSocket connections — must be listed before the /api catch-all
+    handle /ws/* {
+        reverse_proxy backend:8000 {
+            header_up Connection {>Connection}
+            header_up Upgrade {>Upgrade}
+        }
+    }
+
+    # Django REST API and admin
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+    handle /admin/* {
+        reverse_proxy backend:8000
+    }
+
+    # Serve collectstatic output directly (no Python overhead)
+    handle /static/* {
+        root * /srv
+        file_server
+    }
+
+    # Serve user-uploaded media directly
+    handle /media/* {
+        root * /srv
+        file_server
+    }
+
+    # Everything else → React SPA
+    handle {
+        reverse_proxy frontend:80
+    }
+}

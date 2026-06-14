@@ -63,6 +63,9 @@ dump.rdb
 .env.*.local
 *.env
 
+# Local Docker overrides (port remapping for rootless Podman etc.)
+docker-compose.override.yml
+
 # Sentry
 .sentryclirc
 
