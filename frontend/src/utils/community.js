@@ -126,10 +126,15 @@ export const mapCommunityPost = (raw = {}) => {
   return {
     id: String(raw.id || ""),
     groupId: String(raw.group || ""),
+    authorId: String(author.id || ""),
     authorName,
     authorAvatar: buildAvatar(authorName, author.profile_picture),
+    title: raw.title || "",
     content: raw.content || "",
     image: raw.image ? withApiUrl(raw.image) : "",
+    voteScore: Number(raw.vote_score ?? 0),
+    userVote: Number(raw.user_vote ?? 0),
+    commentCount: Number(raw.comment_count ?? 0),
     createdAt: raw.created_at || null,
     createdAtLabel: formatCommunityRelative(raw.created_at),
   };

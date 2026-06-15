@@ -4,15 +4,18 @@ Community API views.
 
 from __future__ import annotations
 
-from django.db.models import Exists, OuterRef, Prefetch
+from django.db.models import Count, Exists, IntegerField, OuterRef, Prefetch, Subquery, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from community.models import Group, GroupChatMessage, GroupChatReadState, GroupMembership, Post
+from community.models import Comment, Group, GroupChatMessage, GroupChatReadState, GroupMembership, Post, PostVote
 from api.community_api.serializers import (
+    CommentCreateSerializer,
+    CommentSerializer,
     GroupChatMessageCreateSerializer,
     GroupChatMessageSerializer,
     GroupChatSummarySerializer,
@@ -171,7 +174,23 @@ class PostListView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        posts = Post.objects.filter(group=group).select_related("author")
+        posts = (
+            Post.objects.filter(group=group)
+            .select_related("author")
+            .annotate(
+                vote_score=Coalesce(Sum("votes__value"), 0),
+                user_vote=Coalesce(
+                    Subquery(
+                        PostVote.objects.filter(post=OuterRef("pk"), user=request.user)
+                        .values("value")[:1],
+                        output_field=IntegerField(),
+                    ),
+                    0,
+                ),
+                comment_count=Count("comments"),
+            )
+            .order_by("-vote_score", "-created_at")
+        )
         serializer = PostSerializer(posts, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -271,3 +290,76 @@ class GroupChatReadView(APIView):
         read_state.save(update_fields=["last_read_at"])
 
         return Response({"marked_read": marked_read}, status=status.HTTP_200_OK)
+
+
+class PostVoteView(APIView):
+    """POST with {"value": 1 or -1}. Re-voting same value toggles (removes) the vote."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            return Response({"error": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_member(request.user, post.group):
+            return Response({"error": "Join the group to vote."}, status=status.HTTP_403_FORBIDDEN)
+
+        value = request.data.get("value")
+        if value not in (1, -1, "1", "-1"):
+            return Response({"error": "value must be 1 or -1."}, status=status.HTTP_400_BAD_REQUEST)
+        value = int(value)
+
+        existing = PostVote.objects.filter(post=post, user=request.user).first()
+        if existing:
+            if existing.value == value:
+                existing.delete()
+                user_vote = 0
+            else:
+                existing.value = value
+                existing.save(update_fields=["value"])
+                user_vote = value
+        else:
+            PostVote.objects.create(post=post, user=request.user, value=value)
+            user_vote = value
+
+        score = PostVote.objects.filter(post=post).aggregate(total=Coalesce(Sum("value"), 0))["total"]
+        return Response({"score": score, "user_vote": user_vote}, status=status.HTTP_200_OK)
+
+
+class PostCommentView(APIView):
+    """GET: list comments for a post. POST: create a comment."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id):
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            return Response({"error": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_member(request.user, post.group):
+            return Response({"error": "Join the group to view comments."}, status=status.HTTP_403_FORBIDDEN)
+
+        comments = post.comments.select_related("author")
+        return Response(CommentSerializer(comments, many=True, context={"request": request}).data)
+
+    def post(self, request, post_id):
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            return Response({"error": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not is_member(request.user, post.group):
+            return Response({"error": "Join the group to comment."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = CommentCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        comment = serializer.save(post=post, author=request.user)
+        return Response(
+            CommentSerializer(comment, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )

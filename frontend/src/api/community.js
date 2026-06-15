@@ -14,9 +14,10 @@ export const sendGroupMessage = (groupId, body) =>
     method: "POST",
     body: JSON.stringify({ body }),
   });
-export const createPost = ({ group, content, image }) => {
+export const createPost = ({ group, title, content, image }) => {
   const body = new FormData();
   body.append("group", group);
+  if (title) body.append("title", title);
   body.append("content", content);
   if (image) body.append("image", image);
 
@@ -34,3 +35,15 @@ export const joinGroup = (groupId) =>
   apiJson(`/api/community/groups/${groupId}/join/`, { method: "POST" });
 export const leaveGroup = (groupId) =>
   apiJson(`/api/community/groups/${groupId}/leave/`, { method: "POST" });
+export const votePost = (postId, value) =>
+  apiJson(`/api/community/posts/${postId}/vote/`, {
+    method: "POST",
+    body: JSON.stringify({ value }),
+  });
+export const fetchComments = (postId) =>
+  apiJson(`/api/community/posts/${postId}/comments/`);
+export const createComment = (postId, text) =>
+  apiJson(`/api/community/posts/${postId}/comments/`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });

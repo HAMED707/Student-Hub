@@ -7,7 +7,7 @@ from __future__ import annotations
 from django.db.models import Q
 from rest_framework import serializers
 
-from community.models import Group, GroupChatMessage, GroupChatReadState, GroupMembership, Post
+from community.models import Comment, Group, GroupChatMessage, GroupChatReadState, GroupMembership, Post, PostVote
 
 
 class _AuthorSerializer(serializers.Serializer):
@@ -191,18 +191,47 @@ class GroupCreateSerializer(serializers.ModelSerializer):
         return group
 
 
-class PostSerializer(serializers.ModelSerializer):
+class CommentSerializer(serializers.ModelSerializer):
     author = _AuthorSerializer(read_only=True)
 
     class Meta:
+        model = Comment
+        fields = ["id", "author", "text", "created_at"]
+
+
+class CommentCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = ["text"]
+
+    def validate_text(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Comment text cannot be empty.")
+        return value
+
+    def create(self, validated_data):
+        return Comment.objects.create(**validated_data)
+
+
+class PostSerializer(serializers.ModelSerializer):
+    author        = _AuthorSerializer(read_only=True)
+    vote_score    = serializers.IntegerField(read_only=True, default=0)
+    user_vote     = serializers.IntegerField(read_only=True, default=0)
+    comment_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
         model = Post
-        fields = ["id", "author", "group", "content", "image", "created_at", "updated_at"]
+        fields = [
+            "id", "author", "group", "title", "content", "image",
+            "vote_score", "user_vote", "comment_count",
+            "created_at", "updated_at",
+        ]
 
 
 class PostCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
-        fields = ["content", "image"]
+        fields = ["title", "content", "image"]
 
     def validate_content(self, value):
         if not value.strip():

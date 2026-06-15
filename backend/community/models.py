@@ -94,6 +94,7 @@ class Post(models.Model):
         on_delete=models.CASCADE,
         related_name="posts",
     )
+    title   = models.CharField(max_length=200, blank=True, default="")
     content = models.TextField()
     image   = models.ImageField(upload_to="post_images/", null=True, blank=True)
 
@@ -105,6 +106,48 @@ class Post(models.Model):
 
     def __str__(self):
         return f"Post by {self.author} in {self.group} @ {self.created_at:%Y-%m-%d}"
+
+
+class PostVote(models.Model):
+    """Up/down vote cast by one user on one post. Toggle: re-voting same value removes the vote."""
+
+    UP   = 1
+    DOWN = -1
+    VALUE_CHOICES = [(UP, "Upvote"), (DOWN, "Downvote")]
+
+    post  = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="votes")
+    user  = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="post_votes",
+    )
+    value = models.SmallIntegerField(choices=VALUE_CHOICES)
+
+    class Meta:
+        unique_together = ("post", "user")
+
+    def __str__(self):
+        label = "▲" if self.value == self.UP else "▼"
+        return f"{label} by {self.user} on post #{self.post_id}"
+
+
+class Comment(models.Model):
+    """A top-level comment on a Post."""
+
+    post   = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="community_comments",
+    )
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Comment by {self.author} on post #{self.post_id}"
 
 
 class GroupChatMessage(models.Model):

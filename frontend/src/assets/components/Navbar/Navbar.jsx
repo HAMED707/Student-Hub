@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, CalendarCheck, Heart, LogOut, Search, Settings, User } from "lucide-react";
+import { Bell, CalendarCheck, Heart, LogOut, MessageCircle, Search, Settings, User } from "lucide-react";
 import { withApiUrl } from "../../../api/client.js";
 import { useNotifications } from "../../../context/notificationsContext.js";
 import { clearSession } from "../../../utils/auth.js";
@@ -9,8 +9,55 @@ import {
   resolveNotificationDestination,
 } from "../../../utils/notifications.js";
 import logoFull from "../../brand/icons/logo.svg";
+import { useGlobalMessaging } from "../../../context/messagingContext.js";
 
 const cx = (...classes) => classes.filter(Boolean).join(" ");
+
+function ConversationsFlyout({ conversations, onOpenChat }) {
+  const preview = conversations.slice(0, 8);
+  return (
+    <div className="absolute right-0 top-full z-[100] mt-4 w-80 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)]">
+      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/80 px-4 py-3">
+        <h3 className="font-bold text-gray-800">Messages</h3>
+        <Link to="/messages" className="text-xs text-blue-600 hover:underline">
+          See all
+        </Link>
+      </div>
+      <div className="max-h-72 overflow-y-auto">
+        {preview.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-gray-500">No conversations yet.</div>
+        ) : (
+          preview.map((conv) => (
+            <button
+              key={conv.id}
+              type="button"
+              onClick={() => onOpenChat(conv)}
+              className="flex w-full items-center gap-3 border-b border-gray-50 px-4 py-3 text-left transition hover:bg-gray-50"
+            >
+              <img
+                src={conv.avatar}
+                alt={conv.name}
+                className="h-10 w-10 shrink-0 rounded-full object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between">
+                  <span className="truncate text-sm font-bold text-gray-900">{conv.name}</span>
+                  <span className="ml-2 shrink-0 text-[10px] text-gray-400">{conv.lastTime}</span>
+                </div>
+                <p className="truncate text-xs text-gray-500">{conv.lastMessage}</p>
+              </div>
+              {conv.unreadCount > 0 && (
+                <span className="shrink-0 rounded-full bg-[#155BC2] px-2 py-0.5 text-[10px] font-bold text-white">
+                  {conv.unreadCount}
+                </span>
+              )}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Navbar() {
   const location = useLocation();
@@ -20,6 +67,7 @@ export default function Navbar() {
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isInboxOpen, setIsInboxOpen] = useState(false);
 
   const {
     user,
@@ -30,6 +78,8 @@ export default function Navbar() {
     markNotificationAsRead,
     markAllNotificationsAsRead,
   } = useNotifications();
+
+  const { totalUnread, conversations, openChat } = useGlobalMessaging();
 
   const currentUser = useMemo(() => {
     const displayName = user?.fullName || user?.name || user?.username || "Student";
@@ -61,6 +111,7 @@ export default function Navbar() {
   const closeMenus = () => {
     setIsDropdownOpen(false);
     setIsNotificationsOpen(false);
+    setIsInboxOpen(false);
   };
 
   useEffect(() => {
@@ -86,6 +137,14 @@ export default function Navbar() {
     closeMenus();
     if (!notification.read) {
       await markNotificationAsRead(notification.id);
+    }
+
+    if (
+      notification.notificationType === "new_message" &&
+      notification.data?.conversation_id
+    ) {
+      openChat({ conversationId: notification.data.conversation_id });
+      return;
     }
 
     const destination = resolveNotificationDestination(notification, role);
@@ -163,6 +222,7 @@ export default function Navbar() {
                 event.stopPropagation();
                 setIsNotificationsOpen((open) => !open);
                 setIsDropdownOpen(false);
+                setIsInboxOpen(false);
               }}
               className="group relative flex cursor-pointer items-center"
             >
@@ -259,8 +319,39 @@ export default function Navbar() {
             <button
               onClick={(event) => {
                 event.stopPropagation();
+                setIsInboxOpen((open) => !open);
+                setIsNotificationsOpen(false);
+                setIsDropdownOpen(false);
+              }}
+              className="group relative flex cursor-pointer items-center"
+            >
+              <MessageCircle
+                className={cx(
+                  "h-6 w-6 transition",
+                  isInboxOpen
+                    ? "text-blue-600"
+                    : "text-gray-700 group-hover:text-blue-600",
+                )}
+              />
+              {totalUnread > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full border border-white bg-[#155BC2] px-1 text-[10px] font-bold text-white">
+                  {totalUnread > 99 ? "99+" : totalUnread}
+                </span>
+              )}
+            </button>
+
+            {isInboxOpen && (
+              <ConversationsFlyout conversations={conversations} onOpenChat={openChat} />
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
                 setIsDropdownOpen((open) => !open);
                 setIsNotificationsOpen(false);
+                setIsInboxOpen(false);
               }}
               className="flex cursor-pointer items-center gap-3 rounded-lg border-l border-gray-200 p-1 pl-2 transition hover:bg-gray-50"
             >

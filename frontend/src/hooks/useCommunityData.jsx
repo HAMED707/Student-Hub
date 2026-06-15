@@ -464,9 +464,10 @@ export function CommunityProvider({ children }) {
   );
 
   const createPost = useCallback(
-    async ({ groupId, content, image }) => {
+    async ({ groupId, title, content, image }) => {
       const data = await createPostRequest({
         group: groupId,
+        title,
         content,
         image,
       });

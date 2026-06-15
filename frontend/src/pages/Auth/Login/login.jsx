@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { User, Eye, EyeOff, Lock, AlertCircle, Home, Users, ShieldCheck } from 'lucide-react';
+import { User, Eye, EyeOff, Lock, AlertCircle, Home, Users, ShieldCheck, GraduationCap, Building2 } from 'lucide-react';
 import GoogleSignInButton from "../../../assets/components/Auth/GoogleSignInButton.jsx";
 import { loginUser, loginWithGoogle } from "../../../api/accounts.js";
 import { getApiErrorMessage, getDefaultRouteForRole } from "../../../utils/auth.js";
@@ -19,6 +19,7 @@ const Login = () => {
     const navigate = useNavigate();
     const location = useLocation();
     
+    const [selectedRole, setSelectedRole] = useState(null);
     const [formData, setFormData] = useState({ username: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
     const [errors, setErrors] = useState({});
@@ -39,14 +40,16 @@ const Login = () => {
 
     const handleLogin = async (e) => {
         e.preventDefault();
-        
+
         let newErrors = {};
         const identifier = formData.username.trim();
 
+        if (!selectedRole) {
+            newErrors.role = "Please select your account type.";
+        }
         if (!identifier) {
             newErrors.username = "Username or email is required";
         }
-
         if (!formData.password) {
             newErrors.password = "Password is required";
         }
@@ -63,10 +66,17 @@ const Login = () => {
                 username: identifier,
                 password: formData.password,
             });
+
+            const actualRole = data.user?.role;
+            if (actualRole && actualRole !== 'pending' && actualRole !== selectedRole) {
+                const correct = actualRole === 'student' ? 'Student' : 'Landlord';
+                setFormError(`This account is registered as a ${correct}. Please select ${correct} and try again.`);
+                return;
+            }
+
             const destination =
                 location.state?.from?.pathname ||
-                getDefaultRouteForRole(data.user?.role);
-
+                getDefaultRouteForRole(actualRole);
             navigate(destination, { replace: true });
         } catch (error) {
             setFormError(getApiErrorMessage(error, "Login failed"));
@@ -95,10 +105,48 @@ const Login = () => {
             <div className="w-full lg:w-[60%] flex flex-col justify-center px-12 md:px-24 relative h-full">
                 
                 <div className="w-full max-w-md mx-auto">
-                    <div className="mb-10 text-center lg:text-left">
+                    <div className="mb-8 text-center lg:text-left">
                         <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Login</h1>
-                        <p className="text-gray-500 text-sm">How can I find my ideal room or roommate?</p>
+                        <p className="text-gray-500 text-sm">
+                            {selectedRole === 'student'
+                                ? 'Find your perfect room and ideal roommate.'
+                                : selectedRole === 'landlord'
+                                ? 'Manage your properties and connect with students.'
+                                : 'Select your account type to continue.'}
+                        </p>
                     </div>
+
+                    {/* Role Selector */}
+                    <div className="flex gap-3 mb-2">
+                        {[
+                            { role: 'student', label: 'Student', Icon: GraduationCap },
+                            { role: 'landlord', label: 'Landlord', Icon: Building2 },
+                        ].map(({ role, label, Icon }) => (
+                            <button
+                                key={role}
+                                type="button"
+                                onClick={() => {
+                                    setSelectedRole(role);
+                                    setErrors((prev) => ({ ...prev, role: '' }));
+                                    setFormError('');
+                                }}
+                                className={`flex-1 h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all
+                                    ${selectedRole === role
+                                        ? 'border-[#1A56DB] bg-[#EEF4FF] text-[#1A56DB]'
+                                        : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                                    }`}
+                            >
+                                <Icon className="w-5 h-5" />
+                                <span className="text-xs font-semibold">{label}</span>
+                            </button>
+                        ))}
+                    </div>
+                    {errors.role && (
+                        <div className="flex items-center gap-1 text-red-500 text-xs mb-1 ml-1">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>{errors.role}</span>
+                        </div>
+                    )}
 
                     <form onSubmit={handleLogin} className="flex flex-col gap-5">
                         {formError && (

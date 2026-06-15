@@ -13,6 +13,8 @@ from api.community_api.views import (
     GroupChatReadView,
     PostListView,
     PostCreateView,
+    PostVoteView,
+    PostCommentView,
 )
 
 urlpatterns = [
@@ -28,6 +30,8 @@ urlpatterns = [
     path("groups/<int:group_id>/messages/read/", GroupChatReadView.as_view(), name="community-group-messages-read"),
 
     # ── Posts ─────────────────────────────────────────────────────────────────
-    path("posts/",               PostListView.as_view(),    name="community-post-list"),
-    path("posts/create/",        PostCreateView.as_view(),  name="community-post-create"),
+    path("posts/",                        PostListView.as_view(),    name="community-post-list"),
+    path("posts/create/",                 PostCreateView.as_view(),  name="community-post-create"),
+    path("posts/<int:post_id>/vote/",     PostVoteView.as_view(),    name="community-post-vote"),
+    path("posts/<int:post_id>/comments/", PostCommentView.as_view(), name="community-post-comments"),
 ]

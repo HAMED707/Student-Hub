@@ -60,6 +60,8 @@ import Footer from "./assets/components/Footer/Footer.jsx";
 import logo from "./assets/brand/icons/logo.svg";
 import { CommunityProvider } from "./hooks/useCommunityData.jsx";
 import { NotificationsProvider } from "./hooks/useNotifications.jsx";
+import { MessagingProvider } from "./hooks/useGlobalMessaging.jsx";
+import ChatDock from "./assets/components/ChatDock/ChatDock.jsx";
 
 import {
   LayoutDashboard,
@@ -240,6 +242,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       <NotificationsProvider>
+        <MessagingProvider>
         <CommunityProvider>
         <Routes>
           <Route index element={<Navigate to="/home" replace />} />
@@ -321,6 +324,8 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
         </CommunityProvider>
+        <ChatDock />
+        </MessagingProvider>
       </NotificationsProvider>
     </div>
   );
