@@ -4,7 +4,7 @@ import { MessagingContext } from "../context/messagingContext.js";
 import { useNotifications } from "../context/notificationsContext.js";
 import { fetchConversations } from "../api/messaging.js";
 import { getStoredUser } from "../utils/auth.js";
-import { mapConversation } from "../utils/messaging.js";
+import { createDraftConversation, mapConversation } from "../utils/messaging.js";
 import { playNotificationSound } from "../utils/sound.js";
 
 export function MessagingProvider({ children }) {
@@ -72,9 +72,24 @@ export function MessagingProvider({ children }) {
         stateOrConversation?.id ||
         null;
 
-      // Drafts (no real conversation yet) go to full-page view
+      // Draft on desktop → inject into conversations list + open popup
       if (!id || String(id).startsWith("draft-")) {
-        navigate("/messages", { state: stateOrConversation });
+        const draftConv = createDraftConversation(stateOrConversation);
+        if (!draftConv) {
+          navigate("/messages", { state: stateOrConversation });
+          return;
+        }
+        setConversations((prev) => {
+          const exists = prev.some((c) => String(c.receiverId) === String(draftConv.receiverId) && c.isDraft);
+          return exists ? prev : [draftConv, ...prev];
+        });
+        const draftId = draftConv.id;
+        setOpenWindows((prev) => {
+          const existing = prev.find((w) => w.conversationId === draftId);
+          if (existing) return prev.map((w) => w.conversationId === draftId ? { ...w, minimized: false } : w);
+          const capped = prev.length >= 3 ? prev.slice(1) : prev;
+          return [...capped, { conversationId: draftId, minimized: false }];
+        });
         return;
       }
 
@@ -93,6 +108,17 @@ export function MessagingProvider({ children }) {
     },
     [navigate],
   );
+
+  const upgradeWindow = useCallback((draftId, realConversationId) => {
+    setOpenWindows((prev) =>
+      prev.map((w) =>
+        w.conversationId === String(draftId)
+          ? { ...w, conversationId: String(realConversationId) }
+          : w,
+      ),
+    );
+    setConversations((prev) => prev.filter((c) => c.id !== String(draftId)));
+  }, []);
 
   const closeChat = useCallback((conversationId) => {
     setOpenWindows((prev) => prev.filter((w) => w.conversationId !== String(conversationId)));
@@ -126,6 +152,7 @@ export function MessagingProvider({ children }) {
       openChat,
       closeChat,
       minimizeChat,
+      upgradeWindow,
       refreshConversations,
       updateConversationPreview,
     }),
@@ -137,6 +164,7 @@ export function MessagingProvider({ children }) {
       openChat,
       closeChat,
       minimizeChat,
+      upgradeWindow,
       refreshConversations,
       updateConversationPreview,
     ],

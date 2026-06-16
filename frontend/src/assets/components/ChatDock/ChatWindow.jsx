@@ -4,7 +4,8 @@ import { withApiUrl } from "../../../api/client.js";
 import { useGlobalMessaging } from "../../../context/messagingContext.js";
 import { useChatWindow } from "../../../hooks/useChatWindow.js";
 import { getStoredUser } from "../../../utils/auth.js";
-import { markConversationRead } from "../../../api/messaging.js";
+import { markConversationRead, startConversation } from "../../../api/messaging.js";
+import { mapConversation } from "../../../utils/messaging.js";
 
 const emojis = ["😀", "😂", "😍", "👍", "🔥", "❤️", "🙏", "🎓", "🏠", "✅"];
 
@@ -34,8 +35,9 @@ function MessageStatus({ status }) {
 }
 
 export function ChatWindow({ conversationId, minimized, onMinimize, onClose, index }) {
-  const { conversations, currentUserId, updateConversationPreview } = useGlobalMessaging();
+  const { conversations, currentUserId, upgradeWindow, refreshConversations, updateConversationPreview } = useGlobalMessaging();
   const storedUser = getStoredUser();
+  const isDraft = String(conversationId).startsWith("draft-");
 
   const myAvatar = storedUser?.profile_picture
     ? withApiUrl(storedUser.profile_picture)
@@ -78,6 +80,21 @@ export function ChatWindow({ conversationId, minimized, onMinimize, onClose, ind
     if (!text) return;
     setInputText("");
     setIsEmojiOpen(false);
+
+    if (isDraft) {
+      const draft = conversations.find((c) => c.id === String(conversationId));
+      if (!draft) return;
+      try {
+        const created = await startConversation({ receiver_id: draft.receiverId, message: text });
+        const mapped = mapConversation(created, currentUserId);
+        await refreshConversations();
+        upgradeWindow(conversationId, mapped.id);
+      } catch {
+        // best-effort
+      }
+      return;
+    }
+
     try {
       await sendMessage(text);
     } catch {
@@ -137,10 +154,8 @@ export function ChatWindow({ conversationId, minimized, onMinimize, onClose, ind
           <div className="min-w-0">
             <p className="truncate text-sm font-bold leading-tight text-gray-900">{displayName}</p>
             <span className="flex items-center gap-1 text-[10px] text-gray-400">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${connectionDot[connectionState] || connectionDot.idle}`}
-              />
-              {connectionLabel[connectionState] || connectionLabel.idle}
+              <span className={`h-1.5 w-1.5 rounded-full ${isDraft ? "bg-emerald-500" : (connectionDot[connectionState] || connectionDot.idle)}`} />
+              {isDraft ? "Send first message" : (connectionLabel[connectionState] || connectionLabel.idle)}
             </span>
           </div>
         </div>

@@ -24,15 +24,22 @@ class Booking(models.Model):
         ("expired", "Expired"),
     ]
 
+    BOOKING_UNIT_CHOICES = [
+        ("whole", "Whole Property"),
+        ("room", "By Room"),
+        ("bed", "By Bed"),
+    ]
+
     # ────Parties──────────────────────────────────────────────────────────────────────────────────────────────────────────
     tenant     = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="bookings" , limit_choices_to={ "role" : "student" })
     property   = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="bookings")
 
     # ────Booking Details─────────────────────────────────────────────────────────────────────────────────────────────────
-    status          = models.CharField(max_length=15 ,choices=STATUS_CHOICES ,default='pending_payment')
+    status          = models.CharField(max_length=15, choices=STATUS_CHOICES, default="pending_payment")
+    booking_unit    = models.CharField(max_length=10, choices=BOOKING_UNIT_CHOICES, default="whole")
     move_in_date    = models.DateField()
     duration_months = models.PositiveIntegerField()
-    message         = models.TextField(null=True , blank=True)
+    message         = models.TextField(null=True, blank=True)
 
     # ── Financial Snapshot ───────────────────────────────────
     # Copied from property.price at booking time — never changes even if landlord later edits the listing price

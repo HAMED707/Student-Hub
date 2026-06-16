@@ -6,6 +6,12 @@ from django.contrib import admin
 from properties.models import Property, PropertyImage
 
 
+class PropertyAdminMedia:
+    """Auto-fills room_price / bed_price when price / num_rooms / num_beds change."""
+    class Media:
+        js = ("admin/js/property_autocalc.js",)
+
+
 class PropertyImageInline(admin.TabularInline):
     """
     Inline editor for images directly inside the Property admin page.
@@ -18,7 +24,7 @@ class PropertyImageInline(admin.TabularInline):
 
 
 @admin.register(Property)
-class PropertyAdmin(admin.ModelAdmin):
+class PropertyAdmin(PropertyAdminMedia, admin.ModelAdmin):
     """
     Main listing admin. is_featured is editable from the list view directly
     so admin can feature/unfeature listings without opening each one.
@@ -26,8 +32,8 @@ class PropertyAdmin(admin.ModelAdmin):
     inlines = [PropertyImageInline]
 
     list_display = [
-        "title", "landlord", "property_type", "price",
-        "city", "status", "is_featured", "view_count", "created_at",
+        "title", "landlord", "property_type", "price", "room_price", "bed_price",
+        "city", "status", "available_from", "is_featured", "view_count", "created_at",
     ]
     list_filter = ["property_type", "status", "is_featured", "city", "gender_preference"]
     search_fields = ["title", "landlord__username", "city", "district", "nearby_university"]
@@ -44,7 +50,7 @@ class PropertyAdmin(admin.ModelAdmin):
             "fields": ("title", "description", "property_type"),
         }),
         ("Pricing & Stay", {
-            "fields": ("price", "min_stay_months", "max_stay_months"),
+            "fields": ("price", "room_price", "bed_price", "available_from", "min_stay_months", "max_stay_months"),
         }),
         ("Location", {
             "fields": ("city", "district", "address", "latitude", "longitude"),
@@ -55,11 +61,11 @@ class PropertyAdmin(admin.ModelAdmin):
         ("Room Details", {
             "fields": (
                 "num_rooms", "num_beds", "num_bathrooms",
-                "num_roommates", "floor", "area_sqm", "gender_preference",
+                "floor", "area_sqm", "gender_preference",
             ),
         }),
         ("Amenities", {
-            "fields": ("amenities",),
+            "fields": ("amenities", "bills_included"),
         }),
         ("Status & Visibility", {
             "fields": ("status", "is_featured"),

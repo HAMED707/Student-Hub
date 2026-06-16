@@ -67,8 +67,19 @@ export async function apiRequest(path, options = {}) {
         headers: retryHeaders,
         _retry: true,
       });
-    } else if (token || readRefreshToken()) {
-      clearSession();
+    } else {
+      if (token || readRefreshToken()) clearSession();
+      // Retry without auth — lets IsAuthenticatedOrReadOnly endpoints
+      // still serve public data after token expiry
+      const anonHeaders = new Headers(options.headers || {});
+      if (!anonHeaders.has("Content-Type") && !(options.body instanceof FormData)) {
+        anonHeaders.set("Content-Type", "application/json");
+      }
+      response = await fetch(toAbsoluteUrl(path), {
+        ...options,
+        headers: anonHeaders,
+        _retry: true,
+      });
     }
   }
 

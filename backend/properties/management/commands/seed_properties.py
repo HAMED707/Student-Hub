@@ -75,11 +75,14 @@ class Command(BaseCommand):
     # ── Universities mapped to their natural city ─────────────────────────────
     UNIVERSITIES = {
         "Cairo":      ["Cairo University", "Ain Shams University", "Al-Azhar University",
-                       "Helwan University", "American University in Cairo (AUC)"],
-        "Giza":       ["Cairo University", "6th October University"],
-        "Alexandria": ["Alexandria University"],
-        "New Cairo":  ["Future University", "Modern Science and Arts University (MSA)"],
-        "Mansoura":   ["Mansoura University"],
+                       "Helwan University", "Misr International University"],
+        "Giza":       ["October 6 University", "MUST University", "MSA University",
+                       "The Egyptian E-learning University (EELU)"],
+        "Alexandria": ["Alexandria University", "Arab Academy for Science & Technology",
+                       "Pharos University"],
+        "New Cairo":  ["American University in Cairo (AUC)", "German University in Cairo (GUC)",
+                       "The British University in Egypt (BUE)", "Future University in Egypt"],
+        "Mansoura":   ["Mansoura University", "New Mansoura University"],
         "Ismailia":   ["Suez Canal University"],
     }
 
@@ -134,20 +137,17 @@ class Command(BaseCommand):
         ],
     }
 
-    AMENITIES_POOL = [
-        "WiFi", "AC", "Kitchen", "Furnished", "Elevator", "Study Room",
-        "Parking", "Supermarket Nearby", "Water Included", "Electricity Included",
-        "Gas Included", "Security Guard", "CCTV", "Gym", "Washing Machine",
-        "Dishwasher", "Balcony", "Garden", "Rooftop Access", "Cleaning Service",
-    ]
+    FACILITY_OPTIONS = ["WiFi", "AC", "Kitchen", "Furnished", "Elevator", "Washing Machine"]
 
-    # Realistic amenity bundles per property type
+    # Realistic facility bundles per property type (subset of FACILITY_OPTIONS)
     AMENITY_BUNDLES = {
-        "studio":    ["WiFi", "AC", "Furnished", "Kitchen", "Elevator", "Security Guard"],
-        "apartment": ["WiFi", "AC", "Kitchen", "Furnished", "Elevator", "Parking", "Washing Machine"],
-        "room":      ["WiFi", "AC", "Furnished", "Study Room", "Security Guard"],
-        "shared":    ["WiFi", "Kitchen", "Furnished", "Washing Machine", "CCTV"],
+        "studio":    ["WiFi", "AC", "Furnished", "Kitchen"],
+        "apartment": ["WiFi", "AC", "Kitchen", "Furnished", "Elevator", "Washing Machine"],
+        "room":      ["WiFi", "AC", "Furnished"],
+        "shared":    ["WiFi", "Kitchen", "Furnished", "Washing Machine"],
     }
+
+    BILL_OPTIONS = ["electricity", "water", "gas"]
 
     DISTANCE_OPTIONS = ["5 mins", "7 mins", "10 mins", "12 mins", "15 mins", "20 mins", "25 mins"]
 
@@ -257,16 +257,42 @@ class Command(BaseCommand):
             min_stay = random.randint(1, 6)
             max_stay = random.choice([None, random.randint(min_stay + 1, 18)])
 
-            # Start from the type bundle and randomly add extras
+            # Start from the type bundle and randomly drop some extras for variety
             base_amenities = list(self.AMENITY_BUNDLES[ptype])
-            extras = [a for a in self.AMENITIES_POOL if a not in base_amenities]
-            extra_count = random.randint(0, 4)
-            amenities = base_amenities + random.sample(extras, min(extra_count, len(extras)))
+            extras = [a for a in self.FACILITY_OPTIONS if a not in base_amenities]
+            amenities = base_amenities + random.sample(extras, min(random.randint(0, 2), len(extras)))
 
             num_rooms = {"studio": 1, "apartment": random.randint(2, 4),
                          "room": 1, "shared": 1}[ptype]
             num_beds  = {"studio": 1, "apartment": num_rooms,
                          "room": 1, "shared": random.randint(2, 3)}[ptype]
+
+            # ~60% of apartments offer by-room pricing, ~50% offer by-bed
+            # ~40% of studios offer by-bed pricing
+            offer_by_room = ptype == "apartment" and random.random() < 0.60
+            offer_by_bed  = (
+                (ptype == "apartment" and random.random() < 0.50) or
+                (ptype == "studio"    and random.random() < 0.40)
+            )
+            room_price = (Decimal(str(round(int(price) // max(1, num_rooms) // 50 * 50)))
+                          if offer_by_room else None)
+            bed_price  = (Decimal(str(round(int(price) // max(1, num_beds)  // 50 * 50)))
+                          if offer_by_bed  else None)
+
+            from datetime import date, timedelta
+            available_from_choices = [None, None, None,  # 3/5 chance = available now
+                                      date.today() + timedelta(days=random.randint(7, 60)),
+                                      date.today() + timedelta(days=random.randint(1, 6))]
+            available_from = random.choice(available_from_choices)
+
+            transport_types = random.sample(
+                ["walk", "metro", "bus"],
+                k=random.randint(1, 2),
+            )
+            bills_included = random.sample(
+                self.BILL_OPTIONS,
+                k=random.randint(0, len(self.BILL_OPTIONS)),
+            )
 
             prop = Property.objects.create(
                 landlord       = landlord,
@@ -281,11 +307,10 @@ class Command(BaseCommand):
                 longitude      = Decimal(str(round(random.uniform(30.7, 32.1), 6))),
                 nearby_university      = uni,
                 distance_to_university = random.choice(self.DISTANCE_OPTIONS),
-                transport_type         = random.choice(["walk", "metro", "transport"]),
+                transport_type         = transport_types,
                 num_rooms      = num_rooms,
                 num_beds       = num_beds,
                 num_bathrooms  = random.randint(1, 3),
-                num_roommates  = random.randint(0, 3) if ptype in ("apartment", "shared") else 0,
                 floor          = random.choice([None, random.randint(0, 12)]),
                 area_sqm       = {"studio": random.randint(30, 60),
                                   "apartment": random.randint(80, 200),
@@ -293,6 +318,7 @@ class Command(BaseCommand):
                                   "shared": random.randint(12, 25)}[ptype],
                 gender_preference = random.choice(["male", "female"]),
                 amenities      = amenities,
+                bills_included = bills_included,
                 min_stay_months = min_stay,
                 max_stay_months = max_stay,
                 status         = random.choices(
@@ -301,6 +327,9 @@ class Command(BaseCommand):
                 )[0],
                 is_featured    = random.random() < 0.15,
                 view_count     = random.randint(0, 300),
+                room_price     = room_price,
+                bed_price      = bed_price,
+                available_from = available_from,
             )
             props.append(prop)
 

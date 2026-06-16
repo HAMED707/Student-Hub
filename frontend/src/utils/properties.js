@@ -84,7 +84,6 @@ export const normalizePropertyCard = (property) => ({
   price: toNumber(property.price),
   rating: toNumber(property.average_rating),
   reviews: toNumber(property.review_count),
-  roommates: toNumber(property.num_roommates),
   image: getCoverImage(property),
   availabilityStatus: property.status,
   isAvailable: isPropertyAvailable(property),
@@ -163,11 +162,39 @@ export const normalizePropertyDetail = (property, reviewsPayload) => {
       ? toNumber(reviewsPayload.review_count)
       : toNumber(property.review_count);
 
+  const pType = property.property_type || "";
+  const wholePrice = toNumber(property.price);
+  const roomPrice  = property.room_price != null ? toNumber(property.room_price) : null;
+  const bedPrice   = property.bed_price  != null ? toNumber(property.bed_price)  : null;
+
+  const bookingOptions = [];
+  if (pType === "apartment" || pType === "studio" || pType === "room") {
+    bookingOptions.push({ id: "whole", label: "Whole", price: wholePrice });
+  }
+  if (pType === "apartment" && roomPrice != null) {
+    bookingOptions.push({ id: "room", label: "By Room", price: roomPrice });
+  }
+  if ((pType === "apartment" || pType === "studio" || pType === "shared") && bedPrice != null) {
+    bookingOptions.push({ id: "bed", label: "By Bed", price: bedPrice });
+  }
+  if (pType === "shared" && bookingOptions.length === 0) {
+    bookingOptions.push({ id: "bed", label: "By Bed", price: wholePrice });
+  }
+  if (bookingOptions.length === 0) {
+    bookingOptions.push({ id: "whole", label: "Whole", price: wholePrice });
+  }
+
+  const billsIncluded = Array.isArray(property.bills_included) ? property.bills_included : [];
+  const transportTypes = Array.isArray(property.transport_type) ? property.transport_type : [];
+
   return {
     id: property.id,
     title: property.title,
-    price: toNumber(property.price),
-    deposit: toNumber(property.price),
+    price: wholePrice,
+    roomPrice,
+    bedPrice,
+    bookingOptions,
+    deposit: Math.round(wholePrice * 0.2),
     serviceFee: 150,
     address: property.address || buildLocation(property),
     lat: property.latitude ? Number(property.latitude) : 30.0444,
@@ -195,10 +222,9 @@ export const normalizePropertyDetail = (property, reviewsPayload) => {
       iconKey: AMENITY_ICON_KEYS[String(name).trim().toLowerCase()] || "check",
     })),
     bills: [
-      { name: "Internet", iconKey: "wifi", included: amenities.some((item) => String(item).toLowerCase().includes("wifi")) },
-      { name: "Utilities", iconKey: "zap", included: false },
-      { name: "Water", iconKey: "droplet", included: false },
-      { name: "Gas", iconKey: "flame", included: false },
+      { name: "Electricity", iconKey: "zap",     included: billsIncluded.includes("electricity") },
+      { name: "Water",       iconKey: "droplet",  included: billsIncluded.includes("water") },
+      { name: "Gas",         iconKey: "flame",    included: billsIncluded.includes("gas") },
     ],
     reviews,
     nearbyUniversity: property.nearby_university || "",
@@ -206,8 +232,18 @@ export const normalizePropertyDetail = (property, reviewsPayload) => {
     minStayMonths: property.min_stay_months || 1,
     maxStayMonths: property.max_stay_months || null,
     amenities,
+    billsIncluded,
     status: property.status,
+    availableFrom: property.available_from || null,
     isAvailable: isPropertyAvailable(property),
     locationLabel: buildLocation(property),
+    propertyType: property.property_type || "",
+    numRooms: toNumber(property.num_rooms, 1),
+    numBeds: toNumber(property.num_beds, 1),
+    numBathrooms: toNumber(property.num_bathrooms, 1),
+    floor: property.floor ?? null,
+    areaSqm: property.area_sqm ?? null,
+    transportTypes,
+    distanceToUniversity: property.distance_to_university || property.university_distance?.duration_text || "",
   };
 };

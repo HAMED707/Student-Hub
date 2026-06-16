@@ -87,13 +87,23 @@ class BookingCreateView(APIView):
                         status=status.HTTP_409_CONFLICT
                     )
                 
-                # Calculate financial snapshot from property price
-                total     = int(prop.price * 100)
-                deposit   = int(total * 0.20)
+                # Determine unit price based on what the student is booking
+                booking_unit = request.data.get("booking_unit", "whole")
+                unit_price_map = {
+                    "whole": prop.price,
+                    "room":  prop.room_price or prop.price,
+                    "bed":   prop.bed_price  or prop.price,
+                }
+                unit_price = unit_price_map.get(booking_unit, prop.price)
+
+                duration_months = serializer.validated_data["duration_months"]
+                total     = int(unit_price * 100 * duration_months)
+                deposit   = int(unit_price * 100 * 0.20)
                 remaining = total - deposit
 
                 booking = serializer.save(
                             tenant                 = request.user,
+                            booking_unit           = booking_unit,
                             total_amount_cents     = total,
                             deposit_amount_cents   = deposit,
                             remaining_amount_cents = remaining,

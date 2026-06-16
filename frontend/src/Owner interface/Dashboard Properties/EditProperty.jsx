@@ -8,11 +8,14 @@ import {
   uploadPropertyImages,
 } from "../../api/properties.js";
 import {
-  PROPERTY_AMENITIES,
+  BILL_OPTIONS,
+  CITIES,
+  FACILITY_OPTIONS,
   PROPERTY_GENDER_OPTIONS,
   PROPERTY_STATUS_OPTIONS,
-  PROPERTY_TRANSPORT_OPTIONS,
   PROPERTY_TYPE_OPTIONS,
+  TRANSPORT_OPTIONS,
+  UNIVERSITIES_BY_CITY,
   buildPropertyFormState,
   buildPropertyPayload,
 } from "../../utils/propertyForm.js";
@@ -65,18 +68,41 @@ export default function EditProperty() {
   }, [navigate, propertyId]);
 
   const updateField = (key, value) => {
+    setFormState((current) => ({ ...current, [key]: value }));
+  };
+
+  const toggleFacility = (facility) => {
     setFormState((current) => ({
       ...current,
-      [key]: value,
+      amenities: current.amenities.includes(facility)
+        ? current.amenities.filter((item) => item !== facility)
+        : [...current.amenities, facility],
     }));
   };
 
-  const toggleAmenity = (amenity) => {
+  const toggleBill = (bill) => {
     setFormState((current) => ({
       ...current,
-      amenities: current.amenities.includes(amenity)
-        ? current.amenities.filter((item) => item !== amenity)
-        : [...current.amenities, amenity],
+      billsIncluded: current.billsIncluded.includes(bill)
+        ? current.billsIncluded.filter((item) => item !== bill)
+        : [...current.billsIncluded, bill],
+    }));
+  };
+
+  const toggleTransport = (value) => {
+    setFormState((current) => ({
+      ...current,
+      transportTypes: current.transportTypes.includes(value)
+        ? current.transportTypes.filter((t) => t !== value)
+        : [...current.transportTypes, value],
+    }));
+  };
+
+  const handleCityChange = (city) => {
+    setFormState((current) => ({
+      ...current,
+      city,
+      nearbyUniversity: "",
     }));
   };
 
@@ -118,6 +144,8 @@ export default function EditProperty() {
     );
   }
 
+  const universityOptions = UNIVERSITIES_BY_CITY[formState.city] || [];
+
   return (
     <div className="min-h-screen bg-[#F6F8FC] font-sans text-[#091E42]">
       <main className="mx-auto max-w-6xl px-6 py-8">
@@ -148,6 +176,7 @@ export default function EditProperty() {
         ) : null}
 
         <form id="owner-property-form" onSubmit={handleSubmit} className="mt-6 space-y-6">
+          {/* Basic Information */}
           <Section title="Basic Information">
             <label className="block">
               <span className="text-sm font-bold text-slate-600">Title</span>
@@ -171,15 +200,6 @@ export default function EditProperty() {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="block md:col-span-2">
-              <span className="text-sm font-bold text-slate-600">Description</span>
-              <textarea
-                value={formState.description}
-                onChange={(event) => updateField("description", event.target.value)}
-                rows={5}
-                className={fieldClassName}
-              />
             </label>
             <label className="block">
               <span className="text-sm font-bold text-slate-600">Monthly price</span>
@@ -207,15 +227,134 @@ export default function EditProperty() {
             </label>
           </Section>
 
+          {/* Availability & Rental Options */}
+          <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-black text-[#091E42]">Availability & Rental Options</h2>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="text-sm font-bold text-slate-600">Available from</span>
+                <input
+                  type="date"
+                  value={formState.availableFrom}
+                  onChange={(e) => updateField("availableFrom", e.target.value)}
+                  className={fieldClassName}
+                />
+                <p className="mt-1 text-xs text-slate-400">Leave blank if available now</p>
+              </label>
+            </div>
+
+            {(formState.propertyType === "apartment" || formState.propertyType === "studio") && (
+              <div className="mt-6 space-y-4">
+                <p className="text-sm font-bold text-slate-600">How can this property be rented?</p>
+                <p className="text-xs text-slate-400">Whole unit is always offered. Enable additional options below.</p>
+
+                {formState.propertyType === "apartment" && (
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={formState.offerByRoom}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          const calc = Math.round(Number(formState.price || 0) / Math.max(1, Number(formState.numRooms || 1)));
+                          setFormState((prev) => ({
+                            ...prev,
+                            offerByRoom: checked,
+                            roomPrice: checked ? String(calc) : prev.roomPrice,
+                          }));
+                        }}
+                        className="h-4 w-4 rounded accent-[#155BC2]"
+                      />
+                      <span className="font-bold text-[#091E42]">Also offer by Room</span>
+                    </label>
+                    {formState.offerByRoom && (
+                      <label className="mt-3 block pl-7">
+                        <span className="text-sm font-bold text-slate-600">Room price (EGP / room / month)</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={formState.roomPrice}
+                          onChange={(e) => updateField("roomPrice", e.target.value)}
+                          className={fieldClassName}
+                        />
+                        <p className="mt-1 text-xs text-slate-400">
+                          Auto: EGP {Math.round(Number(formState.price || 0) / Math.max(1, Number(formState.numRooms || 1))).toLocaleString()} (whole ÷ rooms) — edit to override
+                        </p>
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={formState.offerByBed}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        const calc = Math.round(Number(formState.price || 0) / Math.max(1, Number(formState.numBeds || 1)));
+                        setFormState((prev) => ({
+                          ...prev,
+                          offerByBed: checked,
+                          bedPrice: checked ? String(calc) : prev.bedPrice,
+                        }));
+                      }}
+                      className="h-4 w-4 rounded accent-[#155BC2]"
+                    />
+                    <span className="font-bold text-[#091E42]">Also offer by Bed</span>
+                  </label>
+                  {formState.offerByBed && (
+                    <label className="mt-3 block pl-7">
+                      <span className="text-sm font-bold text-slate-600">Bed price (EGP / bed / month)</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={formState.bedPrice}
+                        onChange={(e) => updateField("bedPrice", e.target.value)}
+                        className={fieldClassName}
+                      />
+                      <p className="mt-1 text-xs text-slate-400">
+                        Auto: EGP {Math.round(Number(formState.price || 0) / Math.max(1, Number(formState.numBeds || 1))).toLocaleString()} (whole ÷ beds) — edit to override
+                      </p>
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Location */}
           <Section title="Location">
             <label className="block">
               <span className="text-sm font-bold text-slate-600">City</span>
-              <input
+              <select
                 value={formState.city}
-                onChange={(event) => updateField("city", event.target.value)}
+                onChange={(event) => handleCityChange(event.target.value)}
                 className={fieldClassName}
-              />
+                required
+              >
+                <option value="">— Select city —</option>
+                {CITIES.map((city) => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
             </label>
+
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Nearby university</span>
+              <select
+                value={formState.nearbyUniversity}
+                onChange={(event) => updateField("nearbyUniversity", event.target.value)}
+                className={fieldClassName}
+                disabled={!formState.city}
+              >
+                <option value="">{formState.city ? "— Select university —" : "— Select city first —"}</option>
+                {universityOptions.map((uni) => (
+                  <option key={uni} value={uni}>{uni}</option>
+                ))}
+              </select>
+            </label>
+
             <label className="block">
               <span className="text-sm font-bold text-slate-600">District</span>
               <input
@@ -224,22 +363,7 @@ export default function EditProperty() {
                 className={fieldClassName}
               />
             </label>
-            <label className="block md:col-span-2">
-              <span className="text-sm font-bold text-slate-600">Address</span>
-              <input
-                value={formState.address}
-                onChange={(event) => updateField("address", event.target.value)}
-                className={fieldClassName}
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-bold text-slate-600">Nearby university</span>
-              <input
-                value={formState.nearbyUniversity}
-                onChange={(event) => updateField("nearbyUniversity", event.target.value)}
-                className={fieldClassName}
-              />
-            </label>
+
             <label className="block">
               <span className="text-sm font-bold text-slate-600">Distance label</span>
               <input
@@ -250,6 +374,7 @@ export default function EditProperty() {
             </label>
           </Section>
 
+          {/* Rooms & Stay */}
           <Section title="Rooms & Stay">
             <label className="block">
               <span className="text-sm font-bold text-slate-600">Rooms</span>
@@ -282,16 +407,6 @@ export default function EditProperty() {
               />
             </label>
             <label className="block">
-              <span className="text-sm font-bold text-slate-600">Roommates</span>
-              <input
-                type="number"
-                min="0"
-                value={formState.numRoommates}
-                onChange={(event) => updateField("numRoommates", event.target.value)}
-                className={fieldClassName}
-              />
-            </label>
-            <label className="block">
               <span className="text-sm font-bold text-slate-600">Gender preference</span>
               <select
                 value={formState.genderPreference}
@@ -306,43 +421,86 @@ export default function EditProperty() {
               </select>
             </label>
             <label className="block">
-              <span className="text-sm font-bold text-slate-600">Transport type</span>
-              <select
-                value={formState.transportType}
-                onChange={(event) => updateField("transportType", event.target.value)}
+              <span className="text-sm font-bold text-slate-600">Min stay (months)</span>
+              <input
+                type="number"
+                min="1"
+                value={formState.minStayMonths}
+                onChange={(event) => updateField("minStayMonths", event.target.value)}
                 className={fieldClassName}
-              >
-                {PROPERTY_TRANSPORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-600">Max stay (months)</span>
+              <input
+                type="number"
+                min="1"
+                value={formState.maxStayMonths}
+                onChange={(event) => updateField("maxStayMonths", event.target.value)}
+                className={fieldClassName}
+              />
+            </label>
+
+            {/* Transport type — multi-select checkboxes */}
+            <div className="md:col-span-2">
+              <span className="text-sm font-bold text-slate-600">Transport to university</span>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {TRANSPORT_OPTIONS.map((opt) => (
+                  <label key={opt.value} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formState.transportTypes.includes(opt.value)}
+                      onChange={() => toggleTransport(opt.value)}
+                      className="h-4 w-4 rounded accent-[#155BC2]"
+                    />
+                    <span className="text-sm font-semibold text-[#091E42]">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </Section>
 
+          {/* Amenities & Photos */}
           <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-black text-[#091E42]">Amenities & Photos</h2>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {PROPERTY_AMENITIES.map((amenity) => {
-                const active = formState.amenities.includes(amenity);
-                return (
-                  <button
-                    key={amenity}
-                    type="button"
-                    onClick={() => toggleAmenity(amenity)}
-                    className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
-                      active
-                        ? "border-[#155BC2] bg-blue-50 text-[#155BC2]"
-                        : "border-slate-200 bg-white text-slate-600"
-                    }`}
-                  >
-                    {amenity}
-                  </button>
-                );
-              })}
+
+            {/* Facilities */}
+            <div className="mt-5">
+              <p className="mb-3 text-sm font-bold text-slate-600">Facilities</p>
+              <div className="flex flex-wrap gap-3">
+                {FACILITY_OPTIONS.map((facility) => (
+                  <label key={facility} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formState.amenities.includes(facility)}
+                      onChange={() => toggleFacility(facility)}
+                      className="h-4 w-4 rounded accent-[#155BC2]"
+                    />
+                    <span className="text-sm font-semibold text-[#091E42]">{facility}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
+            {/* Bills */}
+            <div className="mt-6">
+              <p className="mb-3 text-sm font-bold text-slate-600">Bills included in rent</p>
+              <div className="flex flex-wrap gap-3">
+                {BILL_OPTIONS.map((bill) => (
+                  <label key={bill.value} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formState.billsIncluded.includes(bill.value)}
+                      onChange={() => toggleBill(bill.value)}
+                      className="h-4 w-4 rounded accent-[#155BC2]"
+                    />
+                    <span className="text-sm font-semibold text-[#091E42]">{bill.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Existing photos */}
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {(property?.images || []).map((image) => (
                 <div key={image.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -376,9 +534,6 @@ export default function EditProperty() {
                   className="hidden"
                 />
               </label>
-              <p className="mt-3 text-sm text-slate-500">
-                Photo uploads remain supported. Video tours and legal property files stay out of scope for this pass.
-              </p>
             </div>
           </section>
         </form>

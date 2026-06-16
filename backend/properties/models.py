@@ -36,11 +36,6 @@ class Property(models.Model):
         ("unavailable", "Unavailable"),
         ("reserved", "Reserved"),
     ]
-    TRANSPORT_CHOICES = [
-        ("walk", "Walking"),
-        ("metro", "Metro"),
-        ("transport", "Public Transport"),
-    ]
     GENDER_CHOICES = [
         ("male", "Males Only"),
         ("female", "Females Only"),
@@ -56,7 +51,9 @@ class Property(models.Model):
     property_type = models.CharField(max_length=20, choices=PROPERTY_TYPE_CHOICES)
 
     # ── Pricing ──────────────────────────────────────────────
-    price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])  
+    price      = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    room_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    bed_price  = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
 
     # ── Location ─────────────────────────────────────────────
     city      = models.CharField(max_length=100)
@@ -68,21 +65,23 @@ class Property(models.Model):
     # ── University Proximity ─────────────────────────────────
     # Used in FindRoom university tab filter
     nearby_university      = models.CharField(max_length=255, blank=True, null=True)
-    distance_to_university = models.CharField(max_length=50, blank=True, null=True) 
-    transport_type         = models.CharField(max_length=20, choices=TRANSPORT_CHOICES, blank=True, null=True)
+    distance_to_university = models.CharField(max_length=50, blank=True, null=True)
+    # List of transport modes, e.g. ["walk", "metro"]. Replaces old single-choice CharField.
+    transport_type         = models.JSONField(default=list, blank=True)
 
     # ── Room Details ─────────────────────────────────────────
-    num_rooms         = models.IntegerField(default=1)
-    num_beds          = models.IntegerField(default=1)  
-    num_bathrooms     = models.IntegerField(default=1)
-    num_roommates     = models.IntegerField(default=0)  
-    floor             = models.IntegerField(blank=True, null=True)
+    num_rooms     = models.IntegerField(default=1)
+    num_beds      = models.IntegerField(default=1)
+    num_bathrooms = models.IntegerField(default=1)
+    floor         = models.IntegerField(blank=True, null=True)
     area_sqm          = models.IntegerField(blank=True, null=True)  
     gender_preference = models.CharField(max_length=10, choices=GENDER_CHOICES)
 
     # ── Amenities ────────────────────────────────────────────
-    # Stored as JSON list e.g. ["WiFi", "AC", "Washing Machine", "Parking"]
+    # Facilities: e.g. ["WiFi", "AC", "Kitchen", "Furnished", "Elevator", "Washing Machine"]
     amenities = models.JSONField(default=list, blank=True)
+    # Bills included in the rent: e.g. ["electricity", "water", "gas"]
+    bills_included = models.JSONField(default=list, blank=True)
 
     # ── Stay Duration ────────────────────────────────────────
     # Matches "Length of Stay" filter on FindRoom page
@@ -90,8 +89,9 @@ class Property(models.Model):
     max_stay_months = models.IntegerField(blank=True, null=True)
 
     # ── Status & Visibility ──────────────────────────────────
-    status      = models.CharField(max_length=20, choices=STATUS_CHOICES, default="available")
-    is_featured = models.BooleanField(default=False)  # shown in "Featured Properties" section
+    status         = models.CharField(max_length=20, choices=STATUS_CHOICES, default="available")
+    available_from = models.DateField(null=True, blank=True, help_text="Date property becomes available. Null = available now.")
+    is_featured    = models.BooleanField(default=False)  # shown in "Featured Properties" section
 
     # ── Analytics ────────────────────────────────────────────
     # NOTE: Increment view_count in the detail view each time a user opens a listing

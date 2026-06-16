@@ -56,20 +56,20 @@ class PropertySerializer(serializers.ModelSerializer):
             # ── Basic Info ───────────────────────────────────
             "title", "description", "property_type",
             # ── Pricing ──────────────────────────────────────
-            "price",
+            "price", "room_price", "bed_price",
             # ── Location ─────────────────────────────────────
             "city", "district", "address", "latitude", "longitude",
             # ── University Proximity ─────────────────────────
             "nearby_university", "distance_to_university", "transport_type","university_distance",
             # ── Room Details ─────────────────────────────────
-            "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
+            "num_rooms", "num_beds", "num_bathrooms",
             "floor", "area_sqm", "gender_preference",
             # ── Amenities ────────────────────────────────────
-            "amenities",
+            "amenities", "bills_included",
             # ── Stay Duration ────────────────────────────────
             "min_stay_months", "max_stay_months",
             # ── Status & Visibility ──────────────────────────
-            "status", "is_featured",
+            "status", "available_from", "is_featured",
             # ── Analytics ────────────────────────────────────
             "view_count",
             # ── Reviews (computed) ───────────────────────────
@@ -107,11 +107,11 @@ class PropertyListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Property
         fields = [
-            "id", "title", "property_type", "price",
+            "id", "title", "property_type", "price", "room_price", "bed_price",
             "city", "district", "latitude", "longitude",
             "nearby_university", "distance_to_university", "transport_type",
-            "num_beds", "num_roommates", "gender_preference",
-            "amenities", "status", "is_featured",
+            "num_beds", "gender_preference",
+            "amenities", "bills_included", "status", "available_from", "is_featured",
             "average_rating", "review_count",
             "cover_image",
             "landlord_name", "landlord_is_verified",
@@ -145,14 +145,14 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
         model = Property
         fields = [
             "title", "description", "property_type",
-            "price",
+            "price", "room_price", "bed_price",
             "city", "district", "address", "latitude", "longitude",
             "nearby_university", "distance_to_university", "transport_type",
-            "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
+            "num_rooms", "num_beds", "num_bathrooms",
             "floor", "area_sqm", "gender_preference",
-            "amenities",
+            "amenities", "bills_included",
             "min_stay_months", "max_stay_months",
-            "status",
+            "status", "available_from",
             "uploaded_images",
         ]
 
@@ -192,14 +192,14 @@ class PropertyUpdateSerializer(serializers.ModelSerializer):
         model = Property
         fields = [
             "title", "description", "property_type",
-            "price",
+            "price", "room_price", "bed_price",
             "city", "district", "address", "latitude", "longitude",
             "nearby_university", "distance_to_university", "transport_type",
-            "num_rooms", "num_beds", "num_bathrooms", "num_roommates",
+            "num_rooms", "num_beds", "num_bathrooms",
             "floor", "area_sqm", "gender_preference",
-            "amenities",
+            "amenities", "bills_included",
             "min_stay_months", "max_stay_months",
-            "status",
+            "status", "available_from",
         ]
 
     def validate_price(self, value):

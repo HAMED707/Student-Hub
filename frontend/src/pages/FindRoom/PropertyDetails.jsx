@@ -1,9 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowRight,
+  ArrowUp,
+  BadgeCheck,
+  Banknote,
+  Bath,
   Bed,
   Building2,
+  Bus,
   CalendarDays,
   Camera,
   Check,
@@ -11,33 +16,41 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  CreditCard,
+  Coffee,
   Droplet,
+  Dumbbell,
   ExternalLink,
   Flame,
+  GraduationCap,
   Heart,
   Home,
+  Hospital,
   IdCard,
+  Landmark,
+  LocateFixed,
   MapPin,
   MessageSquare,
   Monitor,
+  Navigation,
   Phone,
-  PlayCircle,
+  Pill,
+  Ruler,
+  Search,
   Share2,
   ShieldCheck,
+  ShoppingCart,
   Snowflake,
   Star,
-  UploadCloud,
   User,
   Users,
+  Users2,
   Utensils,
-  Video,
   Wifi,
   Wind,
   X,
   Zap,
 } from "lucide-react";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -48,7 +61,9 @@ import { fetchPropertyReviews } from "../../api/reviews.js";
 import { fetchMyProfile } from "../../api/accounts.js";
 import { createBooking } from "../../api/bookings.js";
 import { initiateDepositPayment } from "../../api/payments.js";
+import { fetchNearbyPlaces } from "../../api/services.js";
 import { useFavorites } from "../../hooks/useFavorites.js";
+import { useGlobalMessaging } from "../../context/messagingContext.js";
 import {
   isPropertyAvailable,
   normalizePropertyCard,
@@ -64,11 +79,12 @@ import {
 } from "../../utils/auth.js";
 import { buildDraftChatState } from "../../utils/messaging.js";
 
+// ── Fallback data (used when API is unavailable) ──────────────────────────────
 const propertyData = {
   id: 1,
   title: "Cozy room near Cairo University",
   price: 2500,
-  deposit: 2500,
+  deposit: 500,
   serviceFee: 150,
   address: "Khalifa Al Maamon Street, Abbasiya, Cairo",
   lat: 30.0731,
@@ -82,6 +98,8 @@ const propertyData = {
     name: "Mohamed Ahmed",
     image: "https://randomuser.me/api/portraits/men/32.jpg",
     response: "Usually replies within 2 hours",
+    isVerified: false,
+    isTopRated: false,
   },
   images: [
     "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=1200&q=80",
@@ -169,6 +187,18 @@ const propertyData = {
       avatar: "https://randomuser.me/api/portraits/men/45.jpg",
     },
   ],
+  numRooms: 3,
+  numBeds: 4,
+  numBathrooms: 2,
+  propertyType: "apartment",
+  genderPreference: "",
+  nearbyUniversity: "Cairo University",
+  distanceToUniversity: "14 min walk",
+  transportTypes: ["walk"],
+  minStayMonths: 3,
+  maxStayMonths: 12,
+  status: "available",
+  isAvailable: true,
 };
 
 const similarProperties = [
@@ -226,23 +256,48 @@ const similarProperties = [
   },
 ];
 
-const nearbyPlaces = [
-  { name: "Cairo University", type: "University", latOffset: 0.006, lngOffset: -0.006, color: "#155BC2" },
-  { name: "City Pharmacy", type: "Pharmacy", latOffset: -0.004, lngOffset: 0.005, color: "#10B981" },
-  { name: "Fresh Market", type: "Supermarket", latOffset: 0.004, lngOffset: 0.006, color: "#F59E0B" },
-  { name: "Main Bus Station", type: "Bus Station", latOffset: -0.005, lngOffset: -0.004, color: "#7C3AED" },
-  { name: "Metro Station", type: "Metro Station", latOffset: 0.002, lngOffset: 0.008, color: "#EF4444" },
+// ── Nearby services configuration ─────────────────────────────────────────────
+const SERVICE_CATEGORIES = [
+  { id: "supermarket", label: "Supermarkets", icon: ShoppingCart },
+  { id: "restaurant",  label: "Restaurants",  icon: Coffee },
+  { id: "hospital",    label: "Hospitals",    icon: Hospital },
+  { id: "pharmacy",    label: "Pharmacies",   icon: Pill },
+  { id: "mosque",      label: "Mosques",      icon: Landmark },
+  { id: "bus_station", label: "Bus Stations", icon: Bus },
+  { id: "gym",         label: "GYM",          icon: Dumbbell },
+  { id: "atm",         label: "ATM",          icon: Banknote },
 ];
 
-const ratingBreakdown = [
-  { label: "Communication", value: 82, score: 4.1 },
-  { label: "Safety", value: 88, score: 4.4 },
-  { label: "Cleanliness", value: 76, score: 3.8 },
-  { label: "Amenities", value: 80, score: 4.0 },
-  { label: "Location", value: 92, score: 4.6 },
-  { label: "Value", value: 84, score: 4.2 },
-];
+function NearbyMapController({ activePlace, propertyCenter }) {
+  const map = useMap();
+  useEffect(() => {
+    if (activePlace) {
+      map.flyTo([activePlace.lat, activePlace.lng], 16, { animate: true, duration: 1 });
+    } else {
+      map.flyTo(propertyCenter, 14, { animate: true, duration: 0.6 });
+    }
+  }, [activePlace, map, propertyCenter]);
+  return null;
+}
 
+const normalizePlaces = (payload) =>
+  (payload?.results || []).map((p) => ({
+    id: p.id || `${p.latitude}-${p.longitude}`,
+    name: p.name,
+    lat: Number(p.latitude),
+    lng: Number(p.longitude),
+    hours:
+      p.open_now == null
+        ? "Hours unavailable"
+        : p.open_now
+          ? "Open now"
+          : "Currently closed",
+    address: p.address || "Address unavailable",
+    rating: p.rating ? `${p.rating}/5` : "No rating",
+    distance: p.distance_m ? `${p.distance_m} m away` : "",
+  }));
+
+// ── Icon maps ──────────────────────────────────────────────────────────────────
 const DETAIL_ICON_MAP = {
   wifi: Wifi,
   snowflake: Snowflake,
@@ -257,6 +312,20 @@ const DETAIL_ICON_MAP = {
   flame: Flame,
 };
 
+// ── Leaflet map pin factory ────────────────────────────────────────────────────
+const createPin = (color = "#155BC2") =>
+  L.divIcon({
+    html: `<div class="details-map-pin" style="background:${color}"><span></span></div>`,
+    className: "",
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -34],
+  });
+
+const mapIcon     = createPin("#155BC2");
+const userLocIcon = createPin("#10B981");
+
+// ── Generate fallback similar properties ──────────────────────────────────────
 const generateProperties = () => {
   const images = [
     "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80",
@@ -282,42 +351,42 @@ const generateProperties = () => {
     return {
       id: i,
       title: `${type === "Shared Room" || type === "Private Room" ? "Cozy" : "Modern"} ${type} in ${loc.area}`,
-      type,
       location: `${loc.city} - ${loc.area}`,
-      universityDistance: `${Math.floor(Math.random() * 20) + 5} mins to campus`,
-      price: Math.floor(Math.random() * (12000 - 1500) + 1500),
-      rating: parseFloat((Math.random() * (5 - 3.5) + 3.5).toFixed(1)),
-      reviews: Math.floor(Math.random() * 80) + 5,
-      roommates: type === "Shared Room" ? Math.floor(Math.random() * 3) + 1 : 0,
-      image: images[i % images.length],
       city: loc.city,
-      availabilityStatus: i % 8 === 0 ? "unavailable" : i % 5 === 0 ? "booked" : "available",
+      area: loc.area,
+      universityDistance: `${5 + (i % 20)} mins`,
+      distance: `${5 + (i % 20)} mins`,
+      campusMinutes: 5 + (i % 20),
+      price: 1500 + (i % 10) * 200,
+      rating: 3.5 + (i % 5) * 0.3,
+      reviews: 4 + (i % 20),
+      roommates: i % 4,
+      image: images[i % images.length],
+      availabilityStatus: i % 5 === 0 ? "booked" : "available",
+      isAvailable: i % 5 !== 0,
+      amenities: [],
+      lat: 30.0444 + (i * 0.003),
+      lng: 31.2357 + (i * 0.003),
+      createdAt: Date.now() - i * 86400000,
+      description: "",
+      images: [images[i % images.length]],
+      type,
     };
   });
 };
 
-const createPin = (color = "#155BC2") =>
-  L.divIcon({
-    html: `<div class="details-map-pin" style="background:${color}"><span></span></div>`,
-    className: "",
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    popupAnchor: [0, -34],
-  });
-
-const mapIcon = createPin("#155BC2");
-
+// ── Sub-components ────────────────────────────────────────────────────────────
 const LoadingSkeleton = () => (
   <div className="min-h-screen bg-[#F8FAFC] font-sans">
     <div className="animate-pulse">
       <div className="h-16 bg-slate-200" />
       <div className="mx-auto w-full max-w-[1500px] space-y-6 px-4 py-6">
         <div className="h-8 w-2/3 rounded bg-slate-200" />
-        <div className="h-[420px] rounded-2xl bg-slate-200" />
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-          <div className="h-[700px] rounded-2xl bg-slate-200" />
-          <div className="h-[420px] rounded-2xl bg-slate-200" />
+        <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+          <div className="h-[420px] rounded-3xl bg-slate-200" />
+          <div className="h-[420px] rounded-3xl bg-slate-200" />
         </div>
+        <div className="h-[600px] rounded-2xl bg-slate-200" />
       </div>
     </div>
   </div>
@@ -330,7 +399,7 @@ const NotFoundState = ({ navigate }) => (
         <Home className="h-10 w-10 text-[#155BC2]" />
       </div>
       <h2 className="text-2xl font-black text-[#091E42]">Property not found</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-500">The property you're looking for doesn't exist or has been removed.</p>
+      <p className="mt-2 text-sm leading-6 text-slate-500">The property you&apos;re looking for doesn&apos;t exist or has been removed.</p>
       <button type="button" onClick={() => navigate("/find-room")} className="mt-6 rounded-full bg-[#155BC2] px-8 py-3 text-sm font-bold text-white transition hover:bg-[#0f4699]">
         Browse Properties
       </button>
@@ -347,34 +416,57 @@ const Stars = ({ value, size = "h-4 w-4" }) => (
 );
 
 const SectionTitle = ({ title, subtitle }) => (
-  <div className="mb-5">
-    <h2 className="text-2xl font-black text-[#091E42] md:text-3xl">{title}</h2>
-    {subtitle && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{subtitle}</p>}
+  <div className="mb-3">
+    <h2 className="text-lg font-black text-[#091E42]">{title}</h2>
+    {subtitle && <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{subtitle}</p>}
   </div>
 );
 
 const getRoomStatus = (room) => {
-  const availableBeds = room.beds.filter((bedItem) => bedItem.status === "AVAILABLE").length;
+  const availableBeds = room.beds.filter((b) => b.status === "AVAILABLE").length;
   if (availableBeds === 0) return { label: "Fully Booked", className: "bg-rose-50 text-rose-700 border-rose-100" };
   if (availableBeds <= 1 && room.beds.length > 1) return { label: "Few Beds Left", className: "bg-amber-50 text-amber-700 border-amber-100" };
   return { label: "Available", className: "bg-emerald-50 text-emerald-700 border-emerald-100" };
 };
 
+// ── Property type labels ───────────────────────────────────────────────────────
+const PROPERTY_TYPE_LABELS = {
+  apartment: "Apartment",
+  studio: "Studio",
+  room: "Private Room",
+  shared: "Shared Room",
+};
+
+const TRANSPORT_LABELS = {
+  walk: "Walking",
+  metro: "Metro",
+  transport: "Public Transport",
+  bus: "Bus / minibus",
+  "tuk-tuk": "Tuk-tuk",
+};
+
+const GENDER_LABELS = {
+  male: "Males Only",
+  female: "Females Only",
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 const PropertyDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { openChat, conversations } = useGlobalMessaging();
+
+  // ── Core state ──
   const [isLoading, setIsLoading] = useState(true);
   const [dynamicProperty, setDynamicProperty] = useState(null);
   const [liveSimilarProperties, setLiveSimilarProperties] = useState(similarProperties);
   const [notFound, setNotFound] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [isVideoOpen, setIsVideoOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("rooms");
-  const [visibleReviews, setVisibleReviews] = useState(2);
+  const [activeTab, setActiveTab] = useState("details");
+  const [visibleReviews, setVisibleReviews] = useState(3);
   const [notice, setNotice] = useState("");
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [bookingError, setBookingError] = useState("");
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
   const [paymentLaunchUrl, setPaymentLaunchUrl] = useState("");
@@ -382,24 +474,28 @@ const PropertyDetails = () => {
   const { favoriteIdSet, toggleFavorite } = useFavorites();
   const similarScrollRef = useRef(null);
   const sectionRefs = useRef({});
+  const bookingCardRef = useRef(null);
+  const [showBookingCta, setShowBookingCta] = useState(false);
 
   const [bookingStep, setBookingStep] = useState(1);
+  const [bookingUnit, setBookingUnit] = useState("whole");
   const [bookingData, setBookingData] = useState({
-    bookingType: "bed",
     selectedRoomId: "",
     selectedBedId: "",
     moveInDate: "",
-    duration: "6 months",
-    paymentMethod: "card",
-    phone: "",
-    fullName: "",
-    age: "",
-    university: "",
-    faculty: "",
-    idUploaded: false,
-    agreed: false,
+    duration: "6",
   });
 
+  // ── Nearby services state ──
+  const [serviceCategory, setServiceCategory] = useState("restaurant");
+  const [servicePlaces, setServicePlaces]     = useState([]);
+  const [serviceLoading, setServiceLoading]   = useState(false);
+  const [serviceError, setServiceError]       = useState("");
+  const [activePlaceId, setActivePlaceId]     = useState(null);
+  const [userCoords, setUserCoords]           = useState(null);
+  const [serviceSearch, setServiceSearch]     = useState("");
+
+  // ── Data loading ──
   const loadProperty = useCallback(async () => {
     setIsLoading(true);
     setNotFound(false);
@@ -418,21 +514,17 @@ const PropertyDetails = () => {
 
       if (Array.isArray(similar)) {
         const normalized = similar
-          .filter((property) => property.id !== detail.id)
+          .filter((p) => p.id !== detail.id)
           .slice(0, 4)
           .map(normalizePropertyCard);
-
-        if (normalized.length > 0) {
-          setLiveSimilarProperties(normalized);
-        }
+        if (normalized.length > 0) setLiveSimilarProperties(normalized);
       }
     } catch (error) {
       if (error?.response?.status === 404) {
         setNotFound(true);
       } else {
         const numericId = parseInt(id, 10);
-        const fallback = generateProperties().find((property) => property.id === numericId);
-
+        const fallback = generateProperties().find((p) => p.id === numericId);
         if (fallback) {
           setDynamicProperty({
             ...propertyData,
@@ -455,29 +547,18 @@ const PropertyDetails = () => {
   }, [id]);
 
   useEffect(() => {
-    const safeLoad = async () => {
-      await loadProperty();
-    };
-
-    safeLoad();
+    loadProperty();
   }, [id, loadProperty]);
 
   useEffect(() => {
     const handleReviewCreated = (event) => {
-      if (String(event?.detail?.propertyId || "") === String(id)) {
-        loadProperty();
-      }
+      if (String(event?.detail?.propertyId || "") === String(id)) loadProperty();
     };
-
     const handleFocus = () => {
-      if (consumePropertyReviewUpdate(id)) {
-        loadProperty();
-      }
+      if (consumePropertyReviewUpdate(id)) loadProperty();
     };
-
     window.addEventListener(PROPERTY_REVIEW_CREATED_EVENT, handleReviewCreated);
     window.addEventListener("focus", handleFocus);
-
     return () => {
       window.removeEventListener(PROPERTY_REVIEW_CREATED_EVENT, handleReviewCreated);
       window.removeEventListener("focus", handleFocus);
@@ -486,20 +567,15 @@ const PropertyDetails = () => {
 
   useEffect(() => {
     let cancelled = false;
-
     const fillStudentProfile = async () => {
       const user = getStoredUser();
       if (!user || user.role !== "student") return;
-
       try {
         const profile = await fetchMyProfile();
         if (cancelled) return;
-
         setBookingData((prev) => ({
           ...prev,
-          fullName:
-            [profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
-            prev.fullName,
+          fullName: [profile.first_name, profile.last_name].filter(Boolean).join(" ") || prev.fullName,
           university: profile.student_profile?.university || prev.university,
           faculty: profile.student_profile?.faculty || prev.faculty,
         }));
@@ -507,50 +583,78 @@ const PropertyDetails = () => {
         // keep manual entry
       }
     };
-
     fillStudentProfile();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
+  // ── Nearby services loader ──
   const currentProperty = useMemo(
     () => (dynamicProperty ? { ...propertyData, ...dynamicProperty } : propertyData),
     [dynamicProperty],
   );
 
-  const nearbyMarkers = useMemo(
-    () =>
-      nearbyPlaces.map((place) => ({
-        ...place,
-        lat: currentProperty.lat + place.latOffset,
-        lng: currentProperty.lng + place.lngOffset,
-      })),
-    [currentProperty.lat, currentProperty.lng]
-  );
+  useEffect(() => {
+    if (!currentProperty.lat) return;
+    const lat = userCoords?.lat ?? currentProperty.lat;
+    const lng = userCoords?.lng ?? currentProperty.lng;
+    setServiceLoading(true);
+    setServiceError("");
+    fetchNearbyPlaces({ lat, lng, type: serviceCategory })
+      .then((payload) => {
+        const places = normalizePlaces(payload);
+        setServicePlaces(places);
+        setActivePlaceId(places[0]?.id || null);
+      })
+      .catch((err) => {
+        setServicePlaces([]);
+        setServiceError(err.message || "Unable to load nearby services.");
+      })
+      .finally(() => setServiceLoading(false));
+  }, [serviceCategory, currentProperty.lat, currentProperty.lng, userCoords]);
 
+  // ── Memos ──
   const availableRooms = useMemo(
-    () => currentProperty.rooms.filter((room) => room.beds.some((bedItem) => bedItem.status === "AVAILABLE")),
-    [currentProperty.rooms]
+    () => currentProperty.rooms.filter((room) => room.beds.some((b) => b.status === "AVAILABLE")),
+    [currentProperty.rooms],
   );
 
-  const bookingTypeOptions = useMemo(
-    () => [
-      { id: "bed", label: "Bed", icon: Bed, description: "Book one available bed in a shared room." },
-      { id: "room", label: "Room", icon: Home, description: "Book a full private room when available." },
-    ],
-    []
+  const availableBeds = useMemo(
+    () => currentProperty.rooms.reduce((sum, room) => sum + room.beds.filter((b) => b.status === "AVAILABLE").length, 0),
+    [currentProperty.rooms],
   );
+
+  const filteredServicePlaces = useMemo(() => {
+    if (!serviceSearch.trim()) return servicePlaces;
+    return servicePlaces.filter((p) =>
+      `${p.name} ${p.address}`.toLowerCase().includes(serviceSearch.toLowerCase()),
+    );
+  }, [servicePlaces, serviceSearch]);
+
+  const activeServicePlace = useMemo(
+    () => filteredServicePlaces.find((p) => p.id === activePlaceId) || filteredServicePlaces[0] || null,
+    [activePlaceId, filteredServicePlaces],
+  );
+
+  const activeBookingOption = useMemo(
+    () =>
+      (currentProperty.bookingOptions ?? []).find((o) => o.id === bookingUnit) ??
+      (currentProperty.bookingOptions ?? [])[0] ??
+      { id: "whole", label: "Whole", price: currentProperty.price },
+    [bookingUnit, currentProperty.bookingOptions, currentProperty.price],
+  );
+
+  const canBook = useMemo(() => {
+    if (bookingUnit === "whole") return currentProperty.isAvailable;
+    if (bookingUnit === "room") return availableRooms.length > 0;
+    return availableBeds > 0;
+  }, [bookingUnit, currentProperty.isAvailable, availableRooms.length, availableBeds]);
 
   const visibleRooms = useMemo(() => {
-    if (bookingData.bookingType === "room") {
-      return availableRooms.filter((room) => room.capacity === 1);
-    }
-    return availableRooms.filter((room) => room.beds.some((bedItem) => bedItem.status === "AVAILABLE"));
-  }, [availableRooms, bookingData.bookingType]);
+    if (bookingUnit === "room") return availableRooms.filter((r) => r.capacity === 1);
+    return availableRooms.filter((r) => r.beds.some((b) => b.status === "AVAILABLE"));
+  }, [availableRooms, bookingUnit]);
 
-  const selectedRoom = currentProperty.rooms.find((room) => room.id === bookingData.selectedRoomId);
+  const selectedRoom = currentProperty.rooms.find((r) => r.id === bookingData.selectedRoomId);
 
   const highlights = useMemo(
     () => [
@@ -561,54 +665,72 @@ const PropertyDetails = () => {
       { label: "Furnished", value: "Move-in ready", icon: Home },
       { label: "Utilities", value: "Mostly included", icon: Zap },
     ],
-    [availableRooms.length, currentProperty.distance]
+    [availableRooms.length, currentProperty.distance],
   );
 
   const tabs = useMemo(
     () => [
-      { id: "rooms", label: "Rooms" },
-      { id: "facilities", label: "Facilities" },
-      { id: "bills", label: "Bills" },
-      { id: "reviews", label: "Reviews" },
-      { id: "location", label: "Location" },
+      { id: "details",    label: "Details" },
+      { id: "nearby",     label: "Nearby" },
+      { id: "reviews",    label: "Reviews" },
     ],
-    []
+    [],
   );
 
+  const propertyCenter = useMemo(
+    () => [currentProperty.lat, currentProperty.lng],
+    [currentProperty.lat, currentProperty.lng],
+  );
+
+  const canSubmit = useMemo(() => {
+    if (!bookingData.moveInDate || !bookingData.duration) return false;
+    if (bookingUnit === "room") return Boolean(bookingData.selectedRoomId);
+    if (bookingUnit === "bed") return Boolean(bookingData.selectedRoomId && bookingData.selectedBedId);
+    return true;
+  }, [bookingData, bookingUnit]);
+
+  // ── Intersection observer for tab highlight ──
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
-          .filter((entry) => entry.isIntersecting)
+          .filter((e) => e.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
         if (visible?.target?.id) setActiveTab(visible.target.id);
       },
-      { rootMargin: "-130px 0px -55% 0px", threshold: [0.15, 0.35, 0.6] }
+      { rootMargin: "-80px 0px -40% 0px", threshold: [0, 0.1, 0.25] },
     );
-
     tabs.forEach((tab) => {
       const section = sectionRefs.current[tab.id];
       if (section) observer.observe(section);
     });
-
     return () => observer.disconnect();
   }, [tabs]);
 
   useEffect(() => {
-    document.body.style.overflow = isBookingOpen || isGalleryOpen || isVideoOpen ? "hidden" : "unset";
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, [isBookingOpen, isGalleryOpen, isVideoOpen]);
+    const card = bookingCardRef.current;
+    if (!card) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowBookingCta(!entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, [isLoading]);
 
+  useEffect(() => {
+    document.body.style.overflow = isBookingOpen || isGalleryOpen ? "hidden" : "unset";
+    return () => { document.body.style.overflow = "unset"; };
+  }, [isBookingOpen, isGalleryOpen]);
+
+  // ── Callbacks ──
   const setSectionRef = useCallback(
-    (idName) => (node) => {
-      sectionRefs.current[idName] = node;
-    },
-    []
+    (idName) => (node) => { sectionRefs.current[idName] = node; },
+    [],
   );
 
   const scrollToSection = useCallback((sectionId) => {
+    setActiveTab(sectionId);
     sectionRefs.current[sectionId]?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
@@ -631,111 +753,77 @@ const PropertyDetails = () => {
       navigate("/login", { state: { from: { pathname: `/find-room/${id}` } } });
       return;
     }
-
     if (user.role !== "student") {
       showNotice("Only students can create bookings");
       return;
     }
-
+    const firstOption = (currentProperty.bookingOptions ?? [])[0]?.id ?? "whole";
+    setBookingUnit(firstOption);
     setBookingStep(1);
     setBookingError("");
     setBookingData({
-      bookingType: "bed",
       selectedRoomId: roomId,
       selectedBedId: "",
-      moveInDate: "",
-      duration: "6 months",
-      paymentMethod: "card",
-      phone: "",
-      fullName: "",
-      age: "",
-      university: "",
-      faculty: "",
-      idUploaded: false,
-      agreed: false,
+      moveInDate: currentProperty.availableFrom || "",
+      duration: "6",
     });
     setPaymentLaunchUrl("");
     setCreatedBookingId(null);
     setIsBookingOpen(true);
-  }, [id, navigate, showNotice]);
+  }, [id, navigate, showNotice, currentProperty.bookingOptions]);
 
   const updateBooking = useCallback((patch) => {
     if (bookingError) setBookingError("");
     setBookingData((prev) => ({ ...prev, ...patch }));
   }, [bookingError]);
 
-  const canContinue = useMemo(() => {
-    if (bookingStep === 1) {
-      return Boolean(
-        bookingData.selectedRoomId &&
-          bookingData.moveInDate &&
-          bookingData.duration &&
-          (bookingData.bookingType === "room" || bookingData.selectedBedId)
-      );
-    }
-    if (bookingStep === 2) return Boolean(bookingData.fullName && bookingData.age && bookingData.university && bookingData.faculty && bookingData.idUploaded);
-    if (bookingStep === 3) return Boolean(bookingData.paymentMethod && bookingData.agreed);
-    return true;
-  }, [bookingData, bookingStep]);
-
-  const handleNextBooking = useCallback(async () => {
-    if (bookingStep < 3) {
-      setBookingStep((prev) => Math.min(prev + 1, 4));
-      return;
-    }
-
+  const handleSubmitBooking = useCallback(async () => {
     try {
       setIsSubmittingBooking(true);
       setBookingError("");
       setPaymentLaunchUrl("");
       setCreatedBookingId(null);
-
+      const unitLabel = { whole: "Whole property", room: "Full room", bed: "Bed" };
       const createdBooking = await createBooking({
         property: currentProperty.id,
         move_in_date: bookingData.moveInDate,
         duration_months: Number.parseInt(bookingData.duration, 10) || 6,
+        booking_unit: bookingUnit,
         message: [
-          bookingData.bookingType === "room" ? "Requested full room" : "Requested bed",
+          unitLabel[bookingUnit] || "Whole property",
           bookingData.selectedRoomId ? `Room: ${bookingData.selectedRoomId}` : null,
           bookingData.selectedBedId ? `Bed: ${bookingData.selectedBedId}` : null,
-          bookingData.fullName ? `Student: ${bookingData.fullName}` : null,
         ]
           .filter(Boolean)
           .join(" | "),
       });
-
       setCreatedBookingId(createdBooking.id);
-
-      try {
-        const paymentSession = await initiateDepositPayment({
-          booking_id: createdBooking.id,
-          phone: bookingData.phone?.trim() || "NA",
-        });
-
-        if (paymentSession?.iframe_url) {
-          setPaymentLaunchUrl(paymentSession.iframe_url);
-          window.open(paymentSession.iframe_url, "_blank", "noopener,noreferrer");
-        }
-      } catch (paymentError) {
-        setBookingError(
-          `${getApiErrorMessage(paymentError, "Booking created, but payment session failed")} You can retry from the payments page.`,
-        );
-      }
-
       setBookingStep(4);
     } catch (error) {
       setBookingError(getApiErrorMessage(error, "Booking request failed"));
     } finally {
       setIsSubmittingBooking(false);
     }
-  }, [bookingData, bookingStep, currentProperty.id]);
+  }, [bookingData, bookingUnit, currentProperty.id]);
+
+  const handlePayNow = useCallback(async () => {
+    if (!createdBookingId) return;
+    try {
+      const paymentSession = await initiateDepositPayment({
+        booking_id: createdBookingId,
+        phone: "NA",
+      });
+      if (paymentSession?.iframe_url) {
+        setPaymentLaunchUrl(paymentSession.iframe_url);
+        window.open(paymentSession.iframe_url, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      setBookingError("Payment session failed. Please try from your bookings page.");
+    }
+  }, [createdBookingId]);
 
   const handleShare = useCallback(async () => {
-    const shareData = {
-      title: currentProperty.title,
-      text: `Check this student accommodation: ${currentProperty.title}`,
-      url: window.location.href,
-    };
+    const shareData = { title: currentProperty.title, text: `Check this student accommodation: ${currentProperty.title}`, url: window.location.href };
     try {
       if (navigator.share) {
         await navigator.share(shareData);
@@ -755,40 +843,53 @@ const PropertyDetails = () => {
       showNotice("Only available properties can be added to favorites");
       return;
     }
-
     const wasSaved = favoriteIdSet.has(currentProperty.id);
     const next = await toggleFavorite(currentProperty, {
-      onRequireAuth: () =>
-        navigate("/login", { state: { from: { pathname: `/find-room/${id}` } } }),
+      onRequireAuth: () => navigate("/login", { state: { from: { pathname: `/find-room/${id}` } } }),
       onError: (message) => showNotice(message),
     });
-
-    if (next !== wasSaved) {
-      showNotice(next ? "Property saved" : "Property removed from saved");
-    }
+    if (next !== wasSaved) showNotice(next ? "Property saved" : "Property removed from saved");
   }, [currentProperty, favoriteIdSet, id, navigate, showNotice, toggleFavorite]);
 
-  const handleContactOwner = useCallback(() => {
-    navigate("/messages", {
-      state: buildDraftChatState({
-        receiverId: currentProperty.landlord.id,
-        name: currentProperty.landlord.name,
-        avatar: currentProperty.landlord.image,
-        propertyId: currentProperty.id,
-        propertyTitle: currentProperty.title,
-        receiverRole: "Host",
-      }),
-    });
-  }, [currentProperty.id, currentProperty.landlord.id, currentProperty.landlord.image, currentProperty.landlord.name, currentProperty.title, navigate]);
+  // Chat with owner — uses ChatWindow popup if existing conversation, else navigates to /messages
+  const handleMessageOwner = useCallback(() => {
+    const existing = conversations.find((c) => String(c.receiverId) === String(currentProperty.landlord.id));
+    if (existing) {
+      openChat({ conversationId: existing.id });
+    } else {
+      openChat(
+        buildDraftChatState({
+          receiverId: currentProperty.landlord.id,
+          name: currentProperty.landlord.name,
+          avatar: currentProperty.landlord.image,
+          propertyId: currentProperty.id,
+          propertyTitle: currentProperty.title,
+          receiverRole: "Host",
+        }),
+      );
+    }
+  }, [conversations, currentProperty, openChat]);
 
-  const openOwnerProfile = useCallback(() => {
-    if (currentProperty.landlord.id) {
-      navigate(`/profile/${currentProperty.landlord.id}`);
+  const handleUseMyLocation = useCallback(() => {
+    if (!navigator?.geolocation) {
+      setServiceError("Geolocation is not supported by this browser.");
       return;
     }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setServiceError("Unable to access your current location."),
+    );
+  }, []);
 
-    showNotice("Owner profile is unavailable");
-  }, [currentProperty.landlord.id, navigate, showNotice]);
+  const handleGetDirections = useCallback(() => {
+    const dest = `${currentProperty.lat},${currentProperty.lng}`;
+    const originPart = userCoords ? `&origin=${userCoords.lat},${userCoords.lng}` : "";
+    window.open(
+      `https://www.google.com/maps/dir/?api=1${originPart}&destination=${dest}&travelmode=transit`,
+      "_blank",
+      "noreferrer",
+    );
+  }, [currentProperty.lat, currentProperty.lng, userCoords]);
 
   const openGoogleMaps = useCallback(() => {
     window.open(`https://www.google.com/maps?q=${currentProperty.lat},${currentProperty.lng}`, "_blank", "noreferrer");
@@ -807,6 +908,7 @@ const PropertyDetails = () => {
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeInUp .4s ease-out both; }
         .details-map .leaflet-container { width: 100%; height: 100%; border-radius: 18px; z-index: 1; }
+        .nearby-map .leaflet-container { width: 100%; height: 100%; border-radius: 18px; z-index: 1; }
         .details-map-pin {
           width: 38px; height: 38px; border-radius: 999px; border: 4px solid white;
           box-shadow: 0 14px 28px rgba(9, 30, 66, .24); display: grid; place-items: center;
@@ -814,6 +916,8 @@ const PropertyDetails = () => {
         .details-map-pin span { width: 10px; height: 10px; border-radius: 999px; background: #fff; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
       <Navbar />
@@ -825,294 +929,518 @@ const PropertyDetails = () => {
       )}
 
       <main className="mx-auto w-full max-w-[1500px] px-4 py-5 md:px-6">
-        <section className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-600">
-              <span className="inline-flex items-center gap-1"><Star className="h-4 w-4 fill-[#F59E0B] text-[#F59E0B]" /> {currentProperty.rating}</span>
-              <span>({currentProperty.reviewCount} reviews)</span>
-              <span className="text-slate-300">|</span>
-              <button type="button" onClick={() => scrollToSection("location")} className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-[#155BC2]">
-                <MapPin className="h-4 w-4" /> {currentProperty.address}
-              </button>
-            </div>
-            <h1 className="text-2xl font-black leading-tight text-[#091E42] md:text-4xl">{currentProperty.title}</h1>
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-bold text-slate-600">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200"><Clock className="h-4 w-4 text-[#155BC2]" /> {currentProperty.distance}</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200">From <strong className="text-[#155BC2]">EGP {currentProperty.price}</strong> /month</span>
-            </div>
-          </div>
 
-          <div className="flex gap-2">
-            <button type="button" onClick={handleShare} className="inline-flex h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95">
-              <Share2 className="h-4 w-4" /> Share
-            </button>
-            <button type="button" onClick={handleSave} className={`inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-bold shadow-sm transition active:scale-95 ${isSaved ? "border-rose-200 bg-rose-50 text-rose-600" : "border-slate-200 bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-600"}`}>
-              <Heart className={`h-4 w-4 ${isSaved ? "fill-rose-500" : ""}`} /> {isSaved ? "Saved" : "Save"}
+        {/* ── Header ── */}
+        <section className="mb-5">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-600">
+            <span className="inline-flex items-center gap-1">
+              <Star className="h-4 w-4 fill-[#F59E0B] text-[#F59E0B]" /> {currentProperty.rating}
+            </span>
+            <span>({currentProperty.reviewCount} reviews)</span>
+            <span className="text-slate-300">|</span>
+            <button type="button" onClick={() => scrollToSection("nearby")} className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-[#155BC2]">
+              <MapPin className="h-4 w-4" /> {currentProperty.address}
             </button>
           </div>
+          <h1 className="text-2xl font-black leading-tight text-[#091E42] md:text-4xl">{currentProperty.title}</h1>
         </section>
 
-        <section className="grid gap-2 overflow-hidden rounded-3xl md:h-[450px] md:grid-cols-4 md:grid-rows-2">
-          <button type="button" onClick={() => { setIsGalleryOpen(true); setCurrentImageIndex(0); }} className="group relative h-[330px] overflow-hidden bg-slate-200 md:col-span-2 md:row-span-2 md:h-full">
-            <img src={currentProperty.images[0]} alt="Main property" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="eager" />
-            <div className="absolute bottom-4 left-4 flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black text-[#091E42] shadow-lg">
-                <Camera className="h-4 w-4" /> View all photos
-              </span>
-              <button type="button" onClick={(event) => { event.stopPropagation(); setIsVideoPlaying(false); setIsVideoOpen(true); }} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black text-[#091E42] shadow-lg">
-                <Video className="h-4 w-4" /> Video tour
-              </button>
-            </div>
-          </button>
-          {currentProperty.images.slice(1, 5).map((image, index) => (
-            <button key={image} type="button" onClick={() => { setIsGalleryOpen(true); setCurrentImageIndex(index + 1); }} className="group hidden overflow-hidden bg-slate-200 md:block">
-              <img src={image} alt={`Property ${index + 2}`} loading="lazy" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
-            </button>
-          ))}
-        </section>
+        {/* ── Gallery (2/3) + Booking card (1/3) ── */}
+        <section ref={bookingCardRef} className="grid gap-4 lg:grid-cols-[2fr_1fr] lg:items-start">
 
-        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {highlights.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="grid h-11 w-11 place-items-center rounded-xl bg-blue-50 text-[#155BC2]">
-                  <Icon className="h-5 w-5" />
-                </div>
-                <p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-400">{item.label}</p>
-                <p className="mt-1 text-sm font-black text-[#091E42]">{item.value}</p>
+          {/* Photos */}
+          <div className="grid gap-2 overflow-hidden rounded-3xl md:h-[450px] md:grid-cols-4 md:grid-rows-2">
+            <button
+              type="button"
+              onClick={() => { setIsGalleryOpen(true); setCurrentImageIndex(0); }}
+              className="group relative h-[330px] overflow-hidden bg-slate-200 md:col-span-2 md:row-span-2 md:h-full"
+            >
+              <img src={currentProperty.images[0]} alt="Main property" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="eager" />
+              <div className="absolute bottom-4 left-4">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black text-[#091E42] shadow-lg">
+                  <Camera className="h-4 w-4" /> View all photos
+                </span>
               </div>
-            );
-          })}
-        </section>
-
-        <nav className="sticky top-0 z-30 -mx-4 mt-6 border-y border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur md:-mx-6 md:px-6">
-          <div className="scrollbar-hide flex w-fit max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-1 shadow-sm">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => scrollToSection(tab.id)}
-                className={`h-9 shrink-0 rounded-xl px-4 text-xs font-black transition active:scale-95 sm:text-sm ${
-                  activeTab === tab.id
-                    ? "bg-[#155BC2] text-white shadow-sm"
-                    : "text-slate-600 hover:bg-white hover:text-[#155BC2]"
-                }`}
-              >
-                {tab.label}
+            </button>
+            {currentProperty.images.slice(1, 5).map((image, index) => (
+              <button key={image} type="button" onClick={() => { setIsGalleryOpen(true); setCurrentImageIndex(index + 1); }} className="group hidden overflow-hidden bg-slate-200 md:block">
+                <img src={image} alt={`Property ${index + 2}`} loading="lazy" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
               </button>
             ))}
           </div>
-        </nav>
 
-        <div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1fr)_390px]">
-          <div className="space-y-10">
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">
-              <SectionTitle title="About this property" subtitle={currentProperty.description} />
-              <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-[#F8FAFC] p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <img src={currentProperty.landlord.image} alt={currentProperty.landlord.name} className="h-12 w-12 rounded-full object-cover" loading="lazy" />
-                  <div>
-                    <p className="font-black text-[#091E42]">{currentProperty.landlord.name}</p>
-                    <p className="text-xs font-semibold text-slate-500">{currentProperty.landlord.response}</p>
-                  </div>
-                </div>
-                <button type="button" onClick={openOwnerProfile} className="rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold transition hover:border-[#155BC2] hover:text-[#155BC2] active:scale-95">
-                  View Profile
+          {/* Booking card */}
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/60">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                  {activeBookingOption.id === "whole" ? "Monthly rent" : activeBookingOption.id === "room" ? "Per room / month" : "Per bed / month"}
+                </p>
+                <p className="mt-1 text-3xl font-black text-[#091E42]">
+                  EGP {activeBookingOption.price.toLocaleString()}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={handleShare} className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 active:scale-95" aria-label="Share">
+                  <Share2 className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={handleSave} className={`grid h-10 w-10 place-items-center rounded-full border shadow-sm transition active:scale-95 ${isSaved ? "border-rose-200 bg-rose-50 text-rose-600" : "border-slate-200 bg-white text-slate-600 hover:bg-rose-50 hover:text-rose-600"}`} aria-label="Save">
+                  <Heart className={`h-4 w-4 ${isSaved ? "fill-rose-500" : ""}`} />
                 </button>
               </div>
-            </section>
+            </div>
 
-            <section id="rooms" ref={setSectionRef("rooms")} className="scroll-mt-28">
-              <SectionTitle title="Choose your room" subtitle="Compare room types, beds, capacity, status, and monthly rent before booking." />
-              <div className="grid gap-4">
-                {currentProperty.rooms.map((room) => {
-                  const status = getRoomStatus(room);
-                  const availableBeds = room.beds.filter((bedItem) => bedItem.status === "AVAILABLE").length;
-                  return (
-                    <article key={room.id} className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md md:p-4">
-                      <div className="grid gap-4 md:grid-cols-[190px_1fr_auto] md:items-center">
-                        <img src={room.image} alt={room.name} loading="lazy" className="h-44 w-full rounded-2xl object-cover md:h-32" />
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-black text-[#091E42]">{room.type}</h3>
-                            <span className={`rounded-full border px-3 py-1 text-xs font-black ${status.className}`}>{status.label}</span>
-                          </div>
-                          <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-600 sm:grid-cols-3">
-                            <span className="inline-flex items-center gap-2"><Bed className="h-4 w-4 text-[#155BC2]" /> {room.beds.length} beds</span>
-                            <span className="inline-flex items-center gap-2"><Users className="h-4 w-4 text-[#155BC2]" /> {room.capacity} people</span>
-                            <span className="inline-flex items-center gap-2"><CheckCircle className="h-4 w-4 text-[#10B981]" /> {availableBeds} available</span>
-                          </div>
-                          <p className="mt-3 text-xl font-black text-[#155BC2]">EGP {room.price}<span className="text-xs font-semibold text-slate-400"> /month</span></p>
-                        </div>
-                        <button type="button" onClick={() => openBooking(room.id)} className="h-11 rounded-full bg-[#155BC2] px-6 text-sm font-black text-white transition hover:bg-[#0f4699] active:scale-95">
-                          Select Room
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
+            {(currentProperty.bookingOptions ?? []).length > 1 && (
+              <div className="mt-3 flex gap-1 rounded-2xl bg-slate-100 p-1">
+                {(currentProperty.bookingOptions ?? []).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setBookingUnit(opt.id)}
+                    className={`flex-1 rounded-xl py-1.5 text-xs font-bold transition ${
+                      bookingUnit === opt.id ? "bg-white text-[#155BC2] shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
-            </section>
+            )}
 
-            <section id="facilities" ref={setSectionRef("facilities")} className="scroll-mt-28">
-              <SectionTitle title="Facilities and nearby services" subtitle="Everything students need day to day, from study comfort to essentials around the building." />
-              <div className="rounded-lg bg-slate-100 p-6 shadow-sm ring-1 ring-slate-200">
-                <h3 className="mb-4 text-xl font-bold text-[#091E42]">Property Facilities</h3>
-                <div className="flex flex-wrap gap-3 border-b border-slate-400/70 pb-5">
-                  {currentProperty.services.map((service) => {
-                    const Icon = service.icon || DETAIL_ICON_MAP[service.iconKey] || CheckCircle;
-                    return (
-                      <span key={service.name} className="inline-flex items-center gap-2 rounded-full bg-[#155BC2] px-4 py-2 text-xs font-bold text-white shadow-sm">
-                        <Icon className="h-4 w-4" /> {service.name}
-                      </span>
-                    );
-                  })}
-                </div>
-                <h3 className="mb-4 mt-5 text-xl font-bold text-[#091E42]">Nearby Services</h3>
-                <div className="flex flex-wrap gap-3">
-                  {nearbyPlaces.map((place) => (
-                    <button key={place.name} type="button" onClick={() => scrollToSection("location")} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-[#091E42] shadow-sm ring-1 ring-slate-200 transition hover:text-[#155BC2] active:scale-95">
-                      <MapPin className="h-4 w-4" /> {place.type}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
+            <div className="mt-4 space-y-3 rounded-2xl bg-[#F8FAFC] p-4 text-sm font-bold text-slate-600">
+              <p className="flex justify-between">
+                <span>Deposit (20%)</span>
+                <strong className="text-[#091E42]">EGP {Math.round(activeBookingOption.price * 0.2).toLocaleString()}</strong>
+              </p>
+              <p className="flex justify-between">
+                <span>Available From</span>
+                <strong className={currentProperty.isAvailable ? "text-emerald-600" : "text-amber-600"}>
+                  {currentProperty.availableFrom
+                    ? new Date(currentProperty.availableFrom).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                    : currentProperty.isAvailable ? "Now" : currentProperty.status || "Check with owner"}
+                </strong>
+              </p>
+              {bookingUnit === "whole" && (
+                <p className="flex justify-between">
+                  <span>Entire property</span>
+                  <strong className="text-[#091E42]">{currentProperty.numRooms || currentProperty.rooms.length} rooms · {currentProperty.numBeds || currentProperty.rooms.reduce((s, r) => s + r.beds.length, 0)} beds</strong>
+                </p>
+              )}
+              {bookingUnit === "room" && (
+                <p className="flex justify-between">
+                  <span>Rooms available</span>
+                  <strong className="text-[#091E42]">{availableRooms.length} of {currentProperty.numRooms || currentProperty.rooms.length}</strong>
+                </p>
+              )}
+              {bookingUnit === "bed" && (
+                <>
+                  <p className="flex justify-between">
+                    <span>Beds available</span>
+                    <strong className="text-[#091E42]">{availableBeds} of {currentProperty.numBeds || currentProperty.rooms.reduce((s, r) => s + r.beds.length, 0)}</strong>
+                  </p>
+                  {currentProperty.propertyType === "apartment" && (
+                    <p className="flex justify-between">
+                      <span>Rooms</span>
+                      <strong className="text-[#091E42]">{currentProperty.numRooms || currentProperty.rooms.length} rooms</strong>
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
 
-            <section id="bills" ref={setSectionRef("bills")} className="scroll-mt-28">
-              <SectionTitle title="Bills and utilities" subtitle="Transparent monthly utility expectations before you send a booking request." />
-              <div className="rounded-lg bg-slate-100 p-6 shadow-sm ring-1 ring-slate-200">
-                <div className="flex flex-wrap gap-3">
-                {currentProperty.bills.map((bill) => {
-                  const Icon = bill.icon || DETAIL_ICON_MAP[bill.iconKey] || Zap;
-                  return (
-                    <span key={bill.name} className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-white shadow-sm ${bill.included ? "bg-[#155BC2]" : "bg-[#F59E0B]"}`}>
-                      <Icon className="h-4 w-4" /> {bill.name}
-                      <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px]">
-                        {bill.included ? "Included" : "Not Included"}
-                      </span>
-                    </span>
-                  );
-                })}
-                </div>
-              </div>
-            </section>
+            <button
+              type="button"
+              onClick={() => canBook && openBooking()}
+              disabled={!canBook}
+              className={`mt-5 h-12 w-full rounded-full text-sm font-black text-white shadow-md transition active:scale-95 ${
+                canBook ? "bg-[#155BC2] hover:bg-[#0f4699]" : "cursor-not-allowed bg-slate-300"
+              }`}
+            >
+              {canBook ? "Book Now" : "Not Available"}
+            </button>
 
-            <section id="reviews" ref={setSectionRef("reviews")} className="scroll-mt-28">
-              <SectionTitle title="Student reviews" subtitle="A Booking-style overview of what students say about the property." />
-              <div className="space-y-6">
-                <div className="rounded-lg bg-slate-100 p-6 shadow-sm ring-1 ring-slate-200">
-                  <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h3 className="text-2xl font-black text-[#091E42]">Average Rating</h3>
-                      <p className="mt-1 text-sm font-bold text-slate-600">{currentProperty.reviewCount} verified student reviews</p>
-                    </div>
-                    <div className="rounded-full bg-[#155BC2] px-5 py-2 text-xl font-black text-white">
-                      {currentProperty.rating}
-                    </div>
-                  </div>
-                  <div className="space-y-5">
-                    {ratingBreakdown.map((item) => (
-                      <div key={item.label} className="grid gap-3 md:grid-cols-[220px_1fr_70px] md:items-center">
-                        <span className="text-lg font-medium text-slate-800">{item.label}</span>
-                        <div className="h-3 overflow-hidden rounded-full bg-white">
-                          <div className="h-full rounded-full bg-[#155BC2]" style={{ width: `${item.value}%` }} />
-                        </div>
-                        <span className="text-sm font-black text-slate-600">{item.score.toFixed(1)}</span>
-                      </div>
+            <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#F8FAFC] p-4">
+              <Link
+                to={`/profile/${currentProperty.landlord.id}`}
+                className="flex min-w-0 flex-1 items-center gap-3 transition-opacity hover:opacity-80"
+              >
+                <img src={currentProperty.landlord.image} alt={currentProperty.landlord.name} className="h-10 w-10 shrink-0 rounded-full object-cover" loading="lazy" />
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-[#091E42]">{currentProperty.landlord.name}</p>
+                  <p className="truncate text-xs text-slate-500">{currentProperty.landlord.response}</p>
+                </div>
+              </Link>
+              <button
+                type="button"
+                onClick={handleMessageOwner}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500 text-white shadow-md transition hover:bg-emerald-600 active:scale-95"
+                aria-label="Message owner"
+              >
+                <MessageSquare className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Tab nav ── */}
+        <nav className="sticky top-0 z-30 -mx-4 mt-6 border-y border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur md:-mx-6 md:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className={`shrink-0 grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all duration-300 hover:border-[#155BC2] hover:text-[#155BC2] active:scale-95 ${
+                showBookingCta ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-2 pointer-events-none"
+              }`}
+              aria-label="Back to top"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </button>
+            <div className="scrollbar-hide flex w-fit max-w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-1 shadow-sm">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => scrollToSection(tab.id)}
+                  className={`h-9 shrink-0 rounded-xl px-4 text-xs font-black transition active:scale-95 sm:text-sm ${
+                    activeTab === tab.id
+                      ? "bg-[#155BC2] text-white shadow-sm"
+                      : "text-slate-600 hover:bg-white hover:text-[#155BC2]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => canBook && openBooking()}
+              disabled={!canBook}
+              className={`shrink-0 h-9 rounded-full px-5 text-xs font-black text-white shadow-md transition-all duration-300 active:scale-95 ${
+                canBook ? "bg-[#155BC2] hover:bg-[#0f4699]" : "bg-slate-300 cursor-not-allowed"
+              } ${showBookingCta ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-2 pointer-events-none"}`}
+            >
+              {canBook ? "Book Now" : "Unavailable"}
+            </button>
+          </div>
+        </nav>
+
+        {/* ── Main content (single column) ── */}
+        <div className="mt-6 space-y-6">
+
+          {/* Property Details + Facilities + Bills — compact multi-column */}
+          <section id="details" ref={setSectionRef("details")} className="scroll-mt-28">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+              <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-5">
+
+                {/* Column 1 — Property */}
+                <div>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Property</p>
+                  <ul className="space-y-1.5">
+                    {[
+                      { label: "Type",   value: PROPERTY_TYPE_LABELS[currentProperty.propertyType] || currentProperty.propertyType || "—", Icon: Building2 },
+                      { label: "Floor",  value: currentProperty.floor != null ? `Floor ${currentProperty.floor}` : "Ground", Icon: Home },
+                      { label: "Area",   value: currentProperty.areaSqm ? `${currentProperty.areaSqm} m²` : "—", Icon: Ruler },
+                      { label: "Gender", value: GENDER_LABELS[currentProperty.genderPreference] || "Any", Icon: Users2 },
+                    ].map(({ label, value, Icon }) => (
+                      <li key={label} className="flex items-center gap-2">
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-[#155BC2]" />
+                        <span className="text-xs text-slate-500">{label}:</span>
+                        <span className="text-xs font-bold text-[#091E42]">{value}</span>
+                      </li>
                     ))}
+                  </ul>
+                </div>
+
+                {/* Column 2 — Rooms */}
+                <div>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Rooms</p>
+                  <ul className="space-y-1.5">
+                    {[
+                      { label: "Rooms",     value: `${currentProperty.numRooms || currentProperty.rooms.length}`, Icon: Bed },
+                      { label: "Beds",      value: `${currentProperty.numBeds || currentProperty.rooms.reduce((s, r) => s + r.beds.length, 0)}`, Icon: Bed },
+                      { label: "Bathrooms", value: `${currentProperty.numBathrooms || 1}`, Icon: Bath },
+                    ].map(({ label, value, Icon }) => (
+                      <li key={label} className="flex items-center gap-2">
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-[#155BC2]" />
+                        <span className="text-xs text-slate-500">{label}:</span>
+                        <span className="text-xs font-bold text-[#091E42]">{value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Column 3 — Location & Stay */}
+                <div>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Location & Stay</p>
+                  <ul className="space-y-1.5">
+                    {[
+                      { label: "University", value: currentProperty.nearbyUniversity || "—", Icon: GraduationCap },
+                      { label: "Distance",   value: currentProperty.distanceToUniversity || currentProperty.distance || "—", Icon: Clock },
+                      { label: "Transport",  value: (Array.isArray(currentProperty.transportTypes) ? currentProperty.transportTypes : []).map((t) => TRANSPORT_LABELS[t] || t).filter(Boolean).join(", ") || "—", Icon: Bus },
+                      { label: "Min stay",   value: `${currentProperty.minStayMonths || 1} mo`, Icon: CalendarDays },
+                      { label: "Max stay",   value: currentProperty.maxStayMonths ? `${currentProperty.maxStayMonths} mo` : "Flexible", Icon: CalendarDays },
+                      { label: "Status",     value: currentProperty.isAvailable ? "Available" : (currentProperty.status || "Unavailable"), Icon: CheckCircle, highlight: currentProperty.isAvailable },
+                    ].map(({ label, value, Icon, highlight }) => (
+                      <li key={label} className="flex items-center gap-2">
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${highlight ? "text-emerald-500" : "text-[#155BC2]"}`} />
+                        <span className="text-xs text-slate-500">{label}:</span>
+                        <span className={`text-xs font-bold ${highlight ? "text-emerald-600" : "text-[#091E42]"}`}>{value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Column 4 — Facilities */}
+                <div>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Facilities</p>
+                  <ul className="space-y-1.5">
+                    {currentProperty.services.length > 0 ? currentProperty.services.map((service) => {
+                      const Icon = service.icon || DETAIL_ICON_MAP[service.iconKey] || CheckCircle;
+                      return (
+                        <li key={service.name} className="flex items-center gap-2">
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-[#155BC2]" />
+                          <span className="text-xs font-semibold text-[#091E42]">{service.name}</span>
+                        </li>
+                      );
+                    }) : (
+                      <li className="text-xs text-slate-400">None listed</li>
+                    )}
+                  </ul>
+                </div>
+
+                {/* Column 5 — Bills & Utilities */}
+                <div>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Bills & Utilities</p>
+                  <ul className="space-y-1.5">
+                    {currentProperty.bills.map((bill) => {
+                      const Icon = bill.icon || DETAIL_ICON_MAP[bill.iconKey] || Zap;
+                      return (
+                        <li key={bill.name} className="flex items-center gap-2">
+                          <Icon className={`h-3.5 w-3.5 shrink-0 ${bill.included ? "text-emerald-500" : "text-amber-500"}`} />
+                          <span className="text-xs text-slate-600">{bill.name}</span>
+                          <span className={`text-[10px] font-bold ${bill.included ? "text-emerald-600" : "text-amber-600"}`}>
+                            {bill.included ? "Incl." : "Extra"}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+
+              </div>
+            </div>
+          </section>
+
+          {/* Nearby services + map */}
+          <section id="nearby" ref={setSectionRef("nearby")} className="scroll-mt-28">
+            <SectionTitle title="Location & nearby services" subtitle="Explore the property location and find essential spots around your accommodation." />
+
+            {/* Controls */}
+            <div className="mb-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleUseMyLocation}
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-bold transition active:scale-95 ${
+                  userCoords
+                    ? "border-[#155BC2] bg-[#155BC2] text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-[#155BC2] hover:text-[#155BC2]"
+                }`}
+              >
+                <LocateFixed className="h-4 w-4" />
+                {userCoords ? "My Location Active" : "Use My Location"}
+              </button>
+              <button
+                type="button"
+                onClick={handleGetDirections}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-[#155BC2] hover:text-[#155BC2] active:scale-95"
+              >
+                <Navigation className="h-4 w-4" /> Get Directions to Property
+              </button>
+              <button
+                type="button"
+                onClick={openGoogleMaps}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-[#155BC2] hover:text-[#155BC2] active:scale-95"
+              >
+                <ExternalLink className="h-4 w-4" /> Open in Google Maps
+              </button>
+            </div>
+
+            {/* Category pills */}
+            <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto pb-1">
+              {SERVICE_CATEGORIES.map((cat) => {
+                const Icon = cat.icon;
+                const isActive = serviceCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => { setServiceCategory(cat.id); setServiceSearch(""); setActivePlaceId(null); }}
+                    className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-all active:scale-95 ${
+                      isActive
+                        ? "border-[#155BC2] bg-[#155BC2] text-white shadow-md"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" /> {cat.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Map + places list */}
+            <div className="grid gap-4 lg:grid-cols-[2fr_1fr]" style={{ height: "520px" }}>
+
+              {/* Map */}
+              <div className="nearby-map overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <MapContainer
+                  center={propertyCenter}
+                  zoom={14}
+                  style={{ width: "100%", height: "100%" }}
+                  zoomControl
+                  scrollWheelZoom={false}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                  />
+                  <NearbyMapController activePlace={activeServicePlace} propertyCenter={propertyCenter} />
+
+                  {/* Property marker */}
+                  <Marker position={propertyCenter} icon={mapIcon}>
+                    <Popup>
+                      <strong>{currentProperty.title}</strong>
+                      <br />{currentProperty.address}
+                    </Popup>
+                  </Marker>
+
+                  {/* User location marker */}
+                  {userCoords && (
+                    <Marker position={[userCoords.lat, userCoords.lng]} icon={userLocIcon}>
+                      <Popup>Your current location</Popup>
+                    </Marker>
+                  )}
+
+                  {/* Nearby place markers */}
+                  {filteredServicePlaces.map((place) => (
+                    <Marker
+                      key={place.id}
+                      position={[place.lat, place.lng]}
+                      eventHandlers={{ click: () => setActivePlaceId(place.id) }}
+                    >
+                      <Popup className="font-sans font-semibold text-sm">{place.name}</Popup>
+                    </Marker>
+                  ))}
+                </MapContainer>
+              </div>
+
+              {/* Places list */}
+              <div className="flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                {/* Search */}
+                <div className="border-b border-slate-100 p-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={serviceSearch}
+                      onChange={(e) => setServiceSearch(e.target.value)}
+                      placeholder="Find a place..."
+                      className="w-full rounded-2xl bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    />
                   </div>
                 </div>
+
+                {/* List */}
+                <div className="no-scrollbar flex-1 space-y-2 overflow-y-auto p-3">
+                  {serviceLoading ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-400">
+                      Loading nearby places...
+                    </div>
+                  ) : serviceError ? (
+                    <div className="rounded-2xl border border-dashed border-rose-200 bg-rose-50 p-6 text-center text-sm font-semibold text-rose-500">
+                      {serviceError}
+                    </div>
+                  ) : filteredServicePlaces.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-400">
+                      No places found in this category.
+                    </div>
+                  ) : (
+                    filteredServicePlaces.map((place) => {
+                      const isActive = activeServicePlace?.id === place.id;
+                      return (
+                        <button
+                          key={place.id}
+                          type="button"
+                          onClick={() => setActivePlaceId(place.id)}
+                          className={`w-full rounded-2xl border p-3 text-left transition-all ${
+                            isActive
+                              ? "border-[#155BC2] bg-blue-50/70 shadow-sm"
+                              : "border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-black text-[#091E42]">{place.name}</p>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{place.rating}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">{place.distance}</p>
+                          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
+                            <Clock className="h-3 w-3" /> {place.hours}
+                          </div>
+                          <div className="mt-1 flex items-start gap-1.5 text-xs text-slate-400">
+                            <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+                            <span className="line-clamp-2">{place.address}</span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Reviews — simplified */}
+          <section id="reviews" ref={setSectionRef("reviews")} className="scroll-mt-28">
+            <SectionTitle
+              title="Student reviews"
+              subtitle={`${currentProperty.reviewCount} verified student review${currentProperty.reviewCount !== 1 ? "s" : ""}`}
+            />
+            {currentProperty.reviews.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-400">
+                No reviews yet — be the first to review this property.
+              </div>
+            ) : (
+              <>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {currentProperty.reviews.slice(0, visibleReviews).map((review) => (
                     <article key={review.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <img src={review.avatar} alt={review.user} loading="lazy" className="h-10 w-10 rounded-full object-cover" />
-                          <div>
-                            <p className="text-sm font-black text-[#091E42]">{review.user}</p>
-                            <p className="text-xs font-semibold text-slate-500">{review.date}</p>
-                            <Stars value={review.rating} size="h-3 w-3" />
-                          </div>
+                      <div className="flex items-center gap-3">
+                        <img src={review.avatar} alt={review.user} loading="lazy" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-[#091E42]">{review.user}</p>
+                          <p className="text-xs font-semibold text-slate-500">{review.date}</p>
+                          <Stars value={review.rating} size="h-3 w-3" />
                         </div>
-                        <span className="rounded-full bg-[#155BC2] px-3 py-1 text-xs font-black text-white">{review.rating}.0</span>
                       </div>
-                      <p className="mt-4 min-h-[96px] text-sm leading-7 text-slate-600">"{review.text}"</p>
+                      <p className="mt-4 text-sm leading-7 text-slate-600">&ldquo;{review.text}&rdquo;</p>
                     </article>
                   ))}
                 </div>
                 {visibleReviews < currentProperty.reviews.length && (
-                  <button type="button" onClick={() => setVisibleReviews((prev) => prev + 2)} className="mt-5 rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-black transition hover:border-[#155BC2] hover:text-[#155BC2]">
-                    Load More Reviews
+                  <button
+                    type="button"
+                    onClick={() => setVisibleReviews((prev) => prev + 3)}
+                    className="mt-5 rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-black transition hover:border-[#155BC2] hover:text-[#155BC2]"
+                  >
+                    Load more reviews
                   </button>
                 )}
-              </div>
-            </section>
+              </>
+            )}
+          </section>
 
-            <section id="location" ref={setSectionRef("location")} className="scroll-mt-28">
-              <SectionTitle title="Location and nearby essentials" subtitle="See the property, university, transport, and daily services around the accommodation." />
-              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="details-map h-[380px] overflow-hidden rounded-[18px]">
-                  <MapContainer center={[currentProperty.lat, currentProperty.lng]} zoom={15} scrollWheelZoom={false}>
-                    <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                    <Marker position={[currentProperty.lat, currentProperty.lng]} icon={mapIcon}>
-                      <Popup>
-                        <strong>{currentProperty.title}</strong>
-                        <br />
-                        {currentProperty.address}
-                      </Popup>
-                    </Marker>
-                    {nearbyMarkers.map((place) => (
-                      <Marker key={place.name} position={[place.lat, place.lng]} icon={createPin(place.color)}>
-                        <Popup>
-                          <strong>{place.name}</strong>
-                          <br />
-                          {place.type}
-                        </Popup>
-                      </Marker>
-                    ))}
-                  </MapContainer>
-                </div>
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap gap-2">
-                    {nearbyPlaces.map((place) => (
-                      <span key={place.name} className="rounded-full bg-[#F8FAFC] px-3 py-1 text-xs font-black text-slate-600 ring-1 ring-slate-200">{place.type}</span>
-                    ))}
-                  </div>
-                  <button type="button" onClick={openGoogleMaps} className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#155BC2] px-5 text-sm font-black text-white transition hover:bg-[#0f4699]">
-                    <ExternalLink className="h-4 w-4" /> Open In Google Maps
-                  </button>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <aside className="hidden lg:block">
-            <div className="sticky top-20 rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/60">
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Monthly rent from</p>
-                  <p className="mt-1 text-3xl font-black text-[#091E42]">EGP {currentProperty.price}</p>
-                </div>
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Available</span>
-              </div>
-              <div className="mt-5 space-y-3 rounded-2xl bg-[#F8FAFC] p-4 text-sm font-bold text-slate-600">
-                <p className="flex justify-between"><span>Deposit</span><strong className="text-[#091E42]">EGP {currentProperty.deposit}</strong></p>
-                <p className="flex justify-between"><span>Move In</span><strong className="text-[#091E42]">Flexible</strong></p>
-                <p className="flex justify-between"><span>Rooms</span><strong className="text-[#091E42]">{availableRooms.length} available</strong></p>
-              </div>
-              <button type="button" onClick={() => openBooking()} className="mt-5 h-12 w-full rounded-full bg-[#155BC2] text-sm font-black text-white shadow-md transition hover:bg-[#0f4699] active:scale-95">
-                Book Now
-              </button>
-              <button type="button" onClick={handleContactOwner} className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white text-sm font-black text-[#091E42] transition hover:border-[#155BC2] hover:text-[#155BC2] active:scale-95">
-                <MessageSquare className="h-4 w-4" /> Contact Owner
-              </button>
-              <p className="mt-4 flex items-center justify-center gap-2 text-xs font-semibold text-slate-500"><Phone className="h-4 w-4" /> Owner replies fast</p>
-            </div>
-          </aside>
         </div>
 
+        {/* ── Similar properties ── */}
         <section className="mt-14">
           <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -1141,8 +1469,7 @@ const PropertyDetails = () => {
                   onFavoriteDisabled={() => showNotice("Only available properties can be added to favorites")}
                   onFavoriteToggle={(property) =>
                     toggleFavorite(property, {
-                      onRequireAuth: () =>
-                        navigate("/login", { state: { from: { pathname: `/find-room/${id}` } } }),
+                      onRequireAuth: () => navigate("/login", { state: { from: { pathname: `/find-room/${id}` } } }),
                       onError: (message) => showNotice(message),
                     })
                   }
@@ -1153,18 +1480,25 @@ const PropertyDetails = () => {
         </section>
       </main>
 
+      {/* ── Mobile CTA bar ── */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white p-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] lg:hidden">
         <div className="mx-auto flex max-w-[1500px] items-center gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-slate-500">From</p>
-            <p className="text-lg font-black text-[#091E42]">EGP {currentProperty.price}<span className="text-xs text-slate-400"> /month</span></p>
+            <p className="text-xs font-bold text-slate-500">{activeBookingOption.label}</p>
+            <p className="text-lg font-black text-[#091E42]">EGP {activeBookingOption.price.toLocaleString()}<span className="text-xs text-slate-400"> /month</span></p>
           </div>
-          <button type="button" onClick={() => openBooking()} className="h-12 rounded-full bg-[#155BC2] px-6 text-sm font-black text-white shadow-md">
-            Book Now
+          <button
+            type="button"
+            onClick={() => canBook && openBooking()}
+            disabled={!canBook}
+            className={`h-12 rounded-full px-6 text-sm font-black text-white shadow-md ${canBook ? "bg-[#155BC2]" : "bg-slate-300 cursor-not-allowed"}`}
+          >
+            {canBook ? "Book Now" : "Unavailable"}
           </button>
         </div>
       </div>
 
+      {/* ── Gallery modal ── */}
       {isGalleryOpen && (
         <div className="fixed inset-0 z-[100] flex flex-col bg-black/95 p-4 text-white">
           <div className="flex items-center justify-between py-3">
@@ -1185,35 +1519,7 @@ const PropertyDetails = () => {
         </div>
       )}
 
-      {isVideoOpen && (
-        <div className="fixed inset-0 z-[105] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-              <h3 className="flex items-center gap-2 text-lg font-black text-[#091E42]">
-                <PlayCircle className="h-5 w-5 text-[#155BC2]" /> Property video tour
-              </h3>
-              <button type="button" onClick={() => setIsVideoOpen(false)} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200" aria-label="Close video">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="relative aspect-video bg-slate-900">
-              <img src={currentProperty.images[4] || currentProperty.images[0]} alt="Video preview" className="h-full w-full object-cover opacity-70" />
-              <div className="absolute inset-0 grid place-items-center">
-                {isVideoPlaying ? (
-                  <div className="rounded-full bg-white/90 px-6 py-3 text-sm font-black text-[#155BC2] shadow-lg">
-                    Playing video tour
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => setIsVideoPlaying(true)} className="grid h-20 w-20 place-items-center rounded-full bg-white/90 text-[#155BC2] shadow-lg transition hover:scale-105 active:scale-95" aria-label="Play video tour">
-                    <PlayCircle className="h-10 w-10" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* ── Booking modal ── */}
       {isBookingOpen && (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-900/45 p-0 backdrop-blur-sm md:items-center md:p-4">
           <div className="flex max-h-[94vh] w-full max-w-[980px] flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl md:rounded-3xl">
@@ -1223,107 +1529,109 @@ const PropertyDetails = () => {
                   <X className="h-5 w-5" />
                 </button>
                 <div className="text-right">
-                  <p className="text-xs font-bold text-slate-500">Step {Math.min(bookingStep, 3)} of 3</p>
-                  <h2 className="mt-1 text-xl font-black text-[#091E42]">
-                    {bookingStep === 1 && "Residence details"}
-                    {bookingStep === 2 && "Personal and ID information"}
-                    {bookingStep === 3 && "Booking confirmation"}
-                    {bookingStep === 4 && "Request sent"}
+                  <h2 className="text-xl font-black text-[#091E42]">
+                    {bookingStep === 4 ? "Booking request sent" : `Book ${currentProperty.title}`}
                   </h2>
+                  {bookingStep !== 4 && (
+                    <p className="mt-0.5 text-xs font-bold text-slate-400">
+                      {activeBookingOption.label} · EGP {activeBookingOption.price.toLocaleString()}/month
+                    </p>
+                  )}
                 </div>
               </div>
-              {bookingStep !== 4 && (
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {["Residence", "Personal info", "Payment"].map((label, index) => (
-                  <div key={label}>
-                    <div className={`h-2 rounded-full ${bookingStep >= index + 1 ? "bg-[#155BC2]" : "bg-slate-200"}`} />
-                    <p className="mt-2 hidden text-xs font-bold text-slate-500 sm:block">{label}</p>
-                  </div>
-                ))}
-              </div>
-              )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8FAFC] p-5">
               {bookingStep === 1 && (
-                <div className="space-y-5">
-                  <div className="rounded-lg bg-white p-5 shadow-sm">
-                    <h3 className="mb-4 flex items-center gap-2 text-lg font-black text-[#091E42]"><CalendarDays className="h-5 w-5 text-[#155BC2]" /> Move-in and stay dates</h3>
-                    <div className="grid gap-4 md:grid-cols-2">
+                <div className="mx-auto max-w-2xl space-y-4">
+                  {/* Booking summary */}
+                  <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                    <div className="flex items-center gap-4">
+                      <img src={currentProperty.images[0]} alt={currentProperty.title} className="h-20 w-28 shrink-0 rounded-xl object-cover" />
+                      <div className="min-w-0">
+                        <p className="font-black text-[#091E42] truncate">{currentProperty.title}</p>
+                        <p className="mt-0.5 text-xs text-slate-500 truncate">{currentProperty.address}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#155BC2]">{activeBookingOption.label}</span>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">EGP {activeBookingOption.price.toLocaleString()}/mo</span>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">Deposit: EGP {Math.round(activeBookingOption.price * 0.2).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dates */}
+                  <div className="rounded-2xl bg-white p-5 shadow-sm">
+                    <h3 className="mb-4 flex items-center gap-2 font-black text-[#091E42]"><CalendarDays className="h-4 w-4 text-[#155BC2]" /> Stay details</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <label className="block">
-                        <span className="mb-2 block text-xs font-bold text-slate-500">Move-in date</span>
-                        <input type="date" value={bookingData.moveInDate} onChange={(event) => updateBooking({ moveInDate: event.target.value })} className="h-12 w-full rounded-md border border-slate-200 bg-white px-4 text-sm font-bold outline-none transition focus:border-[#155BC2] focus:ring-2 focus:ring-blue-100" />
+                        <span className="mb-1.5 block text-xs font-bold text-slate-500">Move-in date</span>
+                        <input
+                          type="date"
+                          value={bookingData.moveInDate}
+                          onChange={(e) => updateBooking({ moveInDate: e.target.value })}
+                          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none transition focus:border-[#155BC2] focus:ring-2 focus:ring-blue-100"
+                        />
                       </label>
                       <label className="block">
-                        <span className="mb-2 block text-xs font-bold text-slate-500">Stay duration</span>
-                        <select value={bookingData.duration} onChange={(event) => updateBooking({ duration: event.target.value })} className="h-12 w-full rounded-md border border-slate-200 bg-white px-4 text-sm font-bold outline-none transition focus:border-[#155BC2] focus:ring-2 focus:ring-blue-100">
-                          <option>1 month</option>
-                          <option>3 months</option>
-                          <option>6 months</option>
-                          <option>12 months</option>
+                        <span className="mb-1.5 block text-xs font-bold text-slate-500">Stay duration</span>
+                        <select
+                          value={bookingData.duration}
+                          onChange={(e) => updateBooking({ duration: e.target.value })}
+                          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none transition focus:border-[#155BC2] focus:ring-2 focus:ring-blue-100"
+                        >
+                          <option value="1">1 month</option>
+                          <option value="3">3 months</option>
+                          <option value="6">6 months</option>
+                          <option value="12">12 months</option>
                         </select>
                       </label>
                     </div>
                   </div>
 
-                  <div className="rounded-lg bg-white p-5 shadow-sm">
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-[#155BC2]">{visibleRooms.length} available options</span>
-                      <h3 className="flex items-center gap-2 text-lg font-black text-[#091E42]">Choose accommodation <Building2 className="h-5 w-5 text-[#155BC2]" /></h3>
+                  {/* Room selection (room or bed booking) */}
+                  {bookingUnit !== "whole" && (
+                    <div className="rounded-2xl bg-white p-5 shadow-sm">
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="flex items-center gap-2 font-black text-[#091E42]">
+                          <Building2 className="h-4 w-4 text-[#155BC2]" /> Choose a room
+                        </h3>
+                        <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#155BC2]">
+                          {bookingUnit === "room" ? `${availableRooms.length} rooms available` : `${availableBeds} beds available`}
+                        </span>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                        {visibleRooms.map((room) => {
+                          const active = bookingData.selectedRoomId === room.id;
+                          const roomStatus = getRoomStatus(room);
+                          return (
+                            <button
+                              key={room.id}
+                              type="button"
+                              onClick={() => updateBooking({ selectedRoomId: room.id, selectedBedId: bookingUnit === "room" ? room.beds[0]?.id || "" : "" })}
+                              className={`overflow-hidden rounded-xl border bg-white text-left transition active:scale-[0.99] ${active ? "border-[#155BC2] shadow-[0_0_0_2px_rgba(21,91,194,0.14)]" : "border-slate-200 hover:border-[#155BC2]/50"}`}
+                            >
+                              <div className="relative h-28">
+                                <img src={room.image} alt={room.name} className="h-full w-full object-cover" />
+                                {active && <span className="absolute right-2 top-2 rounded-full bg-[#155BC2] px-2 py-0.5 text-[10px] font-bold text-white">Selected</span>}
+                              </div>
+                              <div className="p-3">
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${roomStatus.className}`}>{roomStatus.label}</span>
+                                <p className="mt-2 text-sm font-black text-[#091E42]">{room.type}</p>
+                                <p className="mt-0.5 text-xs text-slate-500">{room.beds.length} beds · {room.capacity} people</p>
+                                <p className="mt-2 text-sm font-black text-[#155BC2]">EGP {activeBookingOption.price.toLocaleString()}/mo</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                      {bookingTypeOptions.map((option) => {
-                        const Icon = option.icon;
-                        const active = bookingData.bookingType === option.id;
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => updateBooking({ bookingType: option.id, selectedRoomId: "", selectedBedId: "" })}
-                            className={`rounded-lg border p-4 text-left transition active:scale-[0.99] ${active ? "border-[#155BC2] bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:border-[#155BC2]/50"}`}
-                          >
-                            <Icon className="h-5 w-5 text-[#155BC2]" />
-                            <p className="mt-2 font-black text-[#091E42]">{option.label}</p>
-                            <p className="mt-1 text-xs leading-5 text-slate-500">{option.description}</p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-3">
-                      {visibleRooms.map((room) => {
-                        const active = bookingData.selectedRoomId === room.id;
-                        const status = getRoomStatus(room);
-                        return (
-                          <button
-                            key={room.id}
-                            type="button"
-                            onClick={() =>
-                              updateBooking({
-                                selectedRoomId: room.id,
-                                selectedBedId: bookingData.bookingType === "room" ? room.beds[0]?.id || "" : "",
-                              })
-                            }
-                            className={`overflow-hidden rounded-lg border bg-white text-left transition active:scale-[0.99] ${active ? "border-[#155BC2] shadow-[0_0_0_2px_rgba(21,91,194,0.14)]" : "border-slate-200 hover:border-[#155BC2]/50"}`}
-                          >
-                            <div className="relative h-32">
-                              <img src={room.image} alt={room.name} className="h-full w-full object-cover" />
-                              {active && <span className="absolute right-3 top-3 rounded-full bg-[#155BC2] px-2 py-1 text-[10px] font-bold text-white">Selected</span>}
-                            </div>
-                            <div className="p-4">
-                              <span className={`rounded-full border px-2 py-1 text-[10px] font-black ${status.className}`}>{status.label}</span>
-                              <p className="mt-3 font-black text-[#091E42]">{room.type}</p>
-                              <p className="mt-1 text-xs font-bold text-slate-500">{room.beds.length} beds | {room.capacity} people</p>
-                              <p className="mt-3 text-lg font-black text-[#155BC2]">EGP {room.price}</p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  )}
 
-                  {bookingData.bookingType === "bed" && selectedRoom && (
-                    <div className="rounded-lg bg-white p-5 shadow-sm">
-                      <h3 className="mb-4 flex items-center gap-2 text-lg font-black text-[#091E42]">Choose bed <Bed className="h-5 w-5 text-[#F59E0B]" /></h3>
+                  {/* Bed selection */}
+                  {bookingUnit === "bed" && selectedRoom && (
+                    <div className="rounded-2xl bg-white p-5 shadow-sm">
+                      <h3 className="mb-4 flex items-center gap-2 font-black text-[#091E42]"><Bed className="h-4 w-4 text-[#F59E0B]" /> Choose a bed</h3>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {selectedRoom.beds.map((bedItem) => {
                           const available = bedItem.status === "AVAILABLE";
@@ -1334,14 +1642,14 @@ const PropertyDetails = () => {
                               type="button"
                               disabled={!available}
                               onClick={() => updateBooking({ selectedBedId: bedItem.id })}
-                              className={`flex items-center justify-between rounded-lg border p-4 text-left transition disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${active ? "border-[#155BC2] bg-blue-50" : "border-slate-200 hover:border-[#155BC2]/50"}`}
+                              className={`flex items-center justify-between rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${active ? "border-[#155BC2] bg-blue-50" : "border-slate-200 bg-white hover:border-[#155BC2]/50"}`}
                             >
                               <span className={`grid h-9 w-9 place-items-center rounded-full text-sm font-black text-white ${available ? "bg-[#155BC2]" : "bg-slate-300"}`}>
-                                {bedItem.name.split(" ").pop()?.replace("B", "").replace("C", "")}
+                                {bedItem.name.replace(/[^0-9]/g, "") || "—"}
                               </span>
                               <div className="text-right">
-                                <p className="font-black">{bedItem.name}</p>
-                                <p className="text-xs text-slate-500">{bedItem.status}</p>
+                                <p className="font-black text-[#091E42]">{bedItem.name}</p>
+                                <p className="text-xs text-slate-500">{available ? "Available" : "Taken"}</p>
                               </div>
                             </button>
                           );
@@ -1349,128 +1657,41 @@ const PropertyDetails = () => {
                       </div>
                     </div>
                   )}
-                </div>
-              )}
 
-              {bookingStep === 2 && (
-                <div className="mx-auto max-w-3xl space-y-4">
-                  <div className="rounded-2xl bg-white p-5 shadow-sm">
-                    <h3 className="mb-5 flex items-center gap-2 text-lg font-black"><User className="h-5 w-5 text-[#155BC2]" /> Student information</h3>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <input value={bookingData.fullName} onChange={(event) => updateBooking({ fullName: event.target.value })} placeholder="Full name" className="h-12 rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2] focus:ring-4 focus:ring-blue-100" />
-                      <input type="number" min="16" max="80" value={bookingData.age} onChange={(event) => updateBooking({ age: event.target.value })} placeholder="Age" className="h-12 rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2] focus:ring-4 focus:ring-blue-100" />
-                      <select value={bookingData.university} onChange={(event) => updateBooking({ university: event.target.value })} className="h-12 rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2] focus:ring-4 focus:ring-blue-100">
-                        <option value="">Choose university</option>
-                        <option>Cairo University</option>
-                        <option>Ain Shams University</option>
-                        <option>Al-Azhar University</option>
-                        <option>American University in Cairo</option>
-                      </select>
-                      <input value={bookingData.faculty} onChange={(event) => updateBooking({ faculty: event.target.value })} placeholder="Faculty / major" className="h-12 rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2] focus:ring-4 focus:ring-blue-100" />
-                    </div>
-                  </div>
-                  <button type="button" onClick={() => updateBooking({ idUploaded: true })} className={`flex min-h-[150px] w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition ${bookingData.idUploaded ? "border-emerald-300 bg-emerald-50" : "border-slate-300 bg-white hover:border-[#155BC2]/50"}`}>
-                    <span className="grid h-14 w-14 place-items-center rounded-full bg-blue-100 text-[#155BC2]">
-                      {bookingData.idUploaded ? <Check className="h-7 w-7" /> : <UploadCloud className="h-7 w-7" />}
-                    </span>
-                    <p className="mt-4 font-black text-[#091E42]">{bookingData.idUploaded ? "Document uploaded" : "Upload student ID"}</p>
-                    <p className="mt-1 text-xs text-slate-500">PNG, JPG, or PDF up to 5MB</p>
-                  </button>
-                </div>
-              )}
-
-              {bookingStep === 3 && (
-                <div className="mx-auto max-w-3xl space-y-4">
                   {bookingError && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                      {bookingError}
-                    </div>
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{bookingError}</div>
                   )}
-                  <div className="rounded-lg bg-white p-5 shadow-sm">
-                    <h3 className="mb-5 flex items-center gap-2 text-lg font-black text-[#091E42]">Booking summary</h3>
-                    <div className="grid gap-5 md:grid-cols-[120px_1fr]">
-                      <img src={currentProperty.images[0]} alt={currentProperty.title} className="h-28 w-full rounded-lg object-cover" />
-                      <div>
-                        <h4 className="font-black text-[#091E42]">{currentProperty.title}</h4>
-                        <p className="mt-1 text-sm text-slate-500">{currentProperty.address}</p>
-                        <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-                          <p className="font-bold text-slate-600"><CalendarDays className="mr-1 inline h-4 w-4" /> {bookingData.moveInDate}</p>
-                          <p className="font-bold text-slate-600"><Clock className="mr-1 inline h-4 w-4" /> {bookingData.duration}</p>
-                          <p className="font-bold text-slate-600"><Bed className="mr-1 inline h-4 w-4" /> {selectedRoom?.type || "Room"}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-white p-5 shadow-sm">
-                    <h3 className="mb-5 flex items-center gap-2 text-lg font-black"><CreditCard className="h-5 w-5 text-[#155BC2]" /> Deposit payment</h3>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      {[{ id: "card", label: "Card" }, { id: "wallet", label: "Wallet" }, { id: "instapay", label: "InstaPay" }].map((method) => (
-                        <button key={method.id} type="button" onClick={() => updateBooking({ paymentMethod: method.id })} className={`rounded-2xl border p-4 font-black transition ${bookingData.paymentMethod === method.id ? "border-[#155BC2] bg-blue-50 text-[#155BC2]" : "border-slate-200 bg-white text-slate-600 hover:border-[#155BC2]/50"}`}>
-                          {method.label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-4 rounded-lg bg-[#F3F6FA] p-4">
-                      <div className="grid gap-4">
-                        <p className="text-sm leading-6 text-slate-600">
-                          Student Hub now starts a real Paymob session after the booking is created. You will finish the secure payment details on Paymob&apos;s hosted page.
-                        </p>
-                        <input
-                          value={bookingData.phone}
-                          onChange={(event) => updateBooking({ phone: event.target.value })}
-                          placeholder="Phone number for the payment receipt (optional)"
-                          className="h-11 rounded-md border border-slate-200 px-4 text-sm outline-none focus:border-[#155BC2]"
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-5 rounded-2xl bg-[#F8FAFC] p-4">
-                      <div className="flex justify-between text-sm"><span className="text-slate-500">Deposit due today</span><span className="font-black">EGP {currentProperty.deposit}</span></div>
-                      <div className="mt-2 flex justify-between text-sm"><span className="text-slate-500">Monthly rent</span><span className="font-black text-slate-400">Paid after approval</span></div>
-                    </div>
-                  </div>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-white p-4 shadow-sm">
-                    <input type="checkbox" checked={bookingData.agreed} onChange={(event) => updateBooking({ agreed: event.target.checked })} className="mt-1 h-5 w-5 accent-[#155BC2]" />
-                    <span className="text-sm leading-6 text-slate-600">I agree to the booking terms and understand that the booking will be created first, then I must complete the deposit payment to move it into landlord review.</span>
-                  </label>
                 </div>
               )}
 
               {bookingStep === 4 && (
-                <div className="mx-auto flex min-h-[420px] max-w-xl flex-col items-center justify-center rounded-2xl bg-white p-8 text-center shadow-sm">
-                  <div className="grid h-24 w-24 place-items-center rounded-full bg-emerald-50 text-[#10B981]">
-                    <Check className="h-12 w-12" />
+                <div className="mx-auto flex min-h-[380px] max-w-md flex-col items-center justify-center rounded-2xl bg-white p-8 text-center shadow-sm">
+                  <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-50 text-emerald-500">
+                    <Check className="h-10 w-10" />
                   </div>
-                  <h3 className="mt-6 text-3xl font-black">
-                    {paymentLaunchUrl ? "Booking created — complete your deposit" : "Booking created"}
-                  </h3>
-                  <p className="mt-3 max-w-md text-sm leading-6 text-slate-500">
-                    {paymentLaunchUrl
-                      ? `We started your live payment session for ${currentProperty.title}. Finish the deposit in the payment tab, then return to Student Hub and refresh your payments page.`
-                      : `Your booking was created for ${currentProperty.title}. If the payment tab did not open, continue from your payments page and retry the deposit there.`}
+                  <h3 className="mt-5 text-2xl font-black text-[#091E42]">Booking request sent!</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Your request for <strong>{currentProperty.title}</strong> has been submitted. Pay the deposit to move it into landlord review.
                   </p>
                   {bookingError && (
-                    <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-                      {bookingError}
-                    </div>
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">{bookingError}</div>
                   )}
-                  <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-                    {paymentLaunchUrl && (
-                      <button
-                        type="button"
-                        onClick={() => window.open(paymentLaunchUrl, "_blank", "noopener,noreferrer")}
-                        className="rounded-full border border-slate-300 bg-white px-6 py-3 font-black text-[#091E42] transition hover:border-[#155BC2] hover:text-[#155BC2]"
-                      >
-                        Open payment page
-                      </button>
-                    )}
+                  <div className="mt-6 flex flex-col gap-3 w-full">
+                    <button
+                      type="button"
+                      onClick={handlePayNow}
+                      className="h-12 w-full rounded-full bg-[#155BC2] font-black text-white shadow-md transition hover:bg-[#0f4699]"
+                    >
+                      Pay Deposit Now
+                    </button>
                     <button
                       type="button"
                       onClick={() => navigate(createdBookingId ? `/payments?booking=${createdBookingId}` : "/payments")}
-                      className="rounded-full bg-[#155BC2] px-8 py-3 font-black text-white transition hover:bg-[#0f4699]"
+                      className="h-11 w-full rounded-full border border-slate-200 font-black text-[#091E42] transition hover:border-[#155BC2] hover:text-[#155BC2]"
                     >
-                      Go to payments
+                      Go to My Bookings
                     </button>
-                    <button type="button" onClick={() => setIsBookingOpen(false)} className="rounded-full border border-slate-300 bg-white px-6 py-3 font-black text-[#091E42] transition hover:border-[#155BC2] hover:text-[#155BC2]">
+                    <button type="button" onClick={() => setIsBookingOpen(false)} className="text-sm font-bold text-slate-400 hover:text-slate-600">
                       Close
                     </button>
                   </div>
@@ -1478,13 +1699,18 @@ const PropertyDetails = () => {
               )}
             </div>
 
-            {bookingStep !== 4 && (
+            {bookingStep === 1 && (
               <div className="flex items-center justify-between border-t border-slate-200 bg-white px-5 py-4">
-                <button type="button" onClick={() => (bookingStep === 1 ? setIsBookingOpen(false) : setBookingStep((prev) => prev - 1))} className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 font-black text-[#155BC2] transition hover:bg-blue-50">
-                  <ChevronLeft className="h-4 w-4" /> {bookingStep === 1 ? "Cancel" : "Back"}
+                <button type="button" onClick={() => setIsBookingOpen(false)} className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 font-black text-slate-500 transition hover:bg-slate-100">
+                  <ChevronLeft className="h-4 w-4" /> Cancel
                 </button>
-                <button type="button" onClick={handleNextBooking} disabled={!canContinue} className="inline-flex items-center gap-2 rounded-full bg-[#155BC2] px-7 py-3 font-black text-white shadow-lg transition hover:bg-[#0f4699] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none">
-                  {bookingStep === 3 ? (isSubmittingBooking ? "Submitting..." : "Submit booking request") : "Next"} <ArrowRight className="h-4 w-4" />
+                <button
+                  type="button"
+                  onClick={handleSubmitBooking}
+                  disabled={!canSubmit || isSubmittingBooking}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#155BC2] px-7 py-3 font-black text-white shadow-lg transition hover:bg-[#0f4699] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                >
+                  {isSubmittingBooking ? "Submitting…" : "Submit Booking Request"} <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             )}

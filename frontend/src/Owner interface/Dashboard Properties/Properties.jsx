@@ -209,7 +209,6 @@ export default function OwnerProperties() {
 
                         <div className="text-sm text-slate-500">
                           <p>{property.num_beds || 0} bed(s)</p>
-                          <p>{property.num_roommates || 0} roommate slot(s)</p>
                           <p>{property.review_count || 0} review(s)</p>
                         </div>
                       </div>
@@ -271,7 +270,6 @@ export default function OwnerProperties() {
                   <ul className="mt-3 space-y-2">
                     <li>- Status: {selectedProperty.status}</li>
                     <li>- Beds: {selectedProperty.num_beds || 0}</li>
-                    <li>- Roommates: {selectedProperty.num_roommates || 0}</li>
                     <li>- Reviews: {selectedProperty.review_count || 0}</li>
                     <li>- Rating: {selectedProperty.average_rating || 0}</li>
                     <li>- Featured: {selectedProperty.is_featured ? "Yes" : "No"}</li>
