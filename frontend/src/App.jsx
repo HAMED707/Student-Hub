@@ -42,6 +42,7 @@ import { CommunityProvider } from "./hooks/useCommunityData.jsx";
 import { NotificationsProvider } from "./hooks/useNotifications.jsx";
 import { MessagingProvider } from "./hooks/useGlobalMessaging.jsx";
 import ChatDock from "./assets/components/ChatDock/ChatDock.jsx";
+import ChatbotWidget from "./assets/components/ChatbotWidget/ChatbotWidget.jsx";
 
 const NotFound = () => (
   <div className="flex flex-col items-center justify-center h-screen text-center">
@@ -110,6 +111,8 @@ function StudentLayout() {
 }
 
 export default function App() {
+  const authState = useAuthState();
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       <NotificationsProvider>
@@ -178,6 +181,7 @@ export default function App() {
         </Routes>
         </CommunityProvider>
         <ChatDock />
+        {authState.user?.role === "student" && <ChatbotWidget />}
         </MessagingProvider>
       </NotificationsProvider>
     </div>

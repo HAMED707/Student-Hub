@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'roommates',
     'reviews',
     'properties',
+    'chatbot',
 ]
 
 MIDDLEWARE = [
