@@ -21,7 +21,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from accounts.models import Users
-from properties.models import Property, PropertyImage
+from properties.models import Property, PropertyImage, University
 
 
 # ─────────────────────────────────────────────────────────────
@@ -51,10 +51,11 @@ def create_student(username="student1", password="pass1234"):
     )
 
 
-def create_property(landlord, **kwargs):
+def create_property(landlord, universities=None, **kwargs):
     defaults = dict(
         title="Test Apartment",
-        property_type="apartment",
+        unit_type="apartment",
+        rental_mode="whole_apartment",
         price=Decimal("3000.00"),
         city="Cairo",
         district="Dokki",
@@ -62,7 +63,11 @@ def create_property(landlord, **kwargs):
         status="available",
     )
     defaults.update(kwargs)
-    return Property.objects.create(landlord=landlord, **defaults)
+    prop = Property.objects.create(landlord=landlord, **defaults)
+    if universities is None:
+        universities = University.objects.filter(city=defaults["city"])[:1]
+    prop.nearby_universities.set(universities)
+    return prop
 
 
 def get_tokens(client, username, password):
@@ -101,8 +106,12 @@ class PropertyModelTests(TestCase):
     def test_review_count_no_reviews(self):
         self.assertEqual(self.prop.review_count, 0)
 
-    def test_amenities_default_empty_list(self):
-        self.assertEqual(self.prop.amenities, [])
+    def test_amenity_bill_booleans_default_false(self):
+        self.assertFalse(self.prop.has_internet)
+        self.assertFalse(self.prop.has_ac)
+        self.assertFalse(self.prop.has_water)
+        self.assertFalse(self.prop.has_electricity)
+        self.assertFalse(self.prop.has_gas)
 
     def test_ordering_newest_first(self):
         prop2 = create_property(self.landlord, title="Newer Apartment")
@@ -110,17 +119,51 @@ class PropertyModelTests(TestCase):
         self.assertEqual(props[0], prop2)  # newest first
 
     def test_price_cannot_be_negative(self):
-        from django.core.exceptions import ValidationError
         prop = Property(
             landlord=self.landlord,
             title="Bad",
-            property_type="studio",
+            unit_type="apartment",
+            rental_mode="whole_apartment",
             price=Decimal("-100"),
             city="Cairo",
             gender_preference="male",
         )
         with self.assertRaises(Exception):
             prop.full_clean()
+
+    def test_clean_requires_rental_mode_for_apartment(self):
+        prop = Property(
+            landlord=self.landlord,
+            title="No Mode",
+            unit_type="apartment",
+            price=Decimal("3000"),
+            city="Cairo",
+            gender_preference="male",
+        )
+        with self.assertRaises(Exception):
+            prop.clean()
+
+    def test_clean_requires_room_price_for_room_type(self):
+        prop = Property(
+            landlord=self.landlord,
+            title="Room Without Price",
+            unit_type="room",
+            city="Cairo",
+            gender_preference="male",
+        )
+        with self.assertRaises(Exception):
+            prop.clean()
+
+    def test_clean_passes_for_valid_bed_listing(self):
+        prop = Property(
+            landlord=self.landlord,
+            title="Valid Bed",
+            unit_type="bed",
+            bed_price=Decimal("1000"),
+            city="Cairo",
+            gender_preference="male",
+        )
+        prop.clean()  # should not raise
 
 
 class PropertyImageModelTests(TestCase):
@@ -166,26 +209,27 @@ class PropertyFilterTests(TestCase):
 
     def setUp(self):
         self.landlord = create_landlord()
-        self.cairo_studio = create_property(
+        self.cairo_room = create_property(
             self.landlord,
-            title="Cairo Studio",
-            property_type="studio",
+            title="Cairo Room",
+            unit_type="room",
+            rental_mode=None,
+            price=Decimal("2000"),  # set directly via ORM, bypassing clean(), for filter testing
             city="Cairo",
-            price=Decimal("2000"),
             num_beds=1,
             gender_preference="female",
-            nearby_university="Cairo University",
-            amenities=["WiFi", "AC"],
+            has_internet=True,
+            has_ac=True,
         )
         self.alex_apartment = create_property(
             self.landlord,
             title="Alex Apartment",
-            property_type="apartment",
+            unit_type="apartment",
+            rental_mode="whole_apartment",
             city="Alexandria",
             price=Decimal("5000"),
             num_beds=3,
             gender_preference="male",
-            nearby_university="Alexandria University",
         )
 
     def _filter(self, **params):
@@ -195,51 +239,51 @@ class PropertyFilterTests(TestCase):
 
     def test_filter_by_city(self):
         result = self._filter(city="Cairo")
-        self.assertIn(self.cairo_studio, result)
+        self.assertIn(self.cairo_room, result)
         self.assertNotIn(self.alex_apartment, result)
 
     def test_filter_by_city_case_insensitive(self):
         result = self._filter(city="cairo")
-        self.assertIn(self.cairo_studio, result)
+        self.assertIn(self.cairo_room, result)
 
-    def test_filter_by_property_type(self):
-        result = self._filter(type="studio")
-        self.assertIn(self.cairo_studio, result)
+    def test_filter_by_unit_type(self):
+        result = self._filter(type="room")
+        self.assertIn(self.cairo_room, result)
         self.assertNotIn(self.alex_apartment, result)
 
     def test_filter_price_min(self):
         result = self._filter(price_min=3000)
         self.assertIn(self.alex_apartment, result)
-        self.assertNotIn(self.cairo_studio, result)
+        self.assertNotIn(self.cairo_room, result)
 
     def test_filter_price_max(self):
         result = self._filter(price_max=3000)
-        self.assertIn(self.cairo_studio, result)
+        self.assertIn(self.cairo_room, result)
         self.assertNotIn(self.alex_apartment, result)
 
     def test_filter_price_range(self):
         result = self._filter(price_min=1000, price_max=2500)
-        self.assertIn(self.cairo_studio, result)
+        self.assertIn(self.cairo_room, result)
         self.assertNotIn(self.alex_apartment, result)
 
     def test_filter_num_beds(self):
         result = self._filter(num_beds=3)
         self.assertIn(self.alex_apartment, result)
-        self.assertNotIn(self.cairo_studio, result)
+        self.assertNotIn(self.cairo_room, result)
 
     def test_filter_gender(self):
         result = self._filter(gender="female")
-        self.assertIn(self.cairo_studio, result)
+        self.assertIn(self.cairo_room, result)
         self.assertNotIn(self.alex_apartment, result)
 
     def test_filter_university(self):
         result = self._filter(university="Cairo")
-        self.assertIn(self.cairo_studio, result)
+        self.assertIn(self.cairo_room, result)
         self.assertNotIn(self.alex_apartment, result)
 
-    def test_filter_amenity_in_json_list(self):
-        result = self._filter(amenity="WiFi")
-        self.assertIn(self.cairo_studio, result)
+    def test_filter_has_internet(self):
+        result = self._filter(has_internet=True)
+        self.assertIn(self.cairo_room, result)
         self.assertNotIn(self.alex_apartment, result)
 
     def test_no_filters_returns_all(self):
@@ -255,7 +299,8 @@ class PropertySerializerTests(TestCase):
 
     def setUp(self):
         self.landlord = create_landlord()
-        self.prop = create_property(self.landlord, amenities=["WiFi", "AC"])
+        self.prop = create_property(self.landlord, has_internet=True, has_ac=True)
+        self.cairo_uni = University.objects.filter(city="Cairo").first()
 
     def test_list_serializer_has_cover_image_field(self):
         from api.properties_api.serializers import PropertyListSerializer
@@ -278,10 +323,12 @@ class PropertySerializerTests(TestCase):
         from api.properties_api.serializers import PropertyCreateSerializer
         data = {
             "title": "Bad",
-            "property_type": "studio",
+            "unit_type": "apartment",
+            "rental_mode": "whole_apartment",
             "price": 0,
             "city": "Cairo",
             "gender_preference": "male",
+            "nearby_universities": [self.cairo_uni.id],
         }
         s = PropertyCreateSerializer(data=data)
         self.assertFalse(s.is_valid())
@@ -291,24 +338,42 @@ class PropertySerializerTests(TestCase):
         from api.properties_api.serializers import PropertyCreateSerializer
         data = {
             "title": "Bad Stay",
-            "property_type": "studio",
+            "unit_type": "apartment",
+            "rental_mode": "whole_apartment",
             "price": 2000,
             "city": "Cairo",
             "gender_preference": "male",
             "min_stay_months": 6,
             "max_stay_months": 3,  # invalid: less than min
+            "nearby_universities": [self.cairo_uni.id],
         }
         s = PropertyCreateSerializer(data=data)
         self.assertFalse(s.is_valid())
+
+    def test_create_serializer_rejects_missing_universities(self):
+        from api.properties_api.serializers import PropertyCreateSerializer
+        data = {
+            "title": "No Uni",
+            "unit_type": "apartment",
+            "rental_mode": "whole_apartment",
+            "price": 3000,
+            "city": "Cairo",
+            "gender_preference": "male",
+        }
+        s = PropertyCreateSerializer(data=data)
+        self.assertFalse(s.is_valid())
+        self.assertIn("nearby_universities", s.errors)
 
     def test_create_serializer_creates_property_with_images(self):
         from api.properties_api.serializers import PropertyCreateSerializer
         data = {
             "title": "New Place",
-            "property_type": "apartment",
+            "unit_type": "apartment",
+            "rental_mode": "whole_apartment",
             "price": 3000,
             "city": "Cairo",
             "gender_preference": "male",
+            "nearby_universities": [self.cairo_uni.id],
             "uploaded_images": [make_image_file("a.jpg"), make_image_file("b.jpg")],
         }
         s = PropertyCreateSerializer(data=data)
@@ -337,6 +402,7 @@ class PropertyAPIBase(TestCase):
         self.landlord = create_landlord("landlord_api", "pass1234")
         self.other_landlord = create_landlord("other_landlord", "pass1234")
         self.student = create_student("student_api", "pass1234")
+        self.cairo_uni = University.objects.filter(city="Cairo").first()
         self.prop = create_property(self.landlord, title="API Test Property")
         self.featured_prop = create_property(self.landlord, title="Featured", is_featured=True)
 
@@ -357,45 +423,45 @@ class PropertyAPIBase(TestCase):
 class PropertyListViewTests(PropertyAPIBase):
 
     def test_public_can_list_properties(self):
-        resp = self.client.get("/api/properties/properties/")
+        resp = self.client.get("/api/properties/")
         self.assertEqual(resp.status_code, 200)
         self.assertIsInstance(resp.data, list)
 
     def test_default_returns_only_available(self):
         create_property(self.landlord, title="Rented One", status="rented")
-        resp = self.client.get("/api/properties/properties/")
+        resp = self.client.get("/api/properties/")
         statuses = [p["status"] for p in resp.data]
         self.assertTrue(all(s == "available" for s in statuses))
 
     def test_filter_by_city_via_api(self):
         create_property(self.landlord, title="Alex Place", city="Alexandria")
-        resp = self.client.get("/api/properties/properties/?city=Alexandria")
+        resp = self.client.get("/api/properties/?city=Alexandria")
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(all("Alexandria" in p["city"] for p in resp.data))
 
     def test_filter_by_price_range(self):
         create_property(self.landlord, title="Cheap", price=Decimal("1000"))
         create_property(self.landlord, title="Expensive", price=Decimal("9000"))
-        resp = self.client.get("/api/properties/properties/?price_min=500&price_max=2000")
+        resp = self.client.get("/api/properties/?price_min=500&price_max=2000")
         prices = [Decimal(p["price"]) for p in resp.data]
         self.assertTrue(all(500 <= p <= 2000 for p in prices))
 
     def test_filter_by_type(self):
-        create_property(self.landlord, title="Studio Place", property_type="studio")
-        resp = self.client.get("/api/properties/properties/?type=studio")
-        types = [p["property_type"] for p in resp.data]
-        self.assertTrue(all(t == "studio" for t in types))
+        create_property(self.landlord, title="Room Place", unit_type="room", rental_mode=None, price=None, room_price=Decimal("1500"))
+        resp = self.client.get("/api/properties/?type=room")
+        types = [p["unit_type"] for p in resp.data]
+        self.assertTrue(all(t == "room" for t in types))
 
 
 class FeaturedPropertiesViewTests(PropertyAPIBase):
 
     def test_returns_only_featured(self):
-        resp = self.client.get("/api/properties/properties/featured/")
+        resp = self.client.get("/api/properties/featured/")
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(all(p["is_featured"] for p in resp.data))
 
     def test_non_featured_not_included(self):
-        resp = self.client.get("/api/properties/properties/featured/")
+        resp = self.client.get("/api/properties/featured/")
         titles = [p["title"] for p in resp.data]
         self.assertNotIn("API Test Property", titles)
 
@@ -407,17 +473,17 @@ class UniversityPropertiesViewTests(PropertyAPIBase):
         self.uni_prop = create_property(
             self.landlord,
             title="Near Cairo Uni",
-            nearby_university="Cairo University",
+            universities=[University.objects.get(name="Cairo University")],
         )
 
     def test_returns_properties_with_university(self):
-        resp = self.client.get("/api/properties/properties/university/")
+        resp = self.client.get("/api/properties/university/")
         self.assertEqual(resp.status_code, 200)
-        # All results must have a nearby_university value
-        self.assertTrue(all(p.get("nearby_university") for p in resp.data))
+        # All results must have a nearby_universities value
+        self.assertTrue(all(p.get("nearby_universities") for p in resp.data))
 
     def test_filter_by_specific_university(self):
-        resp = self.client.get("/api/properties/properties/university/?university=Cairo")
+        resp = self.client.get("/api/properties/university/?university=Cairo")
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(any(p["title"] == "Near Cairo Uni" for p in resp.data))
 
@@ -425,25 +491,25 @@ class UniversityPropertiesViewTests(PropertyAPIBase):
 class PropertyDetailViewTests(PropertyAPIBase):
 
     def test_returns_full_detail(self):
-        resp = self.client.get(f"/api/properties/properties/{self.prop.id}/")
+        resp = self.client.get(f"/api/properties/{self.prop.id}/")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("images", resp.data)
         self.assertIn("landlord_name", resp.data)
 
     def test_increments_view_count(self):
         initial = self.prop.view_count
-        self.client.get(f"/api/properties/properties/{self.prop.id}/")
+        self.client.get(f"/api/properties/{self.prop.id}/")
         self.prop.refresh_from_db()
         self.assertEqual(self.prop.view_count, initial + 1)
 
     def test_increments_view_count_multiple_times(self):
         for _ in range(3):
-            self.client.get(f"/api/properties/properties/{self.prop.id}/")
+            self.client.get(f"/api/properties/{self.prop.id}/")
         self.prop.refresh_from_db()
         self.assertEqual(self.prop.view_count, 3)
 
     def test_404_for_nonexistent_property(self):
-        resp = self.client.get("/api/properties/properties/99999/")
+        resp = self.client.get("/api/properties/99999/")
         self.assertEqual(resp.status_code, 404)
 
 
@@ -452,17 +518,19 @@ class PropertyCreateViewTests(PropertyAPIBase):
     def _create_payload(self):
         return {
             "title": "New Listing",
-            "property_type": "studio",
+            "unit_type": "apartment",
+            "rental_mode": "whole_apartment",
             "price": "2500.00",
             "city": "Cairo",
             "district": "Zamalek",
             "gender_preference": "male",
+            "nearby_universities": [self.cairo_uni.id],
         }
 
     def test_landlord_can_create_property(self):
         self.auth(self.landlord)
         resp = self.client.post(
-            "/api/properties/properties/create/",
+            "/api/properties/create/",
             self._create_payload(),
             format="json",
         )
@@ -472,7 +540,7 @@ class PropertyCreateViewTests(PropertyAPIBase):
     def test_student_cannot_create_property(self):
         self.auth(self.student)
         resp = self.client.post(
-            "/api/properties/properties/create/",
+            "/api/properties/create/",
             self._create_payload(),
             format="json",
         )
@@ -480,7 +548,7 @@ class PropertyCreateViewTests(PropertyAPIBase):
 
     def test_unauthenticated_cannot_create_property(self):
         resp = self.client.post(
-            "/api/properties/properties/create/",
+            "/api/properties/create/",
             self._create_payload(),
             format="json",
         )
@@ -491,7 +559,7 @@ class PropertyCreateViewTests(PropertyAPIBase):
         payload = self._create_payload()
         payload["uploaded_images"] = [make_image_file("upload1.jpg")]
         resp = self.client.post(
-            "/api/properties/properties/create/",
+            "/api/properties/create/",
             payload,
             format="multipart",
         )
@@ -504,7 +572,7 @@ class PropertyCreateViewTests(PropertyAPIBase):
         payload = self._create_payload()
         payload["price"] = -100
         resp = self.client.post(
-            "/api/properties/properties/create/",
+            "/api/properties/create/",
             payload,
             format="json",
         )
@@ -516,7 +584,7 @@ class PropertyCreateViewTests(PropertyAPIBase):
         self.auth(self.landlord)
         payload = self._create_payload()
         resp = self.client.post(
-            "/api/properties/properties/create/",
+            "/api/properties/create/",
             payload,
             format="json",
         )
@@ -529,7 +597,7 @@ class PropertyEditViewTests(PropertyAPIBase):
     def test_owner_can_edit_property(self):
         self.auth(self.landlord)
         resp = self.client.patch(
-            f"/api/properties/properties/{self.prop.id}/edit/",
+            f"/api/properties/{self.prop.id}/edit/",
             {"title": "Updated Title"},
             format="json",
         )
@@ -540,7 +608,7 @@ class PropertyEditViewTests(PropertyAPIBase):
     def test_non_owner_landlord_cannot_edit(self):
         self.auth(self.other_landlord)
         resp = self.client.patch(
-            f"/api/properties/properties/{self.prop.id}/edit/",
+            f"/api/properties/{self.prop.id}/edit/",
             {"title": "Hijacked"},
             format="json",
         )
@@ -549,7 +617,7 @@ class PropertyEditViewTests(PropertyAPIBase):
     def test_student_cannot_edit(self):
         self.auth(self.student)
         resp = self.client.patch(
-            f"/api/properties/properties/{self.prop.id}/edit/",
+            f"/api/properties/{self.prop.id}/edit/",
             {"title": "Student Edit"},
             format="json",
         )
@@ -559,7 +627,7 @@ class PropertyEditViewTests(PropertyAPIBase):
         original_price = self.prop.price
         self.auth(self.landlord)
         self.client.patch(
-            f"/api/properties/properties/{self.prop.id}/edit/",
+            f"/api/properties/{self.prop.id}/edit/",
             {"title": "Only Title Changed"},
             format="json",
         )
@@ -569,7 +637,7 @@ class PropertyEditViewTests(PropertyAPIBase):
     def test_edit_nonexistent_returns_404(self):
         self.auth(self.landlord)
         resp = self.client.patch(
-            "/api/properties/properties/99999/edit/",
+            "/api/properties/99999/edit/",
             {"title": "Ghost"},
             format="json",
         )
@@ -581,7 +649,7 @@ class PropertyImageUploadViewTests(PropertyAPIBase):
     def test_owner_can_upload_images(self):
         self.auth(self.landlord)
         resp = self.client.post(
-            f"/api/properties/properties/{self.prop.id}/images/",
+            f"/api/properties/{self.prop.id}/images/",
             {"images": [make_image_file("new.jpg")]},
             format="multipart",
         )
@@ -591,7 +659,7 @@ class PropertyImageUploadViewTests(PropertyAPIBase):
     def test_first_uploaded_image_becomes_cover(self):
         self.auth(self.landlord)
         self.client.post(
-            f"/api/properties/properties/{self.prop.id}/images/",
+            f"/api/properties/{self.prop.id}/images/",
             {"images": [make_image_file("first.jpg"), make_image_file("second.jpg")]},
             format="multipart",
         )
@@ -602,14 +670,14 @@ class PropertyImageUploadViewTests(PropertyAPIBase):
         self.auth(self.landlord)
         # First upload — sets cover
         self.client.post(
-            f"/api/properties/properties/{self.prop.id}/images/",
+            f"/api/properties/{self.prop.id}/images/",
             {"images": [make_image_file("cover.jpg")]},
             format="multipart",
         )
         cover_id = self.prop.images.get(is_cover=True).id
         # Second upload
         self.client.post(
-            f"/api/properties/properties/{self.prop.id}/images/",
+            f"/api/properties/{self.prop.id}/images/",
             {"images": [make_image_file("extra.jpg")]},
             format="multipart",
         )
@@ -618,7 +686,7 @@ class PropertyImageUploadViewTests(PropertyAPIBase):
     def test_non_owner_cannot_upload(self):
         self.auth(self.other_landlord)
         resp = self.client.post(
-            f"/api/properties/properties/{self.prop.id}/images/",
+            f"/api/properties/{self.prop.id}/images/",
             {"images": [make_image_file()]},
             format="multipart",
         )
@@ -627,7 +695,7 @@ class PropertyImageUploadViewTests(PropertyAPIBase):
     def test_upload_with_no_files_returns_400(self):
         self.auth(self.landlord)
         resp = self.client.post(
-            f"/api/properties/properties/{self.prop.id}/images/",
+            f"/api/properties/{self.prop.id}/images/",
             {},
             format="multipart",
         )
@@ -640,7 +708,7 @@ class PropertyImageDeleteViewTests(PropertyAPIBase):
         super().setUp()
         self.auth(self.landlord)
         self.client.post(
-            f"/api/properties/properties/{self.prop.id}/images/",
+            f"/api/properties/{self.prop.id}/images/",
             {"images": [make_image_file("a.jpg"), make_image_file("b.jpg")]},
             format="multipart",
         )
@@ -649,14 +717,14 @@ class PropertyImageDeleteViewTests(PropertyAPIBase):
 
     def test_owner_can_delete_gallery_image(self):
         resp = self.client.delete(
-            f"/api/properties/properties/{self.prop.id}/images/{self.gallery_img.id}/"
+            f"/api/properties/{self.prop.id}/images/{self.gallery_img.id}/"
         )
         self.assertEqual(resp.status_code, 204)
         self.assertFalse(PropertyImage.objects.filter(id=self.gallery_img.id).exists())
 
     def test_deleting_cover_promotes_next_image(self):
         resp = self.client.delete(
-            f"/api/properties/properties/{self.prop.id}/images/{self.cover_img.id}/"
+            f"/api/properties/{self.prop.id}/images/{self.cover_img.id}/"
         )
         self.assertEqual(resp.status_code, 204)
         # Gallery image should now be promoted to cover
@@ -667,13 +735,13 @@ class PropertyImageDeleteViewTests(PropertyAPIBase):
     def test_non_owner_cannot_delete(self):
         self.auth(self.other_landlord)
         resp = self.client.delete(
-            f"/api/properties/properties/{self.prop.id}/images/{self.gallery_img.id}/"
+            f"/api/properties/{self.prop.id}/images/{self.gallery_img.id}/"
         )
         self.assertEqual(resp.status_code, 403)
 
     def test_delete_nonexistent_image_returns_404(self):
         resp = self.client.delete(
-            f"/api/properties/properties/{self.prop.id}/images/99999/"
+            f"/api/properties/{self.prop.id}/images/99999/"
         )
         self.assertEqual(resp.status_code, 404)
 
@@ -683,7 +751,7 @@ class LandlordPropertiesViewTests(PropertyAPIBase):
     def test_landlord_sees_only_own_properties(self):
         create_property(self.other_landlord, title="Other's Property")
         self.auth(self.landlord)
-        resp = self.client.get("/api/properties/properties/landlord/properties/")
+        resp = self.client.get("/api/properties/landlord/properties/")
         self.assertEqual(resp.status_code, 200)
         titles = [p["title"] for p in resp.data]
         self.assertNotIn("Other's Property", titles)
@@ -691,18 +759,18 @@ class LandlordPropertiesViewTests(PropertyAPIBase):
     def test_landlord_sees_all_own_properties_regardless_of_status(self):
         create_property(self.landlord, title="Rented Mine", status="rented")
         self.auth(self.landlord)
-        resp = self.client.get("/api/properties/properties/landlord/properties/")
+        resp = self.client.get("/api/properties/landlord/properties/")
         titles = [p["title"] for p in resp.data]
         self.assertIn("Rented Mine", titles)
 
     def test_student_cannot_access_landlord_dashboard(self):
         self.auth(self.student)
-        resp = self.client.get("/api/properties/properties/landlord/properties/")
+        resp = self.client.get("/api/properties/landlord/properties/")
         self.assertEqual(resp.status_code, 403)
 
     def test_unauthenticated_cannot_access(self):
         self.deauth()
-        resp = self.client.get("/api/properties/properties/landlord/properties/")
+        resp = self.client.get("/api/properties/landlord/properties/")
         self.assertEqual(resp.status_code, 401)
 
 

@@ -9,8 +9,18 @@
         - PropertyUpdateSerializer  → PATCH /api/properties/<id>/edit/
 
 """
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
-from properties.models import Property, PropertyImage
+from properties.models import Property, PropertyImage, University, City, Transport
+
+
+class UniversitySerializer(serializers.ModelSerializer):
+    """Nested read representation of a University reference row."""
+    city = serializers.SlugRelatedField(read_only=True, slug_field="name")
+
+    class Meta:
+        model = University
+        fields = ["id", "name", "city"]
 
 
 class PropertyImageSerializer(serializers.ModelSerializer):
@@ -28,23 +38,18 @@ class PropertySerializer(serializers.ModelSerializer):
     Includes nested images, owner info, and computed rating fields.
     """
 
-    # used many=True because one property has many images (reverse relation)
-    images = PropertyImageSerializer(many=True, read_only=True)
-
-    # Computed fields from model properties
-    average_rating = serializers.FloatField(read_only=True)
-    review_count   = serializers.IntegerField(read_only=True)
-
-    # Landlord info — needed when showing property (ForeignKey relation).
-    # Only expose specific fields to avoid exposing sensitive User data.
+    images              = PropertyImageSerializer(many=True, read_only=True)
+    nearby_universities = UniversitySerializer(many=True, read_only=True)
+    city                = serializers.SlugRelatedField(read_only=True, slug_field="name")
+    transport_types     = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
+    average_rating      = serializers.FloatField(read_only=True)
+    review_count        = serializers.IntegerField(read_only=True)
     landlord_id           = serializers.IntegerField(source="landlord.id", read_only=True)
     landlord_name         = serializers.CharField(source="landlord.get_full_name", read_only=True)
     landlord_picture      = serializers.ImageField(source="landlord.profile_picture", read_only=True)
     landlord_is_verified  = serializers.BooleanField(source="landlord.is_verified", read_only=True)
     landlord_is_top_rated = serializers.BooleanField(source="landlord.is_top_rated", read_only=True)
-   
-    # Computed at request time by PropertyDetailView — not stored in DB
-    university_distance = serializers.SerializerMethodField()
+    university_distance   = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -54,18 +59,18 @@ class PropertySerializer(serializers.ModelSerializer):
             "landlord_id", "landlord_name", "landlord_picture",
             "landlord_is_verified", "landlord_is_top_rated",
             # ── Basic Info ───────────────────────────────────
-            "title", "description", "property_type",
+            "title", "description", "unit_type",
             # ── Pricing ──────────────────────────────────────
-            "price", "room_price", "bed_price",
+            "rental_mode", "price", "room_price", "bed_price",
             # ── Location ─────────────────────────────────────
             "city", "district", "address", "latitude", "longitude",
             # ── University Proximity ─────────────────────────
-            "nearby_university", "distance_to_university", "transport_type","university_distance",
+            "nearby_universities", "distance_to_university", "transport_types", "university_distance",
             # ── Room Details ─────────────────────────────────
             "num_rooms", "num_beds", "num_bathrooms",
             "floor", "area_sqm", "gender_preference",
-            # ── Amenities ────────────────────────────────────
-            "amenities", "bills_included",
+            # ── Amenities & Bills ────────────────────────────
+            "has_internet", "has_ac", "has_water", "has_electricity", "has_gas",
             # ── Stay Duration ────────────────────────────────
             "min_stay_months", "max_stay_months",
             # ── Status & Visibility ──────────────────────────
@@ -82,13 +87,6 @@ class PropertySerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "view_count", "is_featured", "created_at", "updated_at"]
 
     def get_university_distance(self, obj):
-        """
-        Returns Google Distance Matrix result if injected by the view.
-        Falls back to None gracefully so serializer never crashes.
-
-        The view injects it via:
-            PropertySerializer(prop, context={"request": req, "university_distance": result})
-        """
         return self.context.get("university_distance", None)
 
 
@@ -103,15 +101,19 @@ class PropertyListSerializer(serializers.ModelSerializer):
     review_count         = serializers.IntegerField(read_only=True)
     landlord_name        = serializers.CharField(source="landlord.get_full_name", read_only=True)
     landlord_is_verified = serializers.BooleanField(source="landlord.is_verified", read_only=True)
+    nearby_universities  = UniversitySerializer(many=True, read_only=True)
+    city                 = serializers.SlugRelatedField(read_only=True, slug_field="name")
+    transport_types      = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
 
     class Meta:
         model  = Property
         fields = [
-            "id", "title", "property_type", "price", "room_price", "bed_price",
+            "id", "title", "unit_type", "rental_mode", "price", "room_price", "bed_price",
             "city", "district", "latitude", "longitude",
-            "nearby_university", "distance_to_university", "transport_type",
+            "nearby_universities", "distance_to_university", "transport_types",
             "num_beds", "gender_preference",
-            "amenities", "bills_included", "status", "available_from", "is_featured",
+            "has_internet", "has_ac", "has_water", "has_electricity", "has_gas",
+            "status", "available_from", "is_featured",
             "average_rating", "review_count",
             "cover_image",
             "landlord_name", "landlord_is_verified",
@@ -119,64 +121,79 @@ class PropertyListSerializer(serializers.ModelSerializer):
         ]
 
     def get_cover_image(self, obj):
-        """Returns the URL of the cover image, or None if no images uploaded."""
         cover = obj.images.filter(is_cover=True).first() or obj.images.first()
         if not cover:
             return None
         request = self.context.get("request")
-        # Build absolute URL so frontend doesn't need to prefix the media root
-        # request.build_absolute_uri() adds full domain (e.g., http://localhost:8000) to URL
-        # Without it, frontend only gets "/media/image.jpg" which may not work
         return request.build_absolute_uri(cover.image.url) if request else cover.image.url
-
 
 
 class PropertyCreateSerializer(serializers.ModelSerializer):
     """
     POST /api/properties/create/ — landlord creates a new listing.
-    owner is injected in the view via save(owner=request.user), not sent by client.
-    
+    landlord is injected in the view via save(landlord=request.user).
     """
 
-    # Accept uploaded images at creation time (optional)
-    uploaded_images = serializers.ListField(child=serializers.ImageField(),write_only=True,required=False,)
+    uploaded_images     = serializers.ListField(child=serializers.ImageField(), write_only=True, required=False)
+    nearby_universities = serializers.PrimaryKeyRelatedField(many=True, queryset=University.objects.all())
+    city                = serializers.SlugRelatedField(queryset=City.objects.all(), slug_field="name")
+    transport_types     = serializers.SlugRelatedField(
+        many=True, queryset=Transport.objects.all(), slug_field="name", required=False
+    )
 
     class Meta:
         model = Property
         fields = [
-            "title", "description", "property_type",
-            "price", "room_price", "bed_price",
+            "title", "description", "unit_type",
+            "rental_mode", "price", "room_price", "bed_price",
             "city", "district", "address", "latitude", "longitude",
-            "nearby_university", "distance_to_university", "transport_type",
+            "nearby_universities", "distance_to_university", "transport_types",
             "num_rooms", "num_beds", "num_bathrooms",
             "floor", "area_sqm", "gender_preference",
-            "amenities", "bills_included",
+            "has_internet", "has_ac", "has_water", "has_electricity", "has_gas",
             "min_stay_months", "max_stay_months",
             "status", "available_from",
             "uploaded_images",
         ]
-
-    def validate_price(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Price must be greater than 0.")
-        return value
 
     def validate(self, data):
         min_stay = data.get("min_stay_months", 1)
         max_stay = data.get("max_stay_months")
         if max_stay and max_stay < min_stay:
             raise serializers.ValidationError("max_stay_months cannot be less than min_stay_months.")
+
+        universities = data.get("nearby_universities") or []
+        if not universities:
+            raise serializers.ValidationError({"nearby_universities": "At least one nearby university is required."})
+        city = data.get("city")
+        mismatched = [u.name for u in universities if u.city_id != city.id]
+        if mismatched:
+            raise serializers.ValidationError({"nearby_universities": f"Not in {city}: {mismatched}"})
+
+        instance = Property(**{
+            k: v for k, v in data.items()
+            if k not in ("nearby_universities", "transport_types", "uploaded_images")
+        })
+        try:
+            instance.clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
+
         return data
 
     def create(self, validated_data):
-        images = validated_data.pop("uploaded_images", [])
-        property_obj = Property.objects.create(**validated_data)
+        images          = validated_data.pop("uploaded_images", [])
+        universities    = validated_data.pop("nearby_universities")
+        transport_types = validated_data.pop("transport_types", [])
+        property_obj    = Property.objects.create(**validated_data)
+        property_obj.nearby_universities.set(universities)
+        property_obj.transport_types.set(transport_types)
 
         for index, image_file in enumerate(images):
             PropertyImage.objects.create(
                 property=property_obj,
                 image=image_file,
-                is_cover=(index == 0),  # first uploaded image is the cover
+                is_cover=(index == 0),
             )
 
         return property_obj
@@ -188,30 +205,62 @@ class PropertyUpdateSerializer(serializers.ModelSerializer):
     All fields optional. Images managed separately via PropertyImageSerializer.
     """
 
+    nearby_universities = serializers.PrimaryKeyRelatedField(many=True, queryset=University.objects.all(), required=False)
+    city                = serializers.SlugRelatedField(queryset=City.objects.all(), slug_field="name", required=False)
+    transport_types     = serializers.SlugRelatedField(
+        many=True, queryset=Transport.objects.all(), slug_field="name", required=False
+    )
+
     class Meta:
         model = Property
         fields = [
-            "title", "description", "property_type",
-            "price", "room_price", "bed_price",
+            "title", "description", "unit_type",
+            "rental_mode", "price", "room_price", "bed_price",
             "city", "district", "address", "latitude", "longitude",
-            "nearby_university", "distance_to_university", "transport_type",
+            "nearby_universities", "distance_to_university", "transport_types",
             "num_rooms", "num_beds", "num_bathrooms",
             "floor", "area_sqm", "gender_preference",
-            "amenities", "bills_included",
+            "has_internet", "has_ac", "has_water", "has_electricity", "has_gas",
             "min_stay_months", "max_stay_months",
             "status", "available_from",
         ]
 
-    def validate_price(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Price must be greater than 0.")
-        return value
-
     def validate(self, data):
-        # On partial update, pull existing values if not being changed
         instance = self.instance
         min_stay = data.get("min_stay_months", instance.min_stay_months)
         max_stay = data.get("max_stay_months", instance.max_stay_months)
         if max_stay and max_stay < min_stay:
             raise serializers.ValidationError("max_stay_months cannot be less than min_stay_months.")
+
+        universities = data.get("nearby_universities")
+        if universities is None:
+            universities = list(instance.nearby_universities.all())
+        if not universities:
+            raise serializers.ValidationError({"nearby_universities": "At least one nearby university is required."})
+        city = data.get("city", instance.city)
+        mismatched = [u.name for u in universities if u.city_id != city.id]
+        if mismatched:
+            raise serializers.ValidationError({"nearby_universities": f"Not in {city}: {mismatched}"})
+
+        merged = {
+            "unit_type": instance.unit_type, "rental_mode": instance.rental_mode,
+            "price": instance.price, "room_price": instance.room_price, "bed_price": instance.bed_price,
+        }
+        merged.update({k: v for k, v in data.items() if k not in ("nearby_universities", "transport_types")})
+        temp = Property(**merged)
+        try:
+            temp.clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
+
         return data
+
+    def update(self, instance, validated_data):
+        universities    = validated_data.pop("nearby_universities", None)
+        transport_types = validated_data.pop("transport_types", None)
+        instance = super().update(instance, validated_data)
+        if universities is not None:
+            instance.nearby_universities.set(universities)
+        if transport_types is not None:
+            instance.transport_types.set(transport_types)
+        return instance

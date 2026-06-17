@@ -13,7 +13,7 @@ Supported query params:
     price_min, price_max,
     num_beds, num_rooms, num_bathrooms,
     gender, university,
-    is_featured, amenity
+    is_featured, has_internet, has_ac, has_water, has_electricity, has_gas
 """
 import django_filters
 from properties.models import Property
@@ -26,12 +26,12 @@ class PropertyFilter(django_filters.FilterSet):
     """
 
     # ── Location ─────────────────────────────────────────────────────────────
-    city = django_filters.CharFilter(field_name="city", lookup_expr="icontains")
+    city = django_filters.CharFilter(field_name="city__name", lookup_expr="icontains")
     district = django_filters.CharFilter(field_name="district", lookup_expr="icontains")
 
     # ── Type & Status ─────────────────────────────────────────────────────────
     # 'type' is a reserved word in Python, so we alias it here
-    type = django_filters.CharFilter(field_name="property_type", lookup_expr="exact")
+    type = django_filters.CharFilter(field_name="unit_type", lookup_expr="exact")
     status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
 
     # ── Pricing ───────────────────────────────────────────────────────────────
@@ -46,16 +46,18 @@ class PropertyFilter(django_filters.FilterSet):
     # ── Preferences ───────────────────────────────────────────────────────────
     gender = django_filters.CharFilter(field_name="gender_preference", lookup_expr="exact")
 
-    # ── University ────────────────────────────────────────────────────────────
-    university = django_filters.CharFilter(field_name="nearby_university", lookup_expr="icontains")
+    # ── University (M2M) ─────────────────────────────────────────────────────
+    university = django_filters.CharFilter(field_name="nearby_universities__name", lookup_expr="icontains")
 
     # ── Visibility ────────────────────────────────────────────────────────────
     is_featured = django_filters.BooleanFilter(field_name="is_featured")
 
-    # ── Amenities (JSON list) ─────────────────────────────────────────────────
-    # NOTE: checks if the amenity string appears anywhere in the JSON array
-    # Example: /api/properties/?amenity=WiFi
-    amenity = django_filters.CharFilter(field_name="amenities", lookup_expr="contains")
+    # ── Amenities & Bills (hardcoded booleans) ──────────────────────────────────
+    has_internet = django_filters.BooleanFilter(field_name="has_internet")
+    has_ac = django_filters.BooleanFilter(field_name="has_ac")
+    has_water = django_filters.BooleanFilter(field_name="has_water")
+    has_electricity = django_filters.BooleanFilter(field_name="has_electricity")
+    has_gas = django_filters.BooleanFilter(field_name="has_gas")
 
     class Meta:
         model = Property
@@ -64,5 +66,6 @@ class PropertyFilter(django_filters.FilterSet):
             "price_min", "price_max",
             "num_beds", "num_rooms", "num_bathrooms",
             "gender", "university",
-            "is_featured", "amenity",
+            "is_featured",
+            "has_internet", "has_ac", "has_water", "has_electricity", "has_gas",
         ]

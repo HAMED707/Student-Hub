@@ -3,7 +3,7 @@ Properties app admin.
 Registers Property and PropertyImage for manual management in /admin.
 """
 from django.contrib import admin
-from properties.models import Property, PropertyImage
+from properties.models import Property, PropertyImage, University, City, Transport
 
 
 class PropertyAdminMedia:
@@ -13,33 +13,24 @@ class PropertyAdminMedia:
 
 
 class PropertyImageInline(admin.TabularInline):
-    """
-    Inline editor for images directly inside the Property admin page.
-    Lets admin preview, add, or remove photos without leaving the listing.
-    """
     model = PropertyImage
-    extra = 1  # show 1 blank upload row by default
+    extra = 1
     fields = ["image", "is_cover", "uploaded_at"]
     readonly_fields = ["uploaded_at"]
 
 
 @admin.register(Property)
 class PropertyAdmin(PropertyAdminMedia, admin.ModelAdmin):
-    """
-    Main listing admin. is_featured is editable from the list view directly
-    so admin can feature/unfeature listings without opening each one.
-    """
     inlines = [PropertyImageInline]
 
     list_display = [
-        "title", "landlord", "property_type", "price", "room_price", "bed_price",
+        "title", "landlord", "unit_type", "rental_mode", "price", "room_price", "bed_price",
         "city", "status", "available_from", "is_featured", "view_count", "created_at",
     ]
-    list_filter = ["property_type", "status", "is_featured", "city", "gender_preference"]
-    search_fields = ["title", "landlord__username", "city", "district", "nearby_university"]
+    list_filter = ["unit_type", "rental_mode", "status", "is_featured", "city", "gender_preference"]
+    search_fields = ["title", "landlord__username", "city__name", "district", "nearby_universities__name"]
     readonly_fields = ["view_count", "created_at", "updated_at"]
-
-    # Allow featuring/unfeaturing directly from the list without opening each record
+    filter_horizontal = ["nearby_universities", "transport_types"]
     list_editable = ["is_featured", "status"]
 
     fieldsets = (
@@ -47,16 +38,16 @@ class PropertyAdmin(PropertyAdminMedia, admin.ModelAdmin):
             "fields": ("landlord",),
         }),
         ("Basic Info", {
-            "fields": ("title", "description", "property_type"),
+            "fields": ("title", "description", "unit_type"),
         }),
         ("Pricing & Stay", {
-            "fields": ("price", "room_price", "bed_price", "available_from", "min_stay_months", "max_stay_months"),
+            "fields": ("rental_mode", "price", "room_price", "bed_price", "available_from", "min_stay_months", "max_stay_months"),
         }),
         ("Location", {
             "fields": ("city", "district", "address", "latitude", "longitude"),
         }),
         ("University Proximity", {
-            "fields": ("nearby_university", "distance_to_university", "transport_type"),
+            "fields": ("nearby_universities", "distance_to_university", "transport_types"),
         }),
         ("Room Details", {
             "fields": (
@@ -64,8 +55,8 @@ class PropertyAdmin(PropertyAdminMedia, admin.ModelAdmin):
                 "floor", "area_sqm", "gender_preference",
             ),
         }),
-        ("Amenities", {
-            "fields": ("amenities", "bills_included"),
+        ("Amenities & Bills", {
+            "fields": ("has_internet", "has_ac", "has_water", "has_electricity", "has_gas"),
         }),
         ("Status & Visibility", {
             "fields": ("status", "is_featured"),
@@ -76,12 +67,27 @@ class PropertyAdmin(PropertyAdminMedia, admin.ModelAdmin):
     )
 
 
+@admin.register(City)
+class CityAdmin(admin.ModelAdmin):
+    list_display = ["name"]
+    search_fields = ["name"]
+
+
+@admin.register(Transport)
+class TransportAdmin(admin.ModelAdmin):
+    list_display = ["name"]
+    search_fields = ["name"]
+
+
+@admin.register(University)
+class UniversityAdmin(admin.ModelAdmin):
+    list_display = ["name", "city"]
+    list_filter = ["city"]
+    search_fields = ["name", "city__name"]
+
+
 @admin.register(PropertyImage)
 class PropertyImageAdmin(admin.ModelAdmin):
-    """
-    Standalone image admin — useful for bulk cleanup or reviewing uploads.
-    Day-to-day image management happens via the inline above.
-    """
     list_display = ["property", "is_cover", "uploaded_at"]
     list_filter = ["is_cover"]
     search_fields = ["property__title", "property__landlord__username"]

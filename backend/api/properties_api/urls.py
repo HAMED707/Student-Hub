@@ -7,6 +7,7 @@ from api.properties_api.views import (
     PropertyListView,
     FeaturedPropertiesView,
     UniversityPropertiesView,
+    UniversitiesByCityView,
     PropertyDetailView,
     PropertyCreateView,
     PropertyEditView,
@@ -21,6 +22,7 @@ urlpatterns = [
     path(""                   , PropertyListView.as_view(),         name="property-list"),
     path("featured/"          , FeaturedPropertiesView.as_view(),   name="property-featured"),
     path("university/"        , UniversityPropertiesView.as_view(), name="property-university"),
+    path("universities/"      , UniversitiesByCityView.as_view(),   name="universities-by-city"),
     path("<int:property_id>/" , PropertyDetailView.as_view(),       name="property-detail"),
 
     # ── Landlord — Listing Management ─────────────────────────────────────────

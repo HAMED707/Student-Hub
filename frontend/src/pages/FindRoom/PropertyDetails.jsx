@@ -69,6 +69,7 @@ import {
   normalizePropertyCard,
   normalizePropertyDetail,
 } from "../../utils/properties.js";
+import { TRANSPORT_OPTIONS } from "../../utils/propertyConstants.js";
 import {
   consumePropertyReviewUpdate,
   PROPERTY_REVIEW_CREATED_EVENT,
@@ -497,6 +498,7 @@ const PropertyDetails = () => {
 
   // ── Data loading ──
   const loadProperty = useCallback(async () => {
+    setDynamicProperty(null);
     setIsLoading(true);
     setNotFound(false);
 
@@ -506,9 +508,10 @@ const PropertyDetails = () => {
 
       setDynamicProperty(normalizePropertyDetail(detail, reviewsPayload));
 
+      const firstUni = Array.isArray(detail.nearby_universities) ? detail.nearby_universities[0]?.name : null;
       const similar = await fetchProperties({
         city: detail.city,
-        university: detail.nearby_university,
+        university: firstUni,
         status: "available",
       }).catch(() => []);
 
@@ -547,6 +550,7 @@ const PropertyDetails = () => {
   }, [id]);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     loadProperty();
   }, [id, loadProperty]);
 
@@ -1127,7 +1131,7 @@ const PropertyDetails = () => {
         {/* ── Main content (single column) ── */}
         <div className="mt-6 space-y-6">
 
-          {/* Property Details + Facilities + Bills — compact multi-column */}
+          {/* Property Details — compact multi-column */}
           <section id="details" ref={setSectionRef("details")} className="scroll-mt-28">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
               <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-5">
@@ -1176,41 +1180,39 @@ const PropertyDetails = () => {
                     {[
                       { label: "University", value: currentProperty.nearbyUniversity || "—", Icon: GraduationCap },
                       { label: "Distance",   value: currentProperty.distanceToUniversity || currentProperty.distance || "—", Icon: Clock },
-                      { label: "Transport",  value: (Array.isArray(currentProperty.transportTypes) ? currentProperty.transportTypes : []).map((t) => TRANSPORT_LABELS[t] || t).filter(Boolean).join(", ") || "—", Icon: Bus },
                       { label: "Min stay",   value: `${currentProperty.minStayMonths || 1} mo`, Icon: CalendarDays },
                       { label: "Max stay",   value: currentProperty.maxStayMonths ? `${currentProperty.maxStayMonths} mo` : "Flexible", Icon: CalendarDays },
-                      { label: "Status",     value: currentProperty.isAvailable ? "Available" : (currentProperty.status || "Unavailable"), Icon: CheckCircle, highlight: currentProperty.isAvailable },
-                    ].map(({ label, value, Icon, highlight }) => (
+                    ].map(({ label, value, Icon }) => (
                       <li key={label} className="flex items-center gap-2">
-                        <Icon className={`h-3.5 w-3.5 shrink-0 ${highlight ? "text-emerald-500" : "text-[#155BC2]"}`} />
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-[#155BC2]" />
                         <span className="text-xs text-slate-500">{label}:</span>
-                        <span className={`text-xs font-bold ${highlight ? "text-emerald-600" : "text-[#091E42]"}`}>{value}</span>
+                        <span className="text-xs font-bold text-[#091E42]">{value}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                {/* Column 4 — Facilities */}
+                {/* Column 4 — Transport */}
                 <div>
-                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Facilities</p>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Transport</p>
                   <ul className="space-y-1.5">
-                    {currentProperty.services.length > 0 ? currentProperty.services.map((service) => {
-                      const Icon = service.icon || DETAIL_ICON_MAP[service.iconKey] || CheckCircle;
-                      return (
-                        <li key={service.name} className="flex items-center gap-2">
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-[#155BC2]" />
-                          <span className="text-xs font-semibold text-[#091E42]">{service.name}</span>
-                        </li>
-                      );
-                    }) : (
-                      <li className="text-xs text-slate-400">None listed</li>
+                    {TRANSPORT_OPTIONS.filter(({ value }) =>
+                      (Array.isArray(currentProperty.transportTypes) ? currentProperty.transportTypes : []).includes(value)
+                    ).map(({ value, label }) => (
+                      <li key={value} className="flex items-center gap-2">
+                        <Bus className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                        <span className="text-xs font-semibold text-[#091E42]">{label}</span>
+                      </li>
+                    ))}
+                    {!(Array.isArray(currentProperty.transportTypes) && currentProperty.transportTypes.length > 0) && (
+                      <li className="text-xs text-slate-400">Not specified</li>
                     )}
                   </ul>
                 </div>
 
-                {/* Column 5 — Bills & Utilities */}
+                {/* Column 5 — Bills */}
                 <div>
-                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Bills & Utilities</p>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Bills</p>
                   <ul className="space-y-1.5">
                     {currentProperty.bills.map((bill) => {
                       const Icon = bill.icon || DETAIL_ICON_MAP[bill.iconKey] || Zap;

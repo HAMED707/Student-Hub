@@ -2,8 +2,10 @@ import { withApiUrl } from "../api/client.js";
 
 const PROPERTY_TYPE_LABELS = {
   apartment: "Apartment",
-  studio: "Studio",
   room: "Private Room",
+  bed: "Bed",
+  // legacy labels kept for fallback
+  studio: "Studio",
   shared: "Shared Room",
 };
 
@@ -50,10 +52,14 @@ export const isPropertyAvailable = (property) => {
   return true;
 };
 
-const getDurationLabel = (property) =>
-  property?.university_distance?.duration_text ||
-  property?.distance_to_university ||
-  (property?.nearby_university ? `Near ${property.nearby_university}` : "Location available");
+const getDurationLabel = (property) => {
+  const firstUni = Array.isArray(property?.nearby_universities) ? property.nearby_universities[0]?.name : null;
+  return (
+    property?.university_distance?.duration_text ||
+    property?.distance_to_university ||
+    (firstUni ? `Near ${firstUni}` : "Location available")
+  );
+};
 
 const getCoverImage = (property) =>
   property?.cover_image ||
@@ -76,18 +82,18 @@ export const mapPropertyTypeLabel = (propertyType) =>
 export const normalizePropertyCard = (property) => ({
   id: property.id,
   title: property.title,
-  type: mapPropertyTypeLabel(property.property_type),
+  type: mapPropertyTypeLabel(property.unit_type || property.property_type),
   location: buildLocation(property),
   universityDistance: getDurationLabel(property),
   distance: getDurationLabel(property),
   campusMinutes: getCampusMinutes(property),
-  price: toNumber(property.price),
+  price: toNumber(property.price || property.room_price || property.bed_price),
   rating: toNumber(property.average_rating),
   reviews: toNumber(property.review_count),
   image: getCoverImage(property),
   availabilityStatus: property.status,
   isAvailable: isPropertyAvailable(property),
-  amenities: Array.isArray(property.amenities) ? property.amenities : [],
+  amenities: [],
   city: property.city || "Unknown",
   area: property.district || property.city || "Unknown",
   lat: property.latitude ? Number(property.latitude) : 30.0444,
@@ -104,7 +110,7 @@ const buildDerivedRooms = (property) => {
 
   return Array.from({ length: totalRooms }, (_, index) => {
     const bedsPerRoom = Math.max(1, Math.ceil(totalBeds / totalRooms));
-    const roomType = totalBeds > totalRooms ? "Shared room" : mapPropertyTypeLabel(property.property_type);
+    const roomType = totalBeds > totalRooms ? "Shared room" : mapPropertyTypeLabel(property.unit_type || property.property_type);
     const bedEntries = Array.from({ length: bedsPerRoom }, (_, bedIndex) => ({
       id: `property-${property.id}-room-${index + 1}-bed-${bedIndex + 1}`,
       name: `Bed ${bedIndex + 1}`,
@@ -149,7 +155,6 @@ export const normalizePropertyDetail = (property, reviewsPayload) => {
     ? property.images.map((image) => image.image)
     : [getCoverImage(property)];
 
-  const amenities = Array.isArray(property.amenities) ? property.amenities : [];
   const derivedRooms = buildDerivedRooms(property);
   const landlordName = property.landlord_name || "Property owner";
   const reviews = normalizePropertyReviews(reviewsPayload);
@@ -162,39 +167,65 @@ export const normalizePropertyDetail = (property, reviewsPayload) => {
       ? toNumber(reviewsPayload.review_count)
       : toNumber(property.review_count);
 
-  const pType = property.property_type || "";
-  const wholePrice = toNumber(property.price);
-  const roomPrice  = property.room_price != null ? toNumber(property.room_price) : null;
-  const bedPrice   = property.bed_price  != null ? toNumber(property.bed_price)  : null;
+  const unitType    = property.unit_type || property.property_type || "";
+  const rentalMode  = property.rental_mode || "";
+  const wholePrice  = toNumber(property.price);
+  const roomPrice   = property.room_price != null ? toNumber(property.room_price) : null;
+  const bedPrice    = property.bed_price  != null ? toNumber(property.bed_price)  : null;
 
+  // Build booking options based on unit_type + rental_mode
   const bookingOptions = [];
-  if (pType === "apartment" || pType === "studio" || pType === "room") {
-    bookingOptions.push({ id: "whole", label: "Whole", price: wholePrice });
-  }
-  if (pType === "apartment" && roomPrice != null) {
-    bookingOptions.push({ id: "room", label: "By Room", price: roomPrice });
-  }
-  if ((pType === "apartment" || pType === "studio" || pType === "shared") && bedPrice != null) {
-    bookingOptions.push({ id: "bed", label: "By Bed", price: bedPrice });
-  }
-  if (pType === "shared" && bookingOptions.length === 0) {
-    bookingOptions.push({ id: "bed", label: "By Bed", price: wholePrice });
+  if (unitType === "apartment") {
+    if (rentalMode === "by_unit") {
+      if (roomPrice != null) bookingOptions.push({ id: "room", label: "By Room", price: roomPrice });
+      if (bedPrice  != null) bookingOptions.push({ id: "bed",  label: "By Bed",  price: bedPrice });
+    } else {
+      bookingOptions.push({ id: "whole", label: "Whole Apartment", price: wholePrice });
+    }
+  } else if (unitType === "room") {
+    bookingOptions.push({ id: "whole", label: "Room", price: roomPrice ?? wholePrice });
+  } else if (unitType === "bed") {
+    bookingOptions.push({ id: "whole", label: "Bed", price: bedPrice ?? wholePrice });
   }
   if (bookingOptions.length === 0) {
     bookingOptions.push({ id: "whole", label: "Whole", price: wholePrice });
   }
 
-  const billsIncluded = Array.isArray(property.bills_included) ? property.bills_included : [];
-  const transportTypes = Array.isArray(property.transport_type) ? property.transport_type : [];
+  // transport_types is now a M2M of names (array of strings from SlugRelatedField)
+  const transportTypes = Array.isArray(property.transport_types) ? property.transport_types : [];
+
+  // nearby_universities is now an array of {id, name, city} objects
+  const nearbyUniversities = Array.isArray(property.nearby_universities) ? property.nearby_universities : [];
+  const nearbyUniversity   = nearbyUniversities[0]?.name || "";
+
+  // Facilities derived from boolean fields
+  const services = [
+    property.has_internet    && { name: "WiFi / Internet",   iconKey: "wifi" },
+    property.has_ac          && { name: "Air Conditioning",   iconKey: "snowflake" },
+    property.has_water       && { name: "Water Included",     iconKey: "droplet" },
+    property.has_electricity && { name: "Electricity Incl.",  iconKey: "zap" },
+    property.has_gas         && { name: "Gas Included",       iconKey: "flame" },
+  ].filter(Boolean);
+
+  // Bills show all 5 with included/extra status
+  const bills = [
+    { name: "Internet",     iconKey: "wifi",      included: Boolean(property.has_internet) },
+    { name: "AC",           iconKey: "snowflake",  included: Boolean(property.has_ac) },
+    { name: "Water",        iconKey: "droplet",    included: Boolean(property.has_water) },
+    { name: "Electricity",  iconKey: "zap",        included: Boolean(property.has_electricity) },
+    { name: "Gas",          iconKey: "flame",      included: Boolean(property.has_gas) },
+  ];
+
+  const displayPrice = bookingOptions[0]?.price ?? wholePrice;
 
   return {
     id: property.id,
     title: property.title,
-    price: wholePrice,
+    price: displayPrice,
     roomPrice,
     bedPrice,
     bookingOptions,
-    deposit: Math.round(wholePrice * 0.2),
+    deposit: Math.round(displayPrice * 0.2),
     serviceFee: 150,
     address: property.address || buildLocation(property),
     lat: property.latitude ? Number(property.latitude) : 30.0444,
@@ -217,27 +248,21 @@ export const normalizePropertyDetail = (property, reviewsPayload) => {
     },
     images,
     rooms: derivedRooms,
-    services: amenities.map((name) => ({
-      name,
-      iconKey: AMENITY_ICON_KEYS[String(name).trim().toLowerCase()] || "check",
-    })),
-    bills: [
-      { name: "Electricity", iconKey: "zap",     included: billsIncluded.includes("electricity") },
-      { name: "Water",       iconKey: "droplet",  included: billsIncluded.includes("water") },
-      { name: "Gas",         iconKey: "flame",    included: billsIncluded.includes("gas") },
-    ],
+    services,
+    bills,
     reviews,
-    nearbyUniversity: property.nearby_university || "",
+    nearbyUniversity,
+    nearbyUniversities,
     genderPreference: property.gender_preference || "",
     minStayMonths: property.min_stay_months || 1,
     maxStayMonths: property.max_stay_months || null,
-    amenities,
-    billsIncluded,
     status: property.status,
     availableFrom: property.available_from || null,
     isAvailable: isPropertyAvailable(property),
     locationLabel: buildLocation(property),
-    propertyType: property.property_type || "",
+    propertyType: unitType,
+    unitType,
+    rentalMode,
     numRooms: toNumber(property.num_rooms, 1),
     numBeds: toNumber(property.num_beds, 1),
     numBathrooms: toNumber(property.num_bathrooms, 1),

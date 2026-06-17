@@ -1,15 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  Routes,
-  Route,
-  Navigate,
-  Outlet,
-  useNavigate,
-  useLocation,
-} from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import {
   AUTH_CHANGE_EVENT,
-  clearSession,
   getAuthSnapshot,
   getDefaultRouteForRole,
 } from "./utils/auth.js";
@@ -43,35 +35,13 @@ import PublicProfile from "./pages/Profile/PublicProfile.jsx";
 import Settings from "./pages/Profile/Settings.jsx";
 
 // ✅ Owner pages
-import Overview from "./Owner interface/Dashboard Overview/Overview.jsx";
-import OwnerPayments from "./Owner interface/Dashboard Payments/Payments.jsx";
-import OwnerProperties from "./Owner interface/Dashboard Properties/Properties.jsx";
-import OwnerMessages from "./Owner interface/Dashboard Messages/Messages.jsx";
-import AddNewProperty from "./Owner interface/Dashboard Properties/AddNewProperty.jsx";
-import EditProperty from "./Owner interface/Dashboard Properties/EditProperty.jsx";
-import OwnerBookings from "./Owner interface/Dashboard Bookings/Bookings.jsx";
-import OwnerNotifications from "./Owner interface/Dashboard Notifications/Notifications.jsx";
-import OwnerProfile from "./Owner interface/OwnerProfile/OwnerProfile.jsx";
-import OwnerSettings from "./Owner interface/OwnerProfile/Setting-Profile.jsx";
+import OwnerDashboard from "./Owner interface/OwnerDashboard.jsx";
 
-// ✅ Sidebar + logo
-import Sidebar from "./assets/components/Sidebar/Sidebar.jsx";
 import Footer from "./assets/components/Footer/Footer.jsx";
-import logo from "./assets/brand/icons/logo.svg";
 import { CommunityProvider } from "./hooks/useCommunityData.jsx";
 import { NotificationsProvider } from "./hooks/useNotifications.jsx";
 import { MessagingProvider } from "./hooks/useGlobalMessaging.jsx";
 import ChatDock from "./assets/components/ChatDock/ChatDock.jsx";
-
-import {
-  LayoutDashboard,
-  Building2,
-  CreditCard,
-  MessageSquare,
-  User,
-  Settings as SettingsIcon,
-  LogOut,
-} from "lucide-react";
 
 const NotFound = () => (
   <div className="flex flex-col items-center justify-center h-screen text-center">
@@ -128,105 +98,6 @@ function RequireAuth({ allowedRoles = null }) {
   }
 
   return <Outlet />;
-}
-
-// ✅ Owner Layout
-function OwnerLayout() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useAuthState();
-
-  const menuItems = useMemo(
-    () => [
-      {
-        id: "overview",
-        label: "Dashboard",
-        icon: <LayoutDashboard size={18} />,
-        to: "/owner/overview",
-      },
-      {
-        id: "properties",
-        label: "Properties",
-        icon: <Building2 size={18} />,
-        to: "/owner/properties",
-      },
-      {
-        id: "payments",
-        label: "Payments",
-        icon: <CreditCard size={18} />,
-        to: "/owner/payments",
-      },
-      {
-        id: "messages",
-        label: "Messages",
-        icon: <MessageSquare size={18} />,
-        to: "/owner/messages",
-      },
-    ],
-    [],
-  );
-
-  const profile = useMemo(
-    () => ({
-      name:
-        user?.fullName ||
-        user?.name ||
-        [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
-        user?.username ||
-        "Owner",
-      email: user?.email || "owner@studenthub.com",
-      avatarUrl:
-        user?.avatarUrl ||
-        user?.profile_picture ||
-        "https://ui-avatars.com/api/?name=Owner&background=0A2647&color=fff",
-    }),
-    [user],
-  );
-
-  // ✅ Dropdown (3 dots) — لازم يكون Route URL
-  const profileMenuItems = useMemo(
-    () => [
-      {
-        id: "profile",
-        label: "Profile",
-        icon: <User size={16} />,
-        to: "/owner/profile",
-      }, // ✅ الصح
-      {
-        id: "settings",
-        label: "Settings",
-        icon: <SettingsIcon size={16} />,
-        to: "/owner/settings",
-      },
-      {
-        id: "logout",
-        label: "Logout",
-        icon: <LogOut size={16} />,
-        onClick: () => {
-          clearSession();
-          navigate("/login");
-        },
-      },
-    ],
-    [navigate],
-  );
-
-  return (
-    <div className="min-h-screen bg-[#F6F8FC]">
-      <Sidebar
-        logoPath={logo}
-        menuItems={menuItems}
-        routerNavigate={navigate}
-        currentPath={location.pathname}
-        profile={profile}
-        profileMenuItems={profileMenuItems}
-      />
-
-      <div className="ml-72 min-h-screen">
-        <Outlet />
-      </div>
-    </div>
-  );
 }
 
 function StudentLayout() {
@@ -299,25 +170,7 @@ export default function App() {
 
         {/* ✅ Owner */}
         <Route element={<RequireAuth allowedRoles={["landlord"]} />}>
-          <Route path="/owner" element={<OwnerLayout />}>
-            <Route index element={<Navigate to="/owner/overview" replace />} />
-            <Route
-              path="dashboard"
-              element={<Navigate to="/owner/overview" replace />}
-            />
-            <Route path="overview" element={<Overview />} />
-            <Route path="properties" element={<OwnerProperties />} />
-            <Route path="payments" element={<OwnerPayments />} />
-            <Route path="messages" element={<OwnerMessages />} />
-            <Route path="bookings" element={<OwnerBookings />} />
-            <Route path="notifications" element={<OwnerNotifications />} />
-            <Route path="properties/new" element={<AddNewProperty />} />
-            <Route path="properties/edit" element={<EditProperty />} />
-            <Route path="properties/edit/:id" element={<EditProperty />} />
-
-            <Route path="settings" element={<OwnerSettings />} />
-            <Route path="profile" element={<OwnerProfile />} />
-          </Route>
+          <Route path="/owner/*" element={<OwnerDashboard />} />
         </Route>
 
         {/* 404 */}

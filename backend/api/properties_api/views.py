@@ -4,7 +4,8 @@ Properties API views.
 Views:
     - PropertyListView          → GET  /api/properties/            (filtered list)
     - FeaturedPropertiesView    → GET  /api/properties/featured/   (is_featured=True)
-    - UniversityPropertiesView  → GET  /api/properties/university/ (filter by nearby_university)
+    - UniversityPropertiesView  → GET  /api/properties/university/ (filter by nearby_universities)
+    - UniversitiesByCityView    → GET  /api/properties/universities/?city=Cairo (lookup list for a city)
     - PropertyDetailView        → GET  /api/properties/<id>/       (increments view_count)
     - PropertyCreateView        → POST /api/properties/create/     (landlords only)
     - PropertyEditView          → PATCH /api/properties/<id>/edit/ (landlord only)
@@ -14,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework import status
 from django.db.models import Count, Q
-from properties.models import Property, PropertyImage
+from properties.models import Property, PropertyImage, University
 from api.accounts_api.permissions import IsLandlord
 from api.properties_api.serializers import (
     PropertySerializer,
@@ -22,6 +23,7 @@ from api.properties_api.serializers import (
     PropertyCreateSerializer,
     PropertyUpdateSerializer,
     PropertyImageSerializer,
+    UniversitySerializer,
 )
 
 import logging
@@ -47,14 +49,14 @@ def apply_filters(queryset, params):
     Called by PropertyListView and UniversityPropertiesView.
 
     Supported params:
-        city, district, type (property_type), status,
-        price_min, price_max, num_beds, num_rooms,
-        gender, university, amenity (single value, checks if list contains it)
+        city, district, type (unit_type, comma-separated), status,
+        price_min, price_max, num_beds, num_rooms, gender, university,
+        has_internet, has_ac, has_water, has_electricity, has_gas ("true"/"false")
     """
     query = params.get("q")
     city = params.get("city")
     district = params.get("district")
-    property_type = params.get("type")
+    unit_type = params.get("type")
     prop_status = params.get("status")
     price_min = params.get("price_min")
     price_max = params.get("price_max")
@@ -62,24 +64,23 @@ def apply_filters(queryset, params):
     num_rooms = params.get("num_rooms")
     gender = params.get("gender")
     university = params.get("university")
-    amenity = params.get("amenity")
 
     if query:
         queryset = queryset.filter(
             Q(title__icontains=query)
-            | Q(city__icontains=query)
+            | Q(city__name__icontains=query)
             | Q(district__icontains=query)
             | Q(address__icontains=query)
-            | Q(nearby_university__icontains=query)
-        )
+            | Q(nearby_universities__name__icontains=query)
+        ).distinct()
     if city:
-        queryset = queryset.filter(city__icontains=city)
+        queryset = queryset.filter(city__name__icontains=city)
     if district:
         queryset = queryset.filter(district__icontains=district)
-    if property_type:
-        property_types = [item.strip() for item in property_type.split(",") if item.strip()]
-        if property_types:
-            queryset = queryset.filter(property_type__in=property_types)
+    if unit_type:
+        unit_types = [item.strip() for item in unit_type.split(",") if item.strip()]
+        if unit_types:
+            queryset = queryset.filter(unit_type__in=unit_types)
     if prop_status:
         queryset = queryset.filter(status=prop_status)
     if price_min:
@@ -93,11 +94,12 @@ def apply_filters(queryset, params):
     if gender:
         queryset = queryset.filter(gender_preference=gender)
     if university:
-        queryset = queryset.filter(nearby_university__icontains=university)
-    if amenity:
-        amenities = [item.strip() for item in amenity.split(",") if item.strip()]
-        for amenity_value in amenities:
-            queryset = queryset.filter(amenities__contains=amenity_value)
+        queryset = queryset.filter(nearby_universities__name__icontains=university).distinct()
+
+    for bool_param in ("has_internet", "has_ac", "has_water", "has_electricity", "has_gas"):
+        value = params.get(bool_param)
+        if value is not None:
+            queryset = queryset.filter(**{bool_param: value.lower() == "true"})
 
     return queryset
 
@@ -156,13 +158,33 @@ class UniversityPropertiesView(APIView):
         queryset = (
             Property.objects
             .filter(status="available")
-            .exclude(nearby_university__isnull=True)
-            .exclude(nearby_university="")
+            .exclude(nearby_universities__isnull=True)
+            .distinct()
             .select_related("landlord")
             .prefetch_related("images")
         )
         queryset = apply_filters(queryset, request.query_params)
         serializer = PropertyListSerializer(queryset, many=True, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class UniversitiesByCityView(APIView):
+    """
+    GET /api/properties/universities/?city=Cairo
+    Lookup list for the listing form: a landlord must pick a city first,
+    then this returns only the universities that belong to that city.
+    Returns an empty list if no city is given, so the frontend can leave
+    the universities field disabled/empty until a city is chosen.
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request):
+        city = request.query_params.get("city")
+        if not city:
+            return Response([], status=status.HTTP_200_OK)
+
+        queryset = University.objects.filter(city__name__iexact=city)
+        serializer = UniversitySerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -191,10 +213,12 @@ class PropertyDetailView(APIView):
         prop.refresh_from_db(fields=["view_count"])
 
         university_distance = None
+        nearest_university = prop.nearby_universities.first()
 
-        if prop.latitude and prop.longitude and prop.nearby_university:
+        if prop.latitude and prop.longitude and nearest_university:
+            first_transport = prop.transport_types.first()
             mode = TRANSPORT_TO_MODE.get(
-                prop.transport_type,
+                first_transport.name if first_transport else None,
                 "walking"
             )
 
@@ -202,7 +226,7 @@ class PropertyDetailView(APIView):
                 university_distance = get_distance_to_university(
                     origin_lat=float(prop.latitude),
                     origin_lng=float(prop.longitude),
-                    destination=prop.nearby_university,
+                    destination=nearest_university.name,
                     mode=mode,
                 )
             except GoogleMapsError as exc:
@@ -428,7 +452,7 @@ class LandlordDashboardView(APIView):
                     else None,
                     "property_id": booking.property_id,
                     "property_title": booking.property.title,
-                    "property_type": booking.property.property_type,
+                    "unit_type": booking.property.unit_type,
                     "status": booking.status,
                     "move_in_date": booking.move_in_date,
                     "duration_months": booking.duration_months,
