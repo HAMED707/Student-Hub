@@ -1,5 +1,6 @@
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from api.kyc_api.views import PersonaWebhookView
 
 urlpatterns = [
     # JWT auth endpoints for obtaining and refreshing tokens
@@ -18,4 +19,6 @@ urlpatterns = [
     path('payments/'     , include('api.payments_api.urls')),
     path('services/'     , include('api.services_api.urls')),
     path('chatbot/'      , include('api.chatbot_api.urls')),
+    path('kyc/'          , include('api.kyc_api.urls')),
+    path('webhooks/persona/', PersonaWebhookView.as_view(), name='persona-webhook'),
 ]

@@ -1,0 +1,351 @@
+{
+	"info": {
+		"_postman_id": "studenthub-kyc-testing",
+		"name": "StudentHub - KYC (Persona) Testing",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "base_url", "value": "http://127.0.0.1:8000" },
+		{ "key": "landlord_token", "value": "" },
+		{ "key": "verification_url", "value": "" }
+	],
+	"item": [
+		{
+			"name": "🛠️ 1. SETUP: Login as Landlord",
+			"request": {
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/auth/login/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "auth", "login", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"landlord_user\",\n    \"password\": \"Testuser123\"\n}"
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = pm.response.json();",
+							"if (jsonData.access) {",
+							"    pm.environment.set(\"landlord_token\", jsonData.access);",
+							"    pm.collectionVariables.set(\"landlord_token\", jsonData.access);",
+							"    console.log(\"✅ Token saved:\", jsonData.access.substring(0, 30) + \"...\");",
+							"} else {",
+							"    console.log(\"❌ Login failed:\", JSON.stringify(jsonData));",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "✅ 2. TEST: GET KYC Status (NOT_STARTED)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{landlord_token}}", "type": "string" } ] },
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/kyc/status/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "kyc", "status", ""]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+							"var body = pm.response.json();",
+							"pm.test(\"Has status field\", () => pm.expect(body).to.have.property(\"status\"));",
+							"console.log(\"KYC status:\", body.status);"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "✅ 3. TEST: POST Create KYC Inquiry",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{landlord_token}}", "type": "string" } ] },
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/kyc/create/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "kyc", "create", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status 201 or 200\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+							"var body = pm.response.json();",
+							"pm.test(\"Has verification_url\", () => pm.expect(body).to.have.property(\"verification_url\"));",
+							"pm.test(\"Has status\", () => pm.expect(body).to.have.property(\"status\"));",
+							"if (body.verification_url) {",
+							"    pm.environment.set(\"verification_url\", body.verification_url);",
+							"    pm.collectionVariables.set(\"verification_url\", body.verification_url);",
+							"    console.log(\"✅ Verification URL:\", body.verification_url);",
+							"}",
+							"console.log(\"Inquiry status:\", body.status);"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "✅ 4. TEST: GET KYC Status (CREATED — after inquiry created)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{landlord_token}}", "type": "string" } ] },
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/kyc/status/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "kyc", "status", ""]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+							"var body = pm.response.json();",
+							"pm.test(\"Status is not NOT_STARTED\", () => pm.expect(body.status).to.not.equal(\"NOT_STARTED\"));",
+							"console.log(\"KYC status after create:\", body.status);"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "✅ 5. TEST: POST Create Again → Returns Existing (No Duplicate)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{landlord_token}}", "type": "string" } ] },
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/kyc/create/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "kyc", "create", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status 200 (existing returned, not 201)\", () => pm.response.to.have.status(200));",
+							"var body = pm.response.json();",
+							"pm.test(\"Has verification_url\", () => pm.expect(body).to.have.property(\"verification_url\"));",
+							"console.log(\"Re-create returned status:\", body.status, \"— should be same inquiry\");"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "🚫 6. FAIL: POST Create — No Auth (401)",
+			"request": {
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/kyc/create/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "kyc", "create", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status 401 Unauthorized\", () => pm.response.to.have.status(401));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "🚫 7. FAIL: GET Status — No Auth (401)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/kyc/status/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "kyc", "status", ""]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status 401 Unauthorized\", () => pm.response.to.have.status(401));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "🚫 8. FAIL: POST Properties Create — KYC Not Approved (403)",
+			"request": {
+				"auth": { "type": "bearer", "bearer": [ { "key": "token", "value": "{{landlord_token}}", "type": "string" } ] },
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/properties/create/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "properties", "create", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"Should Be Blocked\",\n    \"description\": \"This should fail because KYC is not approved.\",\n    \"property_type\": \"apartment\",\n    \"price\": 5000,\n    \"city\": \"Cairo\",\n    \"district\": \"Maadi\",\n    \"address\": \"15 Test Street\",\n    \"num_rooms\": 2,\n    \"num_beds\": 2,\n    \"num_bathrooms\": 1,\n    \"gender_preference\": \"male\",\n    \"min_stay_months\": 1,\n    \"max_stay_months\": 12\n}"
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status 403 Forbidden\", () => pm.response.to.have.status(403));",
+							"var body = pm.response.json();",
+							"pm.test(\"Has identity verification message\", () => {",
+							"    pm.expect(body.message).to.include(\"Identity verification\");",
+							"});",
+							"console.log(\"Block message:\", body.message);"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "🚫 9. FAIL: POST Webhook — Bad Signature (403)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" },
+					{ "key": "Persona-Signature", "value": "t=1234567890,v1=badsignature" }
+				],
+				"url": {
+					"raw": "{{base_url}}/api/webhooks/persona/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "webhooks", "persona", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"data\": {\n        \"attributes\": {\n            \"payload\": {\n                \"data\": {\n                    \"id\": \"inq_fake123\",\n                    \"attributes\": { \"status\": \"approved\" }\n                }\n            }\n        }\n    }\n}"
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status 403 — bad signature rejected\", () => pm.response.to.have.status(403));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "🚫 10. FAIL: POST Webhook — No Signature Header (403)",
+			"request": {
+				"method": "POST",
+				"header": [ { "key": "Content-Type", "value": "application/json" } ],
+				"url": {
+					"raw": "{{base_url}}/api/webhooks/persona/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "webhooks", "persona", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"data\": {\n        \"attributes\": {\n            \"payload\": {\n                \"data\": {\n                    \"id\": \"inq_fake123\",\n                    \"attributes\": { \"status\": \"approved\" }\n                }\n            }\n        }\n    }\n}"
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status 403 — missing signature rejected\", () => pm.response.to.have.status(403));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			]
+		},
+		{
+			"name": "✅ 11. TEST: POST Webhook — Unknown Inquiry ID (200, no retry-storm)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" },
+					{ "key": "Persona-Signature", "value": "t=1234567890,v1=placeholder_run_manually_with_real_secret" }
+				],
+				"url": {
+					"raw": "{{base_url}}/api/webhooks/persona/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "webhooks", "persona", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"data\": {\n        \"attributes\": {\n            \"payload\": {\n                \"data\": {\n                    \"id\": \"inq_does_not_exist\",\n                    \"attributes\": { \"status\": \"approved\" }\n                }\n            }\n        }\n    }\n}"
+				},
+				"description": "Signature must be valid for this to pass signature check and hit the unknown-inquiry-id branch (returns 200 so Persona doesn't retry). Update the Persona-Signature header with a real computed value when testing against sandbox webhooks."
+			}
+		},
+		{
+			"name": "✅ 12. TEST: POST Webhook — Missing Fields (200, logged + ignored)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" },
+					{ "key": "Persona-Signature", "value": "t=1234567890,v1=placeholder_run_manually_with_real_secret" }
+				],
+				"url": {
+					"raw": "{{base_url}}/api/webhooks/persona/",
+					"host": ["{{base_url}}"],
+					"path": ["api", "webhooks", "persona", ""]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"data\": {\n        \"attributes\": {\n            \"payload\": {}\n        }\n    }\n}",
+					"description": "Missing inquiry id and status — should log warning and return 200 without erroring."
+				},
+				"description": "Signature must be valid. With a real PERSONA_WEBHOOK_SECRET this returns 200 — missing fields are logged, not crashed."
+			}
+		}
+	]
+}

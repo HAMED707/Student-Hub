@@ -48,6 +48,19 @@ class Users(AbstractUser):
     )
     city = models.CharField(max_length=100, blank=True, null=True)
 
+    # ── KYC (Persona identity verification) ─────────────────
+    KYC_STATUS_CHOICES = [
+        ("NOT_STARTED", "Not Started"),
+        ("CREATED", "Created"),
+        ("STARTED", "Started"),
+        ("PROCESSING", "Processing"),
+        ("PENDING_REVIEW", "Pending Review"),
+        ("APPROVED", "Approved"),
+        ("FAILED", "Failed"),
+        ("REJECTED", "Rejected"),
+    ]
+    kyc_status = models.CharField(max_length=20, choices=KYC_STATUS_CHOICES, default="NOT_STARTED")
+
     # ── Profile Badges (shown on profile page) ──────────────
     is_verified = models.BooleanField(default=False)  #  Verified badge
     is_top_rated = models.BooleanField(default=False)  #  Top Rated badge

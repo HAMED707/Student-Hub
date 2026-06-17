@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'reviews',
     'properties',
     'chatbot',
+    'kyc',
 ]
 
 MIDDLEWARE = [
@@ -218,6 +219,10 @@ CORS_ALLOW_HEADERS = [
 #─────Paymob──────────────────────────────────────────────────
 #Never hardcode secrets in settings.py. we Use a .env file
 from decouple import config
+
+PERSONA_API_KEY              = config("PERSONA_API_KEY")
+PERSONA_INQUIRY_TEMPLATE_ID = config("PERSONA_INQUIRY_TEMPLATE_ID")
+PERSONA_WEBHOOK_SECRET       = config("PERSONA_WEBHOOK_SECRET")
 
 PAYMOB_API_KEY        = config("PAYMOB_API_KEY")
 PAYMOB_INTEGRATION_ID = config("PAYMOB_INTEGRATION_ID", cast=int)

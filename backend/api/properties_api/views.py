@@ -271,6 +271,13 @@ class PropertyCreateView(APIView):
     permission_classes = [IsLandlord]
 
     def post(self, request):
+        from kyc.services import is_kyc_approved
+        if not is_kyc_approved(request.user):
+            return Response(
+                {"message": "Identity verification is required before publishing apartments."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = PropertyCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

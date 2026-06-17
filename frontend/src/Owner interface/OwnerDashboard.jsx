@@ -23,6 +23,7 @@ import {
 
 import logo from "../assets/brand/icons/logo.svg";
 import { apiRequest } from "../api/client.js";
+import { fetchKycStatus, createKycInquiry } from "../api/kyc.js";
 import { clearSession } from "../utils/auth.js";
 import { CITIES, TRANSPORT_OPTIONS, UNIVERSITIES_BY_CITY } from "../utils/propertyConstants.js";
 import { buildPropertyFormState, buildPropertyPayload } from "../utils/propertyForm.js";
@@ -794,6 +795,33 @@ function OwnerDashboard() {
   const [msgSearch, setMsgSearch] = useState("");
   const [properties, setProperties] = useState([]);
   const [propertiesLoading, setPropertiesLoading] = useState(true);
+  const [kycStatus, setKycStatus] = useState(null);
+  const [kycStarting, setKycStarting] = useState(false);
+
+  useEffect(() => {
+    fetchKycStatus()
+      .then((d) => setKycStatus(d.status))
+      .catch(() => setKycStatus("NOT_STARTED"));
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () =>
+      fetchKycStatus().then((d) => setKycStatus(d.status)).catch(() => {});
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  async function handleStartKyc() {
+    setKycStarting(true);
+    try {
+      const data = await createKycInquiry();
+      if (data.verification_url) window.open(data.verification_url, "_blank");
+    } catch (_) {
+      // banner stays visible; landlord can retry
+    } finally {
+      setKycStarting(false);
+    }
+  }
 
   async function fetchProperties() {
     try {
@@ -878,20 +906,55 @@ function OwnerDashboard() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+        {(() => {
+          const kycApproved   = kycStatus === "APPROVED";
+          const kycInProgress = ["CREATED", "STARTED", "PROCESSING", "PENDING_REVIEW"].includes(kycStatus);
+          const kycFailed     = ["FAILED", "REJECTED"].includes(kycStatus);
+          return kycStatus && !kycApproved ? (
+            <div className="flex items-start gap-3 bg-yellow-50 border border-yellow-200 rounded-2xl px-4 py-3">
+              <AlertTriangle size={16} className="text-yellow-500 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-yellow-800">Identity verification required</p>
+                <p className="text-xs text-yellow-700 mt-0.5">
+                  {kycInProgress
+                    ? "Your verification is in progress — we'll unlock property listing once it's approved."
+                    : kycFailed
+                    ? "Your verification was not approved. Please try again to publish properties."
+                    : "You must complete identity verification before you can list properties."}
+                </p>
+              </div>
+              <button
+                onClick={handleStartKyc}
+                disabled={kycStarting}
+                className="text-xs font-semibold text-yellow-800 bg-yellow-100 hover:bg-yellow-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
+              >
+                {kycStarting ? "Opening…" : kycInProgress ? "Continue →" : kycFailed ? "Retry →" : "Verify Now →"}
+              </button>
+            </div>
+          ) : null;
+        })()}
+
         <div id="section-units" className="grid grid-cols-1 md:grid-cols-2 gap-4 scroll-mt-16">
           <div className="bg-white rounded-2xl border border-blue-100 p-4" style={cardShadow}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-gray-800">My Units</h3>
-              <button
-                type="button"
-                onClick={() => setFloating({ kind: "addProperty" })}
-                className="flex items-center gap-1 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
-                style={greenButton}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = greenButtonHover; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = greenButton.backgroundColor; }}
-              >
-                <Plus size={12} /> Add
-              </button>
+              {(() => {
+                const approved = kycStatus === "APPROVED";
+                return (
+                  <button
+                    type="button"
+                    onClick={approved ? () => setFloating({ kind: "addProperty" }) : undefined}
+                    disabled={!approved || kycStatus === null}
+                    title={approved ? undefined : "Complete identity verification to add properties"}
+                    className="flex items-center gap-1 text-white text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={approved ? greenButton : { backgroundColor: "#9ca3af" }}
+                    onMouseEnter={(e) => { if (approved) e.currentTarget.style.backgroundColor = greenButtonHover; }}
+                    onMouseLeave={(e) => { if (approved) e.currentTarget.style.backgroundColor = greenButton.backgroundColor; }}
+                  >
+                    <Plus size={12} /> Add
+                  </button>
+                );
+              })()}
             </div>
             <div className="space-y-2 sh-scroll" style={{ maxHeight: "220px", overflowY: "auto", paddingRight: "2px" }}>
               {propertiesLoading ? (
