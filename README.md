@@ -20,5 +20,14 @@ Accommodation Finder is a comprehensive web application designed to help users d
 - Sentry (error monitoring)
 
 ### Frontend
-- React + Tailwind CSS (planned upgrade)
+- React.js
+- JavaScript (ES6+)
+- Vite
+- Tailwind CSS
+- React Router DOM
+- Axios
+- Leaflet & React Leaflet (Maps Integration)
+- JWT Authentication
+- Responsive UI Design
+- Reusable Components Architecture
 
