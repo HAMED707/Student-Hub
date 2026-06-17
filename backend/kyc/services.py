@@ -139,6 +139,27 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
+def fetch_inquiry_status(inquiry_id: str) -> str:
+    """
+    Fetches the current status of a Persona inquiry directly from the API.
+    Returns the raw Persona status string (e.g. 'approved', 'created').
+    Raises PersonaError on request failure.
+    """
+    try:
+        resp = requests.get(
+            f"{PERSONA_BASE_URL}/inquiries/{inquiry_id}",
+            headers={
+                "Authorization": f"Bearer {settings.PERSONA_API_KEY}",
+                "Persona-Version": "2023-01-05",
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json().get("data", {}).get("attributes", {}).get("status", "created")
+    except requests.RequestException as exc:
+        raise PersonaError(f"Persona inquiry fetch failed: {exc}") from exc
+
+
 def map_persona_status(persona_status: str) -> str:
     """Maps a raw Persona inquiry status string to our internal enum.
     Falls back to PROCESSING for any status we don't explicitly recognize,

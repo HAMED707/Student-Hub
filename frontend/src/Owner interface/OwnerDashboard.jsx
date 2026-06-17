@@ -23,7 +23,7 @@ import {
 
 import logo from "../assets/brand/icons/logo.svg";
 import { apiRequest } from "../api/client.js";
-import { fetchKycStatus, createKycInquiry } from "../api/kyc.js";
+import { fetchKycStatus, createKycInquiry, syncKycStatus } from "../api/kyc.js";
 import { clearSession } from "../utils/auth.js";
 import { CITIES, TRANSPORT_OPTIONS, UNIVERSITIES_BY_CITY } from "../utils/propertyConstants.js";
 import { buildPropertyFormState, buildPropertyPayload } from "../utils/propertyForm.js";
@@ -805,11 +805,15 @@ function OwnerDashboard() {
   }, []);
 
   useEffect(() => {
-    const onFocus = () =>
-      fetchKycStatus().then((d) => setKycStatus(d.status)).catch(() => {});
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const activeStatuses = ["CREATED", "STARTED", "PROCESSING", "PENDING_REVIEW"];
+      const syncer = activeStatuses.includes(kycStatus) ? syncKycStatus : fetchKycStatus;
+      syncer().then((d) => setKycStatus(d.status)).catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [kycStatus]);
 
   async function handleStartKyc() {
     setKycStarting(true);

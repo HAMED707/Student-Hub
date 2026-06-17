@@ -7,9 +7,10 @@ spec's exact path rather than nesting it under /api/kyc/.
 """
 
 from django.urls import path
-from api.kyc_api.views import CreateVerificationView, KycStatusView
+from api.kyc_api.views import CreateVerificationView, KycStatusView, KycSyncView
 
 urlpatterns = [
     path("create/", CreateVerificationView.as_view(), name="kyc-create"),
     path("status/", KycStatusView.as_view(), name="kyc-status"),
+    path("sync/",   KycSyncView.as_view(),   name="kyc-sync"),
 ]

@@ -24,7 +24,9 @@ from api.accounts_api.permissions import IsLandlord
 from kyc.models import LandlordVerification
 from kyc.services import (
     PersonaError,
+    _generate_one_time_link,
     create_inquiry,
+    fetch_inquiry_status,
     map_persona_status,
     verify_webhook_signature,
 )
@@ -52,6 +54,10 @@ class CreateVerificationView(APIView):
             landlord=request.user, status__in=ACTIVE_STATUSES
         ).first()
         if existing:
+            fresh_url = _generate_one_time_link(existing.persona_inquiry_id)
+            if fresh_url:
+                existing.verification_url = fresh_url
+                existing.save(update_fields=["verification_url"])
             return Response(LandlordVerificationSerializer(existing).data, status=status.HTTP_200_OK)
 
         try:
@@ -79,6 +85,49 @@ class CreateVerificationView(APIView):
         request.user.save(update_fields=["kyc_status"])
 
         return Response(LandlordVerificationSerializer(verification).data, status=status.HTTP_201_CREATED)
+
+
+class KycSyncView(APIView):
+    """
+    POST /api/kyc/sync/
+    Pulls the current inquiry status directly from Persona and updates the DB.
+    Use this when a webhook was missed — e.g. ngrok was down while the landlord
+    completed the Persona flow and the status is stuck as CREATED.
+    """
+
+    permission_classes = [IsLandlord]
+
+    def post(self, request):
+        verification = LandlordVerification.objects.filter(
+            landlord=request.user
+        ).order_by("-created_at").first()
+
+        if not verification:
+            return Response({"status": request.user.kyc_status}, status=status.HTTP_200_OK)
+
+        try:
+            persona_status = fetch_inquiry_status(verification.persona_inquiry_id)
+        except PersonaError as exc:
+            logger.error("Persona status fetch failed for landlord %s: %s", request.user.id, exc)
+            return Response(
+                {"error": "Could not fetch verification status. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        mapped_status = map_persona_status(persona_status)
+
+        if mapped_status != verification.status:
+            verification.status = mapped_status
+            if mapped_status == "APPROVED":
+                verification.completed_at = timezone.now()
+            verification.save(update_fields=["status", "completed_at"])
+
+            request.user.kyc_status = mapped_status
+            if mapped_status == "APPROVED":
+                request.user.is_verified = True
+            request.user.save(update_fields=["kyc_status", "is_verified"])
+
+        return Response({"status": mapped_status}, status=status.HTTP_200_OK)
 
 
 class KycStatusView(APIView):
