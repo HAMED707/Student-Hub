@@ -67,6 +67,7 @@ PyYAML==6.0.3
 redis==5.2.1
 requests==2.32.5
 scikit-learn==1.8.0
+stripe
 scipy==1.17.1
 service-identity==26.1.0
 six==1.17.0

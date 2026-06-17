@@ -74,10 +74,9 @@ def booking_notification(sender, instance, created, **kwargs):
         return
 
     STATUS_MESSAGES = {
-        "deposit_paid": ("Deposit Received 💰",   f"Deposit paid for '{property_title}'. Please confirm the booking."),
-        "confirmed":    ("Booking Confirmed ✅",   f"Your booking for '{property_title}' has been confirmed."),
-        "completed":    ("Stay Completed 🏁",      f"Your stay at '{property_title}' has been marked as completed."),
-        "cancelled":    ("Booking Cancelled",      f"Your booking for '{property_title}' has been cancelled."),
+        "paid":      ("Payment Received 💰",  f"Payment confirmed for '{property_title}'. Check in to release funds to the landlord."),
+        "finished":  ("Stay Completed 🏁",    f"Your stay at '{property_title}' has been marked as completed."),
+        "cancelled": ("Booking Cancelled",    f"Your booking for '{property_title}' has been cancelled."),
     }
 
     if instance.status not in STATUS_MESSAGES:
@@ -85,12 +84,7 @@ def booking_notification(sender, instance, created, **kwargs):
 
     title, message = STATUS_MESSAGES[instance.status]
 
-    # deposit_paid → landlord needs to act; everything else → tenant is informed
-    recipient = (
-        instance.property.landlord
-        if instance.status == "deposit_paid"
-        else instance.tenant
-    )
+    recipient = instance.tenant
 
     n = push_notification(
         recipient=recipient,

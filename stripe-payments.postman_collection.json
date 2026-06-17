@@ -1,0 +1,234 @@
+{
+  "info": {
+    "name": "Student Hub — Stripe Payments",
+    "_postman_id": "stripe-payments-v1",
+    "description": "Full Stripe marketplace payment flow: booking → checkout → webhook → check-in → payout.\n\nFlow order:\n1. Auth (student + landlord)\n2. Student creates booking\n3. Student gets Stripe checkout URL\n4. Simulate webhook (checkout.session.completed)\n5. Landlord onboards via Connect\n6. Landlord scans QR / check-in → funds released\n\nSet base_url to http://localhost:8000/api before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",       "value": "http://localhost:8000/api" },
+    { "key": "student_token",  "value": "" },
+    { "key": "landlord_token", "value": "" },
+    { "key": "booking_id",     "value": "" },
+    { "key": "qr_token",       "value": "" },
+    { "key": "checkout_session_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Login — student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.collectionVariables.set('student_token', r.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/token/",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test_student1\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login — landlord",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.collectionVariables.set('landlord_token', r.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/token/",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"seed_landlord_001\",\n  \"password\": \"Pass1234!\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Booking",
+      "item": [
+        {
+          "name": "Create booking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.collectionVariables.set('booking_id', r.id);",
+                  "pm.collectionVariables.set('qr_token', r.qr_token);",
+                  "console.log('booking_id:', r.id, '| qr_token:', r.qr_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/bookings/",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{student_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property\": 1,\n  \"move_in_date\": \"2025-09-01\",\n  \"duration_months\": 3,\n  \"booking_unit\": \"whole\",\n  \"message\": \"Postman test booking\"\n}"
+            }
+          }
+        },
+        {
+          "name": "My bookings (student)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/bookings/my/",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{student_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Cancel booking (student)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/bookings/{{booking_id}}/status/",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{student_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"cancelled\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Checkout",
+      "item": [
+        {
+          "name": "Create Stripe checkout session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "console.log('Open in browser to pay:', r.checkout_url);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/payments/create-checkout-session/",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{student_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"booking_id\": {{booking_id}}\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Webhook (simulate)",
+      "item": [
+        {
+          "name": "Stripe webhook — checkout.session.completed",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/webhooks/stripe/",
+            "header": [
+              { "key": "Content-Type",     "value": "application/json" },
+              { "key": "Stripe-Signature", "value": "t=fake,v1=fake" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"checkout.session.completed\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"cs_test_REPLACE_WITH_REAL_SESSION_ID\",\n      \"payment_intent\": \"pi_test_REPLACE\"\n    }\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Landlord — Connect",
+      "item": [
+        {
+          "name": "Start Connect onboarding",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "console.log('Open to onboard landlord:', r.onboarding_url);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/payments/connect/onboard/",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{landlord_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Check Connect status",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/payments/connect/status/",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{landlord_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Check-in (QR scan)",
+      "item": [
+        {
+          "name": "Scan QR — release funds to landlord",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/payments/checkin/",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{landlord_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"qr_token\": \"{{qr_token}}\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

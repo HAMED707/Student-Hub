@@ -59,9 +59,8 @@ class PropertyReviewCreateSerializer(serializers.ModelSerializer):
         except Booking.DoesNotExist:
             raise serializers.ValidationError("Booking not found or you are not the tenant.")
         
-        # Students can only review after the stay is confirmed or completed
-        if booking.status not in ["confirmed", "completed"]:
-            raise serializers.ValidationError("You can only review a property after your booking is confirmed or completed.")
+        if booking.status != "finished":
+            raise serializers.ValidationError("You can only review a property after your stay is finished.")
         
         # Prevent duplicate reviews for the exact same booking
         if Review.objects.filter(booking=booking).exists():

@@ -1,11 +1,18 @@
 """
-booking models 
-    -handel all room booking BTW student and landloard
+Booking models — Stripe Connect marketplace flow.
 
+Status flow: pending_payment → paid → finished
+             pending_payment → cancelled
+             pending_payment → expired (auto, via is_expired property)
+
+qr_token: UUID embedded in the check-in QR code; looked up server-side at scan time.
+payout_done: double-payout guard; always checked inside select_for_update().
 """
+import uuid
+
 from django.utils import timezone
 from datetime import timedelta
-import builtins 
+import builtins
 
 from django.db import models
 from accounts.models import Users
@@ -14,13 +21,11 @@ from properties.models import Property
 
 class Booking(models.Model):
 
-
     STATUS_CHOICES = [
         ("pending_payment", "Pending Payment"),
-        ("deposit_paid", "Deposit Paid"),
-        ("confirmed", "Confirmed"),
+        ("paid", "Paid"),
+        ("finished", "Finished"),
         ("cancelled", "Cancelled"),
-        ("completed", "Completed"),
         ("expired", "Expired"),
     ]
 
@@ -30,45 +35,45 @@ class Booking(models.Model):
         ("bed", "By Bed"),
     ]
 
-    # ────Parties──────────────────────────────────────────────────────────────────────────────────────────────────────────
-    tenant     = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="bookings" , limit_choices_to={ "role" : "student" })
-    property   = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="bookings")
+    # ── Parties ──────────────────────────────────────────────
+    tenant   = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="bookings", limit_choices_to={"role": "student"})
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="bookings")
 
-    # ────Booking Details─────────────────────────────────────────────────────────────────────────────────────────────────
-    status          = models.CharField(max_length=15, choices=STATUS_CHOICES, default="pending_payment")
+    # ── Booking Details ───────────────────────────────────────
+    status          = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending_payment")
     booking_unit    = models.CharField(max_length=10, choices=BOOKING_UNIT_CHOICES, default="whole")
     move_in_date    = models.DateField()
     duration_months = models.PositiveIntegerField()
     message         = models.TextField(null=True, blank=True)
 
-    # ── Financial Snapshot ───────────────────────────────────
-    # Copied from property.price at booking time — never changes even if landlord later edits the listing price
-    total_amount_cents   = models.PositiveIntegerField()    # full rent agreed
-    deposit_amount_cents = models.PositiveIntegerField()    # what student pays now
-    remaining_amount_cents = models.PositiveIntegerField()  # what's left after deposit
+    # ── Financial Snapshot ────────────────────────────────────
+    # Copied from property price at booking time; never changes even if
+    # the landlord later edits the listing. Commission split is computed
+    # on the Payout record at payout time, not here.
+    total_amount_cents = models.PositiveIntegerField()
 
-    # ── Expiration ───────────────────────────────────────────
-    # If student doesn't pay deposit within 30 min, booking auto-expires
+    # ── Check-in / payout ─────────────────────────────────────
+    qr_token    = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    payout_done = models.BooleanField(default=False)
+
+    # ── Expiration ────────────────────────────────────────────
     expires_at = models.DateTimeField()
 
-    # ── Timestamps ───────────────────────────────────────────
+    # ── Timestamps ────────────────────────────────────────────
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    #TODO: custom validation to prevent the tenant booking the same property more than one time
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.tenant.username} - {self.property.title} -({self.status})"
-    
+        return f"{self.tenant.username} - {self.property.title} ({self.status})"
+
     def save(self, *args, **kwargs):
-        # Auto-set expiry to 30 min from creation on first save
         if not self.pk and not self.expires_at:
             self.expires_at = timezone.now() + timedelta(minutes=30)
         super().save(*args, **kwargs)
-    
+
     @builtins.property
     def is_expired(self):
         return self.status == "pending_payment" and timezone.now() > self.expires_at

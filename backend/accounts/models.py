@@ -217,6 +217,10 @@ class LandlordProfile(models.Model):
     total_income = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     available_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
+    # ── Stripe Connect ────────────────────────────────────────
+    stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_onboarding_complete = models.BooleanField(default=False)
+
     def __str__(self):
         return f"{self.user.username} - Landlord Profile"
 

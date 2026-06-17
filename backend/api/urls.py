@@ -1,12 +1,13 @@
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from api.kyc_api.views import PersonaWebhookView
+from api.payments_api.views import StripeWebhookView
 
 urlpatterns = [
     # JWT auth endpoints for obtaining and refreshing tokens
     path('token/'        , TokenObtainPairView.as_view() , name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view() ,    name='token_refresh'),
-    
+
     path('auth/'         , include('api.accounts_api.urls')),
     path('properties/'   , include('api.properties_api.urls')),
     path('bookings/'     , include('api.bookings_api.urls')),
@@ -20,5 +21,6 @@ urlpatterns = [
     path('services/'     , include('api.services_api.urls')),
     path('chatbot/'      , include('api.chatbot_api.urls')),
     path('kyc/'          , include('api.kyc_api.urls')),
+    path('webhooks/stripe/' , StripeWebhookView.as_view(),  name='stripe-webhook'),
     path('webhooks/persona/', PersonaWebhookView.as_view(), name='persona-webhook'),
 ]

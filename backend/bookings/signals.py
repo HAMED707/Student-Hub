@@ -10,21 +10,14 @@ from bookings.models import Booking
 
 @receiver(post_save, sender=Booking)
 def sync_property_status(sender, instance, **kwargs):
-    """
-    Automatically updates the property's status based on booking outcome.
-
-    - approved  → property becomes 'rented'   (no longer searchable)
-    - cancelled → property reverts to 'available' (back in listings)
-    - rejected  → property reverts to 'available'
-    """
     prop = instance.property
 
-    if instance.status == "approved":
+    if instance.status == "paid":
         if prop.status != "rented":
             prop.status = "rented"
             prop.save(update_fields=["status"])
 
-    elif instance.status in ("cancelled", "rejected"):
+    elif instance.status in ("cancelled", "expired"):
         if prop.status == "rented":
             prop.status = "available"
             prop.save(update_fields=["status"])

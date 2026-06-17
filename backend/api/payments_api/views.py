@@ -1,297 +1,278 @@
-import json
-import hmac
-import hashlib
+"""
+Payments API views.
+
+Views:
+    - CreateCheckoutSessionView → POST /api/payments/create-checkout-session/
+    - StripeWebhookView         → POST /api/webhooks/stripe/  (registered
+      directly in api/urls.py, mirroring how the Persona webhook is mounted)
+    - CheckinScanView           → POST /api/payments/checkin/
+    - ConnectOnboardingView     → POST /api/payments/connect/onboard/
+    - ConnectStatusView         → GET  /api/payments/connect/status/
+"""
+
+import logging
 
 from django.db import transaction
-from django.utils import timezone
-from django.conf import settings
-from django.views import View
 from django.http import HttpResponse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
+from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
+from api.accounts_api.permissions import IsLandlord, IsStudent
 from bookings.models import Booking
-from payments.models import Payment
-from payments.paymob import PaymobService
-from .serializers import (
-    PaymentSerializer,
-    InitiateDepositSerializer,
-    PayRemainingSerializer,
-    MarkOfflineSerializer,
+from payments.models import Payment, Payout
+from payments.services import (
+    StripeError,
+    calculate_commission,
+    construct_webhook_event,
+    create_checkout_session,
+    create_onboarding_link,
+    create_transfer,
+    ensure_connect_account,
+    get_connect_account_status,
+)
+from api.payments_api.serializers import (
+    CheckinScanSerializer,
+    CreateCheckoutSessionSerializer,
 )
 
+logger = logging.getLogger(__name__)
 
-class InitiateDepositView(APIView):
+
+class CreateCheckoutSessionView(APIView):
     """
-    Step 1 of payment flow.
-    Student initiates deposit
-    
-    the overview flow of the whole payment proccess is :
-        Create Intention
-            ↓
-        Redirect User
-            ↓
-        Payment Happens
-            ↓
-        Webhook Arrives
-            ↓
-        Verify HMAC
-            ↓
-        Update Database
+    POST /api/payments/create-checkout-session/
+    Body: {"booking_id": 123}  — NEVER an amount. The backend always
+    computes the amount from booking.total_amount_cents.
     """
-    permission_classes = [IsAuthenticated]
+
+    permission_classes = [IsStudent]
 
     def post(self, request):
-        serializer = InitiateDepositSerializer(
-            data=request.data, context={"request": request}
-        )
+        serializer = CreateCheckoutSessionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        booking = Booking.objects.get(id=serializer.validated_data["booking_id"])
-
-        billing_data = {
-            "first_name":      request.user.first_name or "NA",
-            "last_name":       request.user.last_name  or "NA",
-            "email":           request.user.email,
-            "phone_number":    serializer.validated_data["phone"],
-            "apartment":       "NA",
-            "floor":           "NA",
-            "street":          "NA",
-            "building":        "NA",
-            "shipping_method": "NA",
-            "postal_code":     "NA",
-            "city":            "NA",
-            "country":         "EG",
-            "state":           "NA",
-        }
 
         try:
-                     #Create Payment Intention
-            result = PaymobService.initiate_payment(
-                amount_cents = booking.deposit_amount_cents,
-                billing_data = billing_data,
+            booking = Booking.objects.get(
+                id=serializer.validated_data["booking_id"], tenant=request.user
             )
+        except Booking.DoesNotExist:
+            return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            Payment.objects.create(
-                booking         = booking,
-                payment_type    = Payment.PaymentType.DEPOSIT,
-                payment_method  = Payment.PaymentMethod.ONLINE,
-                amount_cents    = booking.deposit_amount_cents,
-                paymob_order_id = str(result["order_id"]),
-                status          = Payment.Status.PENDING,
+        if booking.is_expired:
+            booking.status = "expired"
+            booking.save(update_fields=["status"])
+            return Response({"error": "This booking has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if booking.status != "pending_payment":
+            return Response(
+                {"error": f"Booking is '{booking.status}', not awaiting payment."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
-            return Response(result)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
-
-#──────────────────────────────────────────────────────────────────────────────────────────────────────
-
-class PayRemainingOnlineView(APIView):
-    """Student pays remaining amount online via Paymob."""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        serializer = PayRemainingSerializer(
-            data=request.data, context={"request": request}
-        )
-        serializer.is_valid(raise_exception=True)
-
-        booking = Booking.objects.get(id=serializer.validated_data["booking_id"])
-
-        billing_data = {
-            "first_name":      request.user.first_name or "NA",
-            "last_name":       request.user.last_name  or "NA",
-            "email":           request.user.email,
-            "phone_number":    serializer.validated_data["phone"],
-            "apartment":       "NA",
-            "floor":           "NA",
-            "street":          "NA",
-            "building":        "NA",
-            "shipping_method": "NA",
-            "postal_code":     "NA",
-            "city":            "NA",
-            "country":         "EG",
-            "state":           "NA",
-        }
 
         try:
-            result = PaymobService.initiate_payment(
-                amount_cents = booking.remaining_amount_cents,
-                billing_data = billing_data,
-            )
+            result = create_checkout_session(booking)
+        except StripeError as exc:
+            logger.error("Checkout session creation failed for booking %s: %s", booking.id, exc)
+            return Response({"error": "Could not start payment. Please try again."}, status=status.HTTP_502_BAD_GATEWAY)
 
-            Payment.objects.create(
-                booking         = booking,
-                payment_type    = Payment.PaymentType.REMAINING,
-                payment_method  = Payment.PaymentMethod.ONLINE,
-                amount_cents    = booking.remaining_amount_cents,
-                paymob_order_id = str(result["order_id"]),
-                status          = Payment.Status.PENDING,
-            )
-
-            return Response(result)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
-
-
-#──────────────────────────────────────────────────────────────────────────────────────────────────────
-
-class MarkRemainingOfflineView(APIView):
-    """Landlord marks remaining amount as paid in cash."""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        serializer = MarkOfflineSerializer(
-            data=request.data, context={"request": request}
+        Payment.objects.create(
+            booking=booking,
+            stripe_checkout_session_id=result["checkout_session_id"],
+            amount_cents=booking.total_amount_cents,
+            status=Payment.Status.PENDING,
         )
-        serializer.is_valid(raise_exception=True)
 
-        booking = Booking.objects.get(id=serializer.validated_data["booking_id"])
+        return Response({"checkout_url": result["checkout_url"]}, status=status.HTTP_201_CREATED)
 
-        with transaction.atomic():
-            Payment.objects.create(
-                booking        = booking,
-                payment_type   = Payment.PaymentType.REMAINING,
-                payment_method = Payment.PaymentMethod.OFFLINE,
-                amount_cents   = booking.remaining_amount_cents,
-                status         = Payment.Status.COMPLETED,
-                paid_at        = timezone.now(),
-            )
-
-            booking.status = "completed"
-            booking.save()
-
-        return Response({"message": "Cash payment recorded. Booking marked as completed."})
-
-
-#──────────────────────────────────────────────────────────────────────────────────────────────────────
-
-
-class MyPaymentsView(APIView):
-    """Student views all their payments."""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        payments = Payment.objects.filter(
-            booking__tenant=request.user
-        ).select_related("booking")
-
-        serializer = PaymentSerializer(payments, many=True)
-        return Response(serializer.data)
-
-
-#──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 @method_decorator(csrf_exempt, name="dispatch")
-class PaymobWebhookView(View):
+class StripeWebhookView(View):
     """
-    Paymob calls this after every transaction.
-    Flow: verify HMAC → update Payment → update Booking.
-
-    the idea of HMAC is to make new HMAC based on data i have and 
-    make sure that it match the received hmac  
+    POST /api/webhooks/stripe/
+    Only acts on checkout.session.completed — payment confirmation only,
+    NEVER the trigger for payout (that's the QR scan, per the spec's rule
+    that webhooks are for confirmation, not release decisions).
     """
 
     def post(self, request):
+        sig_header = request.headers.get("Stripe-Signature", "")
         try:
-            data = json.loads(request.body)
-        except Exception:
+            event = construct_webhook_event(request.body, sig_header)
+        except StripeError as exc:
+            logger.warning("Stripe webhook verification failed: %s", exc)
             return HttpResponse(status=400)
 
-        received_hmac = request.GET.get("hmac", "")
-        # Step 1: verify this is really from Paymob
-        if not self._verify_hmac(data, received_hmac):
-            return HttpResponse("Invalid HMAC", status=403)
+        if event["type"] != "checkout.session.completed":
+            return HttpResponse(status=200)  # acknowledged, not acted on
 
-        obj            = data.get("obj", {})
-        order_id       = str(obj.get("order", {}).get("id", ""))
-        success        = obj.get("success", False)
-        transaction_id = str(obj.get("id", ""))
+        session = event["data"]["object"]
 
-        # Step 2: find the payment record
         try:
-            payment = Payment.objects.select_related("booking__property").get(
-                paymob_order_id=order_id
+            payment = Payment.objects.select_related("booking").get(
+                stripe_checkout_session_id=session["id"]
             )
         except Payment.DoesNotExist:
-            return HttpResponse(status=404)
-
-        # Step 3: idempotency — ignore if already processed
-        if payment.status == Payment.Status.COMPLETED:
+            logger.warning("Stripe webhook for unknown checkout session %s", session.get("id"))
             return HttpResponse(status=200)
 
-        # Step 4: update payment + booking atomically
-        with transaction.atomic():
-            if success:
-                payment.status         = Payment.Status.COMPLETED
-                payment.transaction_id = transaction_id
-                payment.raw_response   = obj
-                payment.paid_at        = timezone.now()
-                payment.save()
+        if payment.status == Payment.Status.PAID:
+            return HttpResponse(status=200)  # idempotency — already processed
 
-                booking = payment.booking
-                if payment.payment_type == Payment.PaymentType.DEPOSIT:
-                    booking.status = "deposit_paid"
-                elif payment.payment_type == Payment.PaymentType.REMAINING:
-                    booking.status = "completed"
-                booking.save()
+        payment.status = Payment.Status.PAID
+        payment.stripe_payment_intent_id = session.get("payment_intent")
+        payment.raw_webhook_event = event
+        payment.paid_at = timezone.now()
+        payment.save()
 
-            else:
-                payment.status         = Payment.Status.FAILED
-                payment.failure_reason = obj.get("data", {}).get("message", "")
-                payment.raw_response   = obj
-                payment.save()
+        booking = payment.booking
+        booking.status = "paid"
+        booking.save(update_fields=["status"])
 
         return HttpResponse(status=200)
 
-    def _verify_hmac(self, data ,received_hmac):
-        """Verify Paymob HMAC signature."""
-        obj           = data.get("obj", {})
 
-        def fmt(value):
-            """Convert Python booleans to lowercase — Paymob expects true/false not True/False"""
-            if isinstance(value, bool):
-                return "true" if value else "false"
-            if value is None:
-                return ""
-            return str(value)
-        fields = [
-            fmt(obj.get("amount_cents",           "")),
-            fmt(obj.get("created_at",             "")),
-            fmt(obj.get("currency",               "")),
-            fmt(obj.get("error_occured",          "")),
-            fmt(obj.get("has_parent_transaction", "")),
-            fmt(obj.get("id",                     "")),
-            fmt(obj.get("integration_id",         "")),
-            fmt(obj.get("is_3d_secure",           "")),
-            fmt(obj.get("is_auth",                "")),
-            fmt(obj.get("is_capture",             "")),
-            fmt(obj.get("is_refunded",            "")),
-            fmt(obj.get("is_standalone_payment",  "")),
-            fmt(obj.get("is_voided",              "")),
-            fmt(obj.get("order", {}).get("id",    "")),
-            fmt(obj.get("owner",                  "")),
-            fmt(obj.get("pending",                "")),
-            fmt(obj.get("source_data", {}).get("pan",      "")),
-            fmt(obj.get("source_data", {}).get("sub_type", "")),
-            fmt(obj.get("source_data", {}).get("type",     "")),
-            fmt(obj.get("success",                "")),
-        ]
+class CheckinScanView(APIView):
+    """
+    POST /api/payments/checkin/
+    Body: {"qr_token": "<uuid>"}
+
+    The QR scan does NOT move money itself — it's the trigger that lets
+    this view validate everything and then call the Transfer API exactly
+    once. Landlords only, and only for their own property's booking.
+    """
+
+    permission_classes = [IsLandlord]
+
+    def post(self, request):
+        serializer = CheckinScanSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            try:
+                booking = Booking.objects.select_for_update().select_related(
+                    "property", "property__landlord", "property__city"
+                ).get(qr_token=serializer.validated_data["qr_token"])
+            except Booking.DoesNotExist:
+                return Response({"error": "Invalid QR code."}, status=status.HTTP_404_NOT_FOUND)
+
+            if booking.property.landlord != request.user:
+                return Response({"error": "This booking is not for one of your properties."}, status=status.HTTP_403_FORBIDDEN)
+
+            if booking.status != "paid":
+                return Response(
+                    {"error": f"Booking is '{booking.status}' — payment must be completed before check-in."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if booking.payout_done:
+                return Response({"error": "This booking has already been checked in and paid out."}, status=status.HTTP_409_CONFLICT)
+
+            landlord_profile = request.user.landlord_profile
+            if not landlord_profile.stripe_account_id:
+                return Response(
+                    {"error": "You haven't completed payout onboarding yet. Visit your payout settings first."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            commission_cents, landlord_cents = calculate_commission(booking.total_amount_cents)
+
+            payout, _ = Payout.objects.get_or_create(
+                booking=booking,
+                defaults={
+                    "commission_amount_cents": commission_cents,
+                    "landlord_amount_cents": landlord_cents,
+                },
+            )
+
+            try:
+                transfer_id = create_transfer(
+                    landlord_profile.stripe_account_id, landlord_cents, booking.id
+                )
+            except StripeError as exc:
+                payout.status = Payout.Status.FAILED
+                payout.failure_reason = str(exc)
+                payout.save()
+                logger.error("Payout failed for booking %s: %s", booking.id, exc)
+                return Response({"error": "Payout failed. Please try again or contact support."}, status=status.HTTP_502_BAD_GATEWAY)
+
+            payout.stripe_transfer_id = transfer_id
+            payout.status = Payout.Status.DONE
+            payout.triggered_at = timezone.now()
+            payout.save()
+
+            booking.payout_done = True
+            booking.status = "finished"
+            booking.save(update_fields=["payout_done", "status"])
+
+        return Response(
+            {
+                "booking_id": booking.id,
+                "landlord_amount_egp": landlord_cents / 100,
+                "commission_amount_egp": commission_cents / 100,
+                "status": "finished",
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
-        expected = hmac.new(
-            settings.PAYMOB_HMAC_SECRET.encode(),
-            "".join(fields).encode(),
-            hashlib.sha512
-        ).hexdigest()
+class ConnectOnboardingView(APIView):
+    """
+    POST /api/payments/connect/onboard/
+    Creates (if needed) the landlord's Stripe Express account and returns
+    a hosted onboarding URL.
+    """
 
-        
-        return hmac.compare_digest(expected, received_hmac)
+    permission_classes = [IsLandlord]
+
+    def post(self, request):
+        try:
+            account_id = ensure_connect_account(request.user)
+            onboarding_url = create_onboarding_link(account_id)
+        except StripeError as exc:
+            logger.error("Connect onboarding failed for landlord %s: %s", request.user.id, exc)
+            return Response({"error": "Could not start payout onboarding."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({"onboarding_url": onboarding_url}, status=status.HTTP_200_OK)
+
+
+class ConnectStatusView(APIView):
+    """
+    GET /api/payments/connect/status/
+    Checks the landlord's Connect account status synchronously (no
+    webhook subscriber for account.updated yet — a v2 improvement).
+    """
+
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        profile = request.user.landlord_profile
+        if not profile.stripe_account_id:
+            return Response(
+                {"stripe_account_id": None, "onboarding_complete": False},
+                status=status.HTTP_200_OK,
+            )
+
+        try:
+            account_status = get_connect_account_status(profile.stripe_account_id)
+        except StripeError as exc:
+            logger.error("Could not fetch Connect status for landlord %s: %s", request.user.id, exc)
+            return Response({"error": "Could not check payout status."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        onboarding_complete = account_status["payouts_enabled"] and account_status["details_submitted"]
+        if onboarding_complete != profile.stripe_onboarding_complete:
+            profile.stripe_onboarding_complete = onboarding_complete
+            profile.save(update_fields=["stripe_onboarding_complete"])
+
+        return Response(
+            {
+                "stripe_account_id": profile.stripe_account_id,
+                "onboarding_complete": onboarding_complete,
+                **account_status,
+            },
+            status=status.HTTP_200_OK,
+        )

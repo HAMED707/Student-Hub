@@ -1,16 +1,22 @@
+"""
+Payments API URL configuration.
+
+StripeWebhookView is registered directly in api/urls.py at
+/api/webhooks/stripe/, not nested here — mirrors the Persona webhook
+pattern and keeps webhook paths grouped together at the top level.
+"""
+
 from django.urls import path
-from .views import (
-    InitiateDepositView,
-    PayRemainingOnlineView,
-    MarkRemainingOfflineView,
-    MyPaymentsView,
-    PaymobWebhookView,
+from api.payments_api.views import (
+    CreateCheckoutSessionView,
+    CheckinScanView,
+    ConnectOnboardingView,
+    ConnectStatusView,
 )
 
 urlpatterns = [
-    path("deposit/",           InitiateDepositView.as_view(),     name="pay-deposit"),
-    path("remaining/online/",  PayRemainingOnlineView.as_view(),  name="pay-remaining-online"),
-    path("remaining/offline/", MarkRemainingOfflineView.as_view(),name="pay-remaining-offline"),
-    path("my/",                MyPaymentsView.as_view(),          name="my-payments"),
-    path("webhook/",           PaymobWebhookView.as_view(),       name="paymob-webhook"),
+    path("create-checkout-session/", CreateCheckoutSessionView.as_view(), name="payments-create-checkout-session"),
+    path("checkin/", CheckinScanView.as_view(), name="payments-checkin"),
+    path("connect/onboard/", ConnectOnboardingView.as_view(), name="payments-connect-onboard"),
+    path("connect/status/", ConnectStatusView.as_view(), name="payments-connect-status"),
 ]

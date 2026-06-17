@@ -216,19 +216,16 @@ CORS_ALLOW_HEADERS = [
 
 
 
-#─────Paymob──────────────────────────────────────────────────
-#Never hardcode secrets in settings.py. we Use a .env file
 from decouple import config
 
-PERSONA_API_KEY              = config("PERSONA_API_KEY")
+PERSONA_API_KEY             = config("PERSONA_API_KEY")
 PERSONA_INQUIRY_TEMPLATE_ID = config("PERSONA_INQUIRY_TEMPLATE_ID")
-PERSONA_WEBHOOK_SECRET       = config("PERSONA_WEBHOOK_SECRET")
+PERSONA_WEBHOOK_SECRET      = config("PERSONA_WEBHOOK_SECRET")
 
-PAYMOB_API_KEY        = config("PAYMOB_API_KEY")
-PAYMOB_INTEGRATION_ID = config("PAYMOB_INTEGRATION_ID", cast=int)
-PAYMOB_IFRAME_ID      = config("PAYMOB_IFRAME_ID", cast=int)
-PAYMOB_HMAC_SECRET    = config("PAYMOB_HMAC_SECRET")
-#─────End-Paymob──────────────────────────────────────────────────
+STRIPE_SECRET_KEY           = config("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET       = config("STRIPE_WEBHOOK_SECRET")
+PLATFORM_COMMISSION_PERCENT = config("PLATFORM_COMMISSION_PERCENT", default=10, cast=int)
+FRONTEND_URL                = config("FRONTEND_URL", default="http://localhost:5173")
 
 
 ALLOWED_HOSTS = [
