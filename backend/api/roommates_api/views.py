@@ -65,6 +65,11 @@ class RoommateListView(APIView):
         # Exclude the requesting student's own profile from the list
         if request.user.role == "student":
             queryset = queryset.exclude(user=request.user)
+            # Hard gender filter — students only see same-gender profiles
+            if not request.user.gender:
+                queryset = queryset.none()
+            else:
+                queryset = queryset.filter(user__gender=request.user.gender)
 
         serializer = RoommateProfileSerializer(
             queryset,
@@ -120,6 +125,12 @@ class RoommateProfileDetailView(APIView):
         try:
             profile = RoommateProfile.objects.select_related("user").get(user__id=user_id)
         except RoommateProfile.DoesNotExist:
+            return Response({"error": "Roommate profile not found."}, status=status.HTTP_404_NOT_FOUND)
+        if (
+            request.user.role == "student"
+            and profile.user != request.user
+            and (not request.user.gender or profile.user.gender != request.user.gender)
+        ):
             return Response({"error": "Roommate profile not found."}, status=status.HTTP_404_NOT_FOUND)
         serializer = RoommateProfileSerializer(
             profile,
@@ -284,8 +295,12 @@ class RoommateMatchView(APIView):
         # Only apply a constraint when the current user's field is filled in.
         # Applying an empty/null constraint would silently return zero results.
         filters = {"is_active": True}
-        if current_user.gender:
-            filters["user__gender"] = current_user.gender
+        if not current_user.gender:
+            return Response(
+                {"status": "success", "matches": []},
+                status=status.HTTP_200_OK,
+            )
+        filters["user__gender"] = current_user.gender
         if current_profile.university:
             filters["university"] = current_profile.university
         if current_profile.city:

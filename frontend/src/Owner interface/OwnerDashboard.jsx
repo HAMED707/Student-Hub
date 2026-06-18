@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -23,40 +23,22 @@ import {
 } from "lucide-react";
 
 import logo from "../assets/brand/icons/logo.svg";
+import { fetchMyProfile, updateMyProfile } from "../api/accounts.js";
 import { apiRequest, withApiUrl } from "../api/client.js";
 import { fetchKycStatus, createKycInquiry, syncKycStatus } from "../api/kyc.js";
+import {
+  fetchConversationMessages,
+  fetchConversations,
+  markConversationRead,
+  sendConversationMessage,
+} from "../api/messaging.js";
 import { getConnectStatus, startOnboarding, getLandlordPayouts } from "../api/payments.js";
-import { clearSession } from "../utils/auth.js";
+import { clearSession, getApiErrorMessage, getStoredUser } from "../utils/auth.js";
+import { mapConversation, mapMessage } from "../utils/messaging.js";
 import { CITIES, TRANSPORT_OPTIONS, UNIVERSITIES_BY_CITY } from "../utils/propertyConstants.js";
 import { buildPropertyFormState, buildPropertyPayload } from "../utils/propertyForm.js";
 
 const NAV_ITEMS = ["Units", "Messages", "Payments"];
-
-const CONTACTS = [
-  { id: 1, name: "Mohamed", avatar: "MO", handle: "@mohamed", lastMsg: "Hey, is the room still available?", time: "Dec 15", unread: 2 },
-  { id: 2, name: "Caream", avatar: "CA", handle: "@caream", lastMsg: "Thank you for your recommendation!", time: "Dec 15" },
-  { id: 3, name: "EELU Community", avatar: "EC", handle: "@eelu", lastMsg: "New announcement posted for students", time: "Dec 14" },
-  { id: 4, name: "Sara Hassan", avatar: "SH", handle: "@sara", lastMsg: "When can I move in?", time: "Dec 13", unread: 1 },
-  { id: 5, name: "Ahmed Nour", avatar: "AN", handle: "@ahmed", lastMsg: "Is utilities included in the price?", time: "Dec 12" },
-  { id: 6, name: "Nadia Farouk", avatar: "NF", handle: "@nadia", lastMsg: "Can I visit tomorrow morning?", time: "Dec 11", unread: 3 },
-  { id: 7, name: "Omar Tarek", avatar: "OT", handle: "@omar", lastMsg: "Just confirmed my payment!", time: "Dec 10" },
-];
-
-const MESSAGES_BY_CONTACT = {
-  1: [
-    { id: 1, text: "Hey, is the room still available?", from: "them" },
-    { id: 2, text: "Yes it is! Would you like to schedule a visit?", from: "me" },
-    { id: 3, text: "That would be great, when works for you?", from: "them" },
-  ],
-  2: [
-    { id: 1, text: "Thank you for your good recommendation!", from: "them" },
-    { id: 2, text: "Happy to help! Let me know if you need anything.", from: "me" },
-  ],
-  3: [
-    { id: 1, text: "New announcement posted for students", from: "them" },
-    { id: 2, text: "Thanks for the update!", from: "me" },
-  ],
-};
 
 const PROPERTIES = [
   { id: 1, name: "Room - Elsalam", type: "Room" },
@@ -91,31 +73,43 @@ const ALERTS = [
   { icon: <Zap size={14} className="text-orange-500" />, text: 'Cancellation request for "Shared Room - Zamalek"' },
 ];
 
-const BOOKING_STATS = [
-  { label: "Booked Apartments", count: 1, color: "bg-blue-500" },
-  { label: "Booked Rooms", count: 2, color: "bg-indigo-500" },
-  { label: "Booked Beds", count: 3, color: "bg-sky-500" },
-];
-
-const TOP_PROPERTIES = [
-  { name: "Shared Room - Nasr City", views: "124 views", bookings: "8 bookings" },
-  { name: "Studio Near University", views: "98 views", bookings: "5 bookings" },
-];
-
-const RECENT_BOOKINGS = ["Mohamed booked a bed", "Mohamed booked a bed", "Caream booked a room"];
-
 const cardShadow = { boxShadow: "0 2px 12px rgba(27,48,112,0.08)" };
 const navShadow = { boxShadow: "0 1px 4px rgba(27,48,112,0.08)" };
 const greenButton = { backgroundColor: "#5CAA28" };
 const greenButtonHover = "#4a9020";
 
-function AvatarCircle({ initials, color = "bg-blue-500" }) {
-  return (
-    <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center text-white text-xs font-semibold flex-shrink-0`}>
-      {initials}
-    </div>
-  );
-}
+const getOwnerDisplayName = (profile = {}) =>
+  [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim() ||
+  profile.fullName ||
+  profile.name ||
+  profile.username ||
+  "Owner";
+
+const getOwnerFirstName = (profile = {}) =>
+  profile.first_name ||
+  getOwnerDisplayName(profile).split(/\s+/).filter(Boolean)[0] ||
+  "Owner";
+
+const getOwnerInitials = (profile = {}) =>
+  getOwnerDisplayName(profile)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "OW";
+
+const getOwnerAvatarUrl = (profile = {}) => {
+  const avatar = profile.profile_picture || profile.avatarUrl;
+  return avatar ? withApiUrl(avatar) : "";
+};
+
+const formatUnitType = (value) =>
+  value
+    ? String(value)
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    : "Property";
 
 function StatusBadge({ status }) {
   const cls =
@@ -154,60 +148,152 @@ function FloatingWindow({ title, subtitle, onClose, children, width = "w-80", he
   );
 }
 
-function ProfileWindow({ onClose }) {
-  const [name, setName] = useState("Salah Ahmed");
-  const [email, setEmail] = useState("salah@example.com");
-  const [phone, setPhone] = useState("+20 100 000 0000");
-  const [city, setCity] = useState("Cairo");
+function ProfileWindow({ profile, onClose, onSaved }) {
+  const [form, setForm] = useState(() => ({
+    firstName: profile?.first_name || "",
+    lastName: profile?.last_name || "",
+    email: profile?.email || "",
+    phone: profile?.phone_number || "",
+    city: profile?.city || "",
+    companyName: profile?.landlord_profile?.company_name || "",
+    nationalId: profile?.landlord_profile?.national_id || "",
+  }));
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
-  function save() {
-    setSaved(true);
-    setTimeout(() => {
-      setSaved(false);
-      onClose();
-    }, 900);
+  const previewAvatar = useMemo(
+    () => (avatarFile ? URL.createObjectURL(avatarFile) : getOwnerAvatarUrl(profile)),
+    [avatarFile, profile],
+  );
+  const displayProfile = {
+    ...profile,
+    first_name: form.firstName,
+    last_name: form.lastName,
+    email: form.email,
+  };
+
+  useEffect(() => {
+    setForm({
+      firstName: profile?.first_name || "",
+      lastName: profile?.last_name || "",
+      email: profile?.email || "",
+      phone: profile?.phone_number || "",
+      city: profile?.city || "",
+      companyName: profile?.landlord_profile?.company_name || "",
+      nationalId: profile?.landlord_profile?.national_id || "",
+    });
+  }, [profile]);
+
+  useEffect(() => {
+    if (!avatarFile) return undefined;
+    const objectUrl = previewAvatar;
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [avatarFile, previewAvatar]);
+
+  function updateField(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    setSaving(true);
+    setSaved(false);
+    setError("");
+
+    try {
+      let updated = await updateMyProfile({
+        first_name: form.firstName.trim(),
+        last_name: form.lastName.trim(),
+        email: form.email.trim(),
+        phone_number: form.phone.trim(),
+        city: form.city.trim(),
+        landlord_profile: {
+          company_name: form.companyName.trim(),
+          national_id: form.nationalId.trim(),
+        },
+      });
+
+      if (avatarFile) {
+        const body = new FormData();
+        body.append("profile_picture", avatarFile);
+        updated = await updateMyProfile(body);
+      }
+
+      onSaved(updated);
+      setSaved(true);
+      setTimeout(() => {
+        setSaved(false);
+        onClose();
+      }, 700);
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "Failed to update profile."));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <FloatingWindow title="My Profile" onClose={onClose} width="w-80">
-      <div className="p-4 space-y-3">
+    <FloatingWindow title="My Profile" subtitle="Owner Account" onClose={onClose} width="w-[420px]">
+      <form onSubmit={save} className="p-4 space-y-3">
         <div className="flex flex-col items-center gap-2 pb-2">
-          <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-bold">
-            {name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-          </div>
+          {previewAvatar ? (
+            <img src={previewAvatar} alt={getOwnerDisplayName(displayProfile)} className="w-16 h-16 rounded-full object-cover border border-blue-100" />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-white text-xl font-bold">
+              {getOwnerInitials(displayProfile)}
+            </div>
+          )}
           <p className="text-xs text-gray-400">Owner Account</p>
+          <label className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer">
+            Change photo
+            <input type="file" accept="image/*" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className="hidden" />
+          </label>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Full Name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">First Name</label>
+            <input value={form.firstName} onChange={(e) => updateField("firstName", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Last Name</label>
+            <input value={form.lastName} onChange={(e) => updateField("lastName", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+          </div>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+          <input value={form.email} onChange={(e) => updateField("email", e.target.value)} type="email" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+          <input value={form.phone} onChange={(e) => updateField("phone", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
-          <select value={city} onChange={(e) => setCity(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white">
-            <option>Cairo</option>
-            <option>Alexandria</option>
-            <option>Giza</option>
-            <option>Mansoura</option>
-            <option>Assiut</option>
-            <option>Other</option>
+          <select value={form.city} onChange={(e) => updateField("city", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white">
+            <option value="">Not set</option>
+            {CITIES.map((cityName) => (
+              <option key={cityName} value={cityName}>{cityName}</option>
+            ))}
           </select>
         </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Company Name</label>
+          <input value={form.companyName} onChange={(e) => updateField("companyName", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">National ID</label>
+          <input value={form.nationalId} onChange={(e) => updateField("nationalId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+        </div>
+        {error && <p className="text-xs font-medium text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={onClose} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-          <button type="button" onClick={save} className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${saved ? "bg-green-500 text-white" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
-            {saved ? "Saved ✓" : "Save Changes"}
+          <button type="submit" disabled={saving} className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors disabled:opacity-60 ${saved ? "bg-green-500 text-white" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
           </button>
         </div>
-      </div>
+      </form>
     </FloatingWindow>
   );
 }
@@ -221,34 +307,93 @@ function StatCard({ label, value, valueColor = "text-gray-800" }) {
   );
 }
 
-function ChatWindow({ contact, onClose }) {
+function ChatWindow({ conversation, currentUserId, onClose, onMessageSent }) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState(MESSAGES_BY_CONTACT[contact.id] ?? []);
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   const scrollRef = useRef(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  function send() {
-    if (!input.trim()) return;
-    setMessages((prev) => [...prev, { id: Date.now(), text: input.trim(), from: "me" }]);
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadMessages() {
+      setLoading(true);
+      setError("");
+      try {
+        const data = await fetchConversationMessages(conversation.id);
+        if (isCancelled) return;
+        setMessages(Array.isArray(data) ? data.map((message) => mapMessage(message, currentUserId)) : []);
+        await markConversationRead(conversation.id);
+        onMessageSent?.();
+      } catch (loadError) {
+        if (!isCancelled) setError(getApiErrorMessage(loadError, "Failed to load messages."));
+      } finally {
+        if (!isCancelled) setLoading(false);
+      }
+    }
+
+    loadMessages();
+    return () => {
+      isCancelled = true;
+    };
+  }, [conversation.id, currentUserId, onMessageSent]);
+
+  async function send() {
+    const trimmed = input.trim();
+    if (!trimmed || sending) return;
+
+    setSending(true);
+    setError("");
+    const optimisticMessage = {
+      id: `temp-${Date.now()}`,
+      text: trimmed,
+      from: "me",
+      time: "Just now",
+    };
+    setMessages((prev) => [...prev, optimisticMessage]);
     setInput("");
+
+    try {
+      const created = await sendConversationMessage(conversation.id, trimmed);
+      const mapped = mapMessage(created, currentUserId);
+      setMessages((prev) => prev.map((message) => (message.id === optimisticMessage.id ? mapped : message)));
+      onMessageSent?.();
+    } catch (sendError) {
+      setMessages((prev) => prev.filter((message) => message.id !== optimisticMessage.id));
+      setError(getApiErrorMessage(sendError, "Failed to send message."));
+      setInput(trimmed);
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
-    <FloatingWindow title={contact.name} subtitle={contact.handle} onClose={onClose} width="w-80" height="h-[420px]">
+    <FloatingWindow title={conversation.name} subtitle={conversation.role || "Student"} onClose={onClose} width="w-80" height="h-[420px]">
       <div className="flex flex-col h-full">
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
-              {msg.from === "them" && <AvatarCircle initials={contact.avatar} color="bg-blue-400" />}
+          {loading ? (
+            <div className="flex h-full items-center justify-center text-xs text-gray-400">Loading…</div>
+          ) : messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-xs text-gray-400">No messages yet.</div>
+          ) : messages.map((msg) => (
+            <div key={msg.id} className={`flex items-end ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
+              {msg.from === "them" && (
+                <img src={conversation.avatar} alt={conversation.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+              )}
               <div className={`max-w-[70%] rounded-2xl px-3 py-2 text-sm ${msg.from === "me" ? "bg-blue-600 text-white ml-2" : "bg-gray-100 text-gray-800 ml-2"}`}>
-                {msg.text}
+                <p>{msg.text}</p>
+                {msg.time && <p className={`mt-1 text-[10px] ${msg.from === "me" ? "text-blue-100" : "text-gray-400"}`}>{msg.time}</p>}
               </div>
             </div>
           ))}
         </div>
+        {error && <p className="border-t border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">{error}</p>}
         <div className="border-t border-gray-100 px-3 py-2 flex items-center gap-2">
           <button type="button" className="text-gray-400 hover:text-blue-500 transition-colors" aria-label="Attach image"><ImageIcon size={16} /></button>
           <button type="button" className="text-gray-400 hover:text-blue-500 transition-colors text-xs font-bold border border-gray-300 rounded px-1">GIF</button>
@@ -260,7 +405,7 @@ function ChatWindow({ contact, onClose }) {
             className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5 outline-none focus:border-blue-400 focus:bg-white transition-colors"
           />
           <button type="button" className="text-gray-400 hover:text-blue-500 transition-colors" aria-label="Emoji"><Smile size={16} /></button>
-          <button type="button" onClick={send} className="text-blue-600 hover:text-blue-700 transition-colors" aria-label="Send"><Send size={16} /></button>
+          <button type="button" onClick={send} disabled={!input.trim() || sending} className="text-blue-600 hover:text-blue-700 transition-colors disabled:text-gray-300" aria-label="Send"><Send size={16} /></button>
         </div>
       </div>
     </FloatingWindow>
@@ -864,11 +1009,17 @@ function OwnerDashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [onboardingBanner, setOnboardingBanner] = useState(null);
+  const [ownerProfile, setOwnerProfile] = useState(() => getStoredUser() || null);
   const [activeNav, setActiveNav] = useState("Units");
   const [floating, setFloating] = useState(null);
   const [msgSearch, setMsgSearch] = useState("");
+  const [conversations, setConversations] = useState([]);
+  const [messagesLoading, setMessagesLoading] = useState(true);
+  const [messagesError, setMessagesError] = useState("");
   const [properties, setProperties] = useState([]);
   const [propertiesLoading, setPropertiesLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
   const [kycStatus, setKycStatus] = useState(null);
   const [kycStarting, setKycStarting] = useState(false);
   const [connectStatus, setConnectStatus] = useState(null);
@@ -908,6 +1059,33 @@ function OwnerDashboard() {
   }
 
   useEffect(() => { loadPaymentsData(); }, []);
+
+  useEffect(() => {
+    fetchMyProfile()
+      .then((profile) => setOwnerProfile(profile))
+      .catch(() => {
+        // Keep the stored auth user if the profile request is temporarily unavailable.
+      });
+  }, []);
+
+  const currentUserId = ownerProfile?.id ? String(ownerProfile.id) : String(getStoredUser()?.id || "");
+
+  const loadOwnerMessages = useCallback(async () => {
+    setMessagesLoading(true);
+    setMessagesError("");
+    try {
+      const data = await fetchConversations();
+      setConversations(Array.isArray(data) ? data.map((conversation) => mapConversation(conversation, currentUserId)) : []);
+    } catch (loadError) {
+      setMessagesError(getApiErrorMessage(loadError, "Failed to load messages."));
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    loadOwnerMessages();
+  }, [loadOwnerMessages]);
 
   useEffect(() => {
     const param = searchParams.get("onboarding");
@@ -977,6 +1155,28 @@ function OwnerDashboard() {
 
   useEffect(() => { fetchProperties(); }, []);
 
+  async function fetchDashboardData() {
+    try {
+      setDashboardLoading(true);
+      const res = await apiRequest("/api/properties/landlord/dashboard/");
+      if (res.ok) {
+        const data = await res.json();
+        setDashboardData(data);
+      }
+    } catch {
+      // keep previous dashboard data
+    } finally {
+      setDashboardLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchDashboardData(); }, []);
+
+  function refreshOwnerData() {
+    fetchProperties();
+    fetchDashboardData();
+  }
+
   function openDashboardPage(label) {
     setActiveNav(label);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -987,9 +1187,20 @@ function OwnerDashboard() {
     navigate("/login");
   }
 
-  const filteredContacts = CONTACTS.filter((contact) =>
-    contact.name.toLowerCase().includes(msgSearch.toLowerCase())
+  const filteredConversations = conversations.filter((conversation) =>
+    `${conversation.name} ${conversation.lastMessage}`.toLowerCase().includes(msgSearch.toLowerCase())
   );
+  const ownerName = getOwnerFirstName(ownerProfile);
+  const ownerAvatar = getOwnerAvatarUrl(ownerProfile);
+  const ownerInitials = getOwnerInitials(ownerProfile);
+  const bookingUnitCounts = dashboardData?.summary?.booking_unit_counts || {};
+  const bookingStats = [
+    { label: "Booked Apartments", count: bookingUnitCounts.whole || 0 },
+    { label: "Booked Rooms", count: bookingUnitCounts.room || 0 },
+    { label: "Booked Beds", count: bookingUnitCounts.bed || 0 },
+  ];
+  const topProperties = dashboardData?.top_properties || [];
+  const recentBookings = dashboardData?.recent_bookings || [];
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: "Inter, sans-serif" }}>
@@ -1026,10 +1237,14 @@ function OwnerDashboard() {
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setFloating({ kind: "profile" })} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-                <span className="text-xs font-semibold text-white">SA</span>
-              </div>
-              <span className="text-sm text-gray-600 font-medium hidden sm:block">Hi, Salah</span>
+              {ownerAvatar ? (
+                <img src={ownerAvatar} alt={ownerName} className="w-8 h-8 rounded-full object-cover border border-blue-100" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
+                  <span className="text-xs font-semibold text-white">{ownerInitials}</span>
+                </div>
+              )}
+              <span className="text-sm text-gray-600 font-medium hidden sm:block">Hi, {ownerName}</span>
             </button>
             <button type="button" title="Log out" onClick={handleLogout} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
               <LogOut size={16} />
@@ -1148,9 +1363,9 @@ function OwnerDashboard() {
 
               {/* Stat numbers row */}
               <div className="grid grid-cols-1 gap-2 mb-4 sm:grid-cols-3">
-                {BOOKING_STATS.map((item) => (
+                {bookingStats.map((item) => (
                   <div key={item.label} className="bg-blue-50 rounded-xl border border-blue-100 px-3 py-3 text-center">
-                    <p className="text-xl font-bold text-blue-700">{item.count}</p>
+                    <p className="text-xl font-bold text-blue-700">{dashboardLoading ? "…" : item.count}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{item.label}</p>
                   </div>
                 ))}
@@ -1161,12 +1376,16 @@ function OwnerDashboard() {
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Top Properties</p>
                   <div className="sh-scroll" style={{ maxHeight: "160px", overflowY: "auto" }}>
-                    {TOP_PROPERTIES.map((property) => (
-                      <div key={property.name} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
-                        <p className="text-xs text-gray-700 font-medium">{property.name}</p>
-                        <div className="text-right">
-                          <p className="text-xs font-semibold text-gray-800">{property.views}</p>
-                          <p className="text-xs text-gray-400">{property.bookings}</p>
+                    {dashboardLoading ? (
+                      <p className="text-xs text-gray-400 py-2">Loading…</p>
+                    ) : topProperties.length === 0 ? (
+                      <p className="text-xs text-gray-400 py-2">No properties yet.</p>
+                    ) : topProperties.map((property) => (
+                      <div key={property.id} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-50 last:border-0">
+                        <p className="text-xs text-gray-700 font-medium truncate">{property.title}</p>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-semibold text-gray-800">{property.view_count || 0} views</p>
+                          <p className="text-xs text-gray-400">{property.booking_count || 0} bookings</p>
                         </div>
                       </div>
                     ))}
@@ -1190,10 +1409,16 @@ function OwnerDashboard() {
               <div className="mt-4 pt-3 border-t border-blue-50">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Bookings</p>
                 <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-                  {RECENT_BOOKINGS.map((item, index) => (
-                    <div key={`${item}-${index}`} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+                  {dashboardLoading ? (
+                    <p className="text-xs text-gray-400 py-1.5">Loading…</p>
+                  ) : recentBookings.length === 0 ? (
+                    <p className="text-xs text-gray-400 py-1.5">No bookings yet.</p>
+                  ) : recentBookings.map((booking) => (
+                    <div key={booking.id} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
                       <div className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-                      <p className="text-xs text-gray-600">{item}</p>
+                      <p className="text-xs text-gray-600 truncate">
+                        {booking.tenant_name} booked {formatUnitType(booking.booking_unit)} at {booking.property_title}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -1212,24 +1437,33 @@ function OwnerDashboard() {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input value={msgSearch} onChange={(e) => setMsgSearch(e.target.value)} placeholder="Search people or message" className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50" />
               </div>
-              <p className="text-xs text-gray-400 font-medium mb-2 px-1">All</p>
+              <div className="mb-2 flex items-center justify-between px-1">
+                <p className="text-xs text-gray-400 font-medium">All</p>
+                <button type="button" onClick={loadOwnerMessages} className="text-xs font-semibold text-blue-600 hover:text-blue-700">Refresh</button>
+              </div>
               <div className="space-y-1 sh-scroll" style={{ maxHeight: "280px", overflowY: "auto", paddingRight: "2px" }}>
-                {filteredContacts.map((contact) => (
-                  <button key={contact.id} type="button" onClick={() => setFloating({ kind: "chat", contact })} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-blue-50 transition-colors text-left">
+                {messagesError ? (
+                  <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">{messagesError}</p>
+                ) : messagesLoading ? (
+                  <p className="py-8 text-center text-xs text-gray-400">Loading messages…</p>
+                ) : filteredConversations.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-gray-400">No conversations yet.</p>
+                ) : filteredConversations.map((conversation) => (
+                  <button key={conversation.id} type="button" onClick={() => setFloating({ kind: "chat", conversation })} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-blue-50 transition-colors text-left">
                     <div className="relative">
-                      <AvatarCircle initials={contact.avatar} color="bg-blue-500" />
-                      {contact.unread && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                          {contact.unread}
+                      <img src={conversation.avatar} alt={conversation.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                      {conversation.unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                          {conversation.unreadCount}
                         </span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-gray-800">{contact.name}</span>
-                        <span className="text-[11px] text-gray-400">{contact.time}</span>
+                        <span className="truncate text-sm font-semibold text-gray-800">{conversation.name}</span>
+                        <span className="text-[11px] text-gray-400">{conversation.lastTime}</span>
                       </div>
-                      <p className="text-xs text-gray-500 truncate">{contact.lastMsg}</p>
+                      <p className="text-xs text-gray-500 truncate">{conversation.lastMessage}</p>
                     </div>
                   </button>
                 ))}
@@ -1377,12 +1611,25 @@ function OwnerDashboard() {
         </div>{/* end dashboard stack */}
       </main>
 
-      {floating?.kind === "chat" && <ChatWindow contact={floating.contact} onClose={() => setFloating(null)} />}
-      {floating?.kind === "editProperty" && <EditPropertyWindow property={floating.property} onClose={() => setFloating(null)} onPropertyUpdated={fetchProperties} />}
-      {floating?.kind === "addProperty" && <AddPropertyWindow onClose={() => setFloating(null)} onPropertyAdded={fetchProperties} />}
+      {floating?.kind === "chat" && (
+        <ChatWindow
+          conversation={floating.conversation}
+          currentUserId={currentUserId}
+          onClose={() => setFloating(null)}
+          onMessageSent={loadOwnerMessages}
+        />
+      )}
+      {floating?.kind === "editProperty" && <EditPropertyWindow property={floating.property} onClose={() => setFloating(null)} onPropertyUpdated={refreshOwnerData} />}
+      {floating?.kind === "addProperty" && <AddPropertyWindow onClose={() => setFloating(null)} onPropertyAdded={refreshOwnerData} />}
       {floating?.kind === "withdraw" && <WithdrawWindow onClose={() => setFloating(null)} />}
       {floating?.kind === "cancelRequests" && <CancelRequestsWindow onClose={() => setFloating(null)} />}
-      {floating?.kind === "profile" && <ProfileWindow onClose={() => setFloating(null)} />}
+      {floating?.kind === "profile" && (
+        <ProfileWindow
+          profile={ownerProfile}
+          onClose={() => setFloating(null)}
+          onSaved={setOwnerProfile}
+        />
+      )}
       {showQrScanner && <QrScannerModal onClose={() => setShowQrScanner(false)} onCheckin={handleCheckin} />}
     </div>
   );

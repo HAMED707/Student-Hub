@@ -439,9 +439,15 @@ class LandlordDashboardView(APIView):
 
         total_properties = properties.count()
         total_views = sum(property_obj.view_count for property_obj in properties)
-        booked_units = bookings.filter(status__in=["confirmed", "completed"]).count()
-        pending_requests = bookings.filter(status="deposit_paid").count()
+        active_bookings = bookings.filter(status__in=["paid", "finished"])
+        booked_units = active_bookings.count()
+        pending_requests = bookings.filter(status="pending_payment").count()
         booked_progress = round((booked_units / total_properties) * 100) if total_properties else 0
+        unit_counts = {
+            "whole": active_bookings.filter(booking_unit="whole").count(),
+            "room": active_bookings.filter(booking_unit="room").count(),
+            "bed": active_bookings.filter(booking_unit="bed").count(),
+        }
 
         recent_bookings = []
         for booking in bookings[:6]:
@@ -491,6 +497,7 @@ class LandlordDashboardView(APIView):
                     "booked_units": booked_units,
                     "booked_progress": booked_progress,
                     "pending_requests": pending_requests,
+                    "booking_unit_counts": unit_counts,
                     "wallet_balance": str(getattr(request.user.landlord_profile, "available_balance", 0)),
                     "total_income": str(getattr(request.user.landlord_profile, "total_income", 0)),
                 },

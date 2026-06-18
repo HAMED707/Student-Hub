@@ -138,6 +138,8 @@ class RoommateRequestCreateSerializer(serializers.ModelSerializer):
 
         if sender == receiver:
             raise serializers.ValidationError("You cannot send a roommate request to yourself.")
+        if not sender.gender or sender.gender != receiver.gender:
+            raise serializers.ValidationError("You can only send roommate requests to same-gender students.")
 
         # Block duplicate — catches both directions (A→B and B→A)
         already_exists = RoommateRequest.objects.filter(

@@ -656,13 +656,13 @@ export default function Roommate() {
 
             <Section
               title="Discover Students"
-              description="Browse active students looking for a roommate. Scores show compatibility based on your profile."
+              description="Browse active same-gender students looking for a roommate. Scores show compatibility based on your profile."
             >
               {filteredDiscoverCards.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
                   {activeFilterCount > 0
                     ? "No students match your current filters. Try clearing one or more."
-                    : "No active roommate profiles yet."}
+                    : "No same-gender roommate profiles are active yet."}
                 </div>
               ) : (
                 <div className="grid gap-4 lg:grid-cols-2">
@@ -736,7 +736,7 @@ export default function Roommate() {
         {!loading && activeTab === "matches" ? (
           <Section
             title="AI Matches"
-            description="Your top AI-powered roommate suggestions, ranked by compatibility using cosine similarity on lifestyle fields."
+            description="Your top same-gender roommate suggestions, ranked by compatibility using cosine similarity on lifestyle fields."
           >
             {matchesError ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
@@ -754,7 +754,7 @@ export default function Roommate() {
               </div>
             ) : matches.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-                No AI matches yet. The algorithm needs at least one other active student who shares your university and city. Make sure your profile is active and filled in.
+                No AI matches yet. The algorithm needs at least one other active same-gender student who shares your university and city. Make sure your profile is active and filled in.
               </div>
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
