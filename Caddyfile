@@ -1,9 +1,10 @@
 {$DOMAIN} {
-    # WebSocket connections — must be listed before the /api catch-all
+    # WebSocket connections — force HTTP/1.1 so Daphne sees the Upgrade header
     handle /ws/* {
         reverse_proxy backend:8000 {
-            header_up Connection {>Connection}
-            header_up Upgrade {>Upgrade}
+            transport http {
+                versions 1.1
+            }
         }
     }
 

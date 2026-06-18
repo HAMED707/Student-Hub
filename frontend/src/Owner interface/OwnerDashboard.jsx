@@ -30,11 +30,7 @@ import { clearSession } from "../utils/auth.js";
 import { CITIES, TRANSPORT_OPTIONS, UNIVERSITIES_BY_CITY } from "../utils/propertyConstants.js";
 import { buildPropertyFormState, buildPropertyPayload } from "../utils/propertyForm.js";
 
-const NAV_ITEMS = [
-  { label: "Units", sectionId: "section-units" },
-  { label: "Messages", sectionId: "section-messages" },
-  { label: "Payments", sectionId: "section-payments" },
-];
+const NAV_ITEMS = ["Units", "Messages", "Payments"];
 
 const CONTACTS = [
   { id: 1, name: "Mohamed", avatar: "MO", handle: "@mohamed", lastMsg: "Hey, is the room still available?", time: "Dec 15", unread: 2 },
@@ -868,7 +864,7 @@ function OwnerDashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [onboardingBanner, setOnboardingBanner] = useState(null);
-  const [activeNav, setActiveNav] = useState("");
+  const [activeNav, setActiveNav] = useState("Units");
   const [floating, setFloating] = useState(null);
   const [msgSearch, setMsgSearch] = useState("");
   const [properties, setProperties] = useState([]);
@@ -981,13 +977,9 @@ function OwnerDashboard() {
 
   useEffect(() => { fetchProperties(); }, []);
 
-  function scrollToSection(sectionId, label) {
+  function openDashboardPage(label) {
     setActiveNav(label);
-    const el = document.getElementById(sectionId);
-    if (el) {
-      const top = el.getBoundingClientRect().top + window.pageYOffset - 70;
-      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleLogout() {
@@ -1017,18 +1009,18 @@ function OwnerDashboard() {
             <span className="font-semibold text-sm whitespace-nowrap px-2 py-0.5 rounded-md text-white" style={{ backgroundColor: "#1b3070" }}>Owner</span>
           </div>
           <div className="order-last flex w-full items-center gap-1 overflow-x-auto sh-scroll pb-1 sm:order-none sm:w-auto sm:overflow-visible sm:pb-0">
-            {NAV_ITEMS.map((item) => (
+            {NAV_ITEMS.map((label) => (
               <button
                 type="button"
-                key={item.label}
-                onClick={() => scrollToSection(item.sectionId, item.label)}
+                key={label}
+                onClick={() => openDashboardPage(label)}
                 className={`shrink-0 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeNav === item.label
+                  activeNav === label
                     ? "text-blue-600 bg-blue-50"
                     : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
                 }`}
               >
-                {item.label}
+                {label}
               </button>
             ))}
           </div>
@@ -1048,7 +1040,7 @@ function OwnerDashboard() {
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4">
         {/* KYC banner — full width */}
-        {(() => {
+        {activeNav === "Units" && (() => {
           const kycApproved   = kycStatus === "APPROVED";
           const kycInProgress = ["CREATED", "STARTED", "PROCESSING", "PENDING_REVIEW"].includes(kycStatus);
           const kycFailed     = ["FAILED", "REJECTED"].includes(kycStatus);
@@ -1074,12 +1066,14 @@ function OwnerDashboard() {
               </button>
             </div>
           ) : null;
-        })()}
+          })()}
 
-        {/* Layout: Units+Bookings row, Messages row, Payments row */}
+        {/* Dashboard pages */}
         <div className="flex flex-col gap-4">
 
-          {/* Row 1: Units + Booking Stats side by side */}
+          {activeNav === "Units" && (
+          <>
+          {/* Units + Booking Stats side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
             {/* My Units */}
@@ -1206,8 +1200,12 @@ function OwnerDashboard() {
               </div>
             </div>
           </div>{/* end row 1 grid */}
+          </>
+          )}
 
-          {/* Row 2: Messages */}
+          {activeNav === "Messages" && (
+          <>
+          {/* Messages */}
           <div id="section-messages" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
               <h3 className="font-bold text-gray-800 mb-3">Messages</h3>
               <div className="relative mb-3">
@@ -1237,7 +1235,11 @@ function OwnerDashboard() {
                 ))}
               </div>
             </div>
+          </>
+          )}
 
+          {activeNav === "Payments" && (
+          <>
           <div id="section-payments" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
           <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1368,8 +1370,10 @@ function OwnerDashboard() {
                 </table>
               </div>
             )}
+          </div>{/* end payout history */}
           </div>{/* end section-payments */}
-        </div>{/* end outer flex */}
+          </>
+          )}
         </div>{/* end dashboard stack */}
       </main>
 
