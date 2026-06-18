@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 import logo from "../assets/brand/icons/logo.svg";
-import { apiRequest } from "../api/client.js";
+import { apiRequest, withApiUrl } from "../api/client.js";
 import { fetchKycStatus, createKycInquiry, syncKycStatus } from "../api/kyc.js";
 import { getConnectStatus, startOnboarding, getLandlordPayouts } from "../api/payments.js";
 import { clearSession } from "../utils/auth.js";
@@ -32,7 +32,7 @@ import { buildPropertyFormState, buildPropertyPayload } from "../utils/propertyF
 
 const NAV_ITEMS = [
   { label: "Units", sectionId: "section-units" },
-  { label: "Alerts", sectionId: "section-alerts" },
+  { label: "Messages", sectionId: "section-messages" },
   { label: "Payments", sectionId: "section-payments" },
 ];
 
@@ -132,10 +132,10 @@ function StatusBadge({ status }) {
 
 function FloatingWindow({ title, subtitle, onClose, children, width = "w-80", height }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
       <div
-        className={`relative bg-white rounded-2xl shadow-2xl ${width} ${height ?? ""} flex flex-col overflow-hidden border border-blue-100`}
+        className={`relative mx-auto max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-2xl ${width} ${height ?? ""} flex flex-col overflow-hidden border border-blue-100`}
         style={{ maxHeight: "90vh" }}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
@@ -904,7 +904,7 @@ function OwnerDashboard() {
       const [status, payoutList] = await Promise.all([getConnectStatus(), getLandlordPayouts()]);
       setConnectStatus(status);
       setPayouts(payoutList || []);
-    } catch (_) {
+    } catch {
       // keep previous state
     } finally {
       setPaymentsLoading(false);
@@ -945,7 +945,7 @@ function OwnerDashboard() {
     try {
       const data = await startOnboarding();
       if (data.onboarding_url) window.location.href = data.onboarding_url;
-    } catch (_) {
+    } catch {
       // silently fail — user can retry
     } finally {
       setOnboardingBusy(false);
@@ -957,7 +957,7 @@ function OwnerDashboard() {
     try {
       const data = await createKycInquiry();
       if (data.verification_url) window.open(data.verification_url, "_blank");
-    } catch (_) {
+    } catch {
       // banner stays visible; landlord can retry
     } finally {
       setKycStarting(false);
@@ -1011,18 +1011,18 @@ function OwnerDashboard() {
       </style>
 
       <nav className="bg-white border-b border-blue-100 sticky top-0 z-40" style={navShadow}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 min-h-14 py-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-shrink-0">
             <img src={logo} alt="Studenthub" style={{ height: "32px", objectFit: "contain" }} />
             <span className="font-semibold text-sm whitespace-nowrap px-2 py-0.5 rounded-md text-white" style={{ backgroundColor: "#1b3070" }}>Owner</span>
           </div>
-          <div className="hidden sm:flex items-center gap-1">
+          <div className="order-last flex w-full items-center gap-1 overflow-x-auto sh-scroll pb-1 sm:order-none sm:w-auto sm:overflow-visible sm:pb-0">
             {NAV_ITEMS.map((item) => (
               <button
                 type="button"
                 key={item.label}
                 onClick={() => scrollToSection(item.sectionId, item.label)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`shrink-0 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   activeNav === item.label
                     ? "text-blue-600 bg-blue-50"
                     : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
@@ -1046,14 +1046,14 @@ function OwnerDashboard() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4">
         {/* KYC banner — full width */}
         {(() => {
           const kycApproved   = kycStatus === "APPROVED";
           const kycInProgress = ["CREATED", "STARTED", "PROCESSING", "PENDING_REVIEW"].includes(kycStatus);
           const kycFailed     = ["FAILED", "REJECTED"].includes(kycStatus);
           return kycStatus && !kycApproved ? (
-            <div className="flex items-start gap-3 bg-yellow-50 border border-yellow-200 rounded-2xl px-4 py-3">
+            <div className="flex flex-col gap-3 bg-yellow-50 border border-yellow-200 rounded-2xl px-4 py-3 sm:flex-row sm:items-start">
               <AlertTriangle size={16} className="text-yellow-500 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-yellow-800">Identity verification required</p>
@@ -1068,7 +1068,7 @@ function OwnerDashboard() {
               <button
                 onClick={handleStartKyc}
                 disabled={kycStarting}
-                className="text-xs font-semibold text-yellow-800 bg-yellow-100 hover:bg-yellow-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
+                className="w-full text-xs font-semibold text-yellow-800 bg-yellow-100 hover:bg-yellow-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap disabled:opacity-50 sm:w-auto"
               >
                 {kycStarting ? "Opening…" : kycInProgress ? "Continue →" : kycFailed ? "Retry →" : "Verify Now →"}
               </button>
@@ -1076,14 +1076,14 @@ function OwnerDashboard() {
           ) : null;
         })()}
 
-        {/* Two-column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
+        {/* Layout: Units+Bookings row, Messages row, Payments row */}
+        <div className="flex flex-col gap-4">
 
-          {/* ── LEFT COLUMN: Units + Messages ── */}
-          <div className="flex flex-col gap-4">
+          {/* Row 1: Units + Booking Stats side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
             {/* My Units */}
-            <div id="section-units" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
+            <div id="section-units" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16 h-full" style={cardShadow}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-gray-800">My Units</h3>
                 {(() => {
@@ -1112,18 +1112,26 @@ function OwnerDashboard() {
                     <Home size={22} className="text-blue-100" />
                     <p className="text-xs">No properties yet — click Add to get started.</p>
                   </div>
-                ) : properties.map((prop) => (
-                  <div key={prop.id} className="flex items-center justify-between bg-blue-50 rounded-xl px-3 py-2.5 border border-blue-100">
+                ) : properties.map((prop) => {
+                  const coverImg = prop.cover_image || prop.images?.[0]?.image || null;
+                  return (
+                  <div key={prop.id} className="flex flex-col gap-3 bg-blue-50 rounded-xl px-3 py-2.5 border border-blue-100 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-7 h-7 bg-blue-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Home size={13} className="text-blue-600" />
+                      <div className="w-10 h-10 rounded-lg flex-shrink-0 overflow-hidden bg-blue-200">
+                        {coverImg ? (
+                          <img src={withApiUrl(coverImg)} alt={prop.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Home size={15} className="text-blue-600" />
+                          </div>
+                        )}
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm text-gray-700 font-medium truncate">{prop.title}</p>
                         <p className="text-xs text-gray-400 capitalize">{prop.unit_type} · {prop.city}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0 sm:ml-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         prop.status === "available" ? "bg-green-100 text-green-700" :
                         prop.status === "rented"    ? "bg-blue-100 text-blue-700" :
@@ -1135,51 +1143,17 @@ function OwnerDashboard() {
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
-
-            {/* Messages */}
-            <div className="bg-white rounded-2xl border border-blue-100 p-4" style={cardShadow}>
-              <h3 className="font-bold text-gray-800 mb-3">Messages</h3>
-              <div className="relative mb-3">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input value={msgSearch} onChange={(e) => setMsgSearch(e.target.value)} placeholder="Search people or message" className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50" />
-              </div>
-              <p className="text-xs text-gray-400 font-medium mb-2 px-1">All</p>
-              <div className="space-y-1 sh-scroll" style={{ maxHeight: "280px", overflowY: "auto", paddingRight: "2px" }}>
-                {filteredContacts.map((contact) => (
-                  <button key={contact.id} type="button" onClick={() => setFloating({ kind: "chat", contact })} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-blue-50 transition-colors text-left">
-                    <div className="relative">
-                      <AvatarCircle initials={contact.avatar} color="bg-blue-500" />
-                      {contact.unread && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                          {contact.unread}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-gray-800">{contact.name}</span>
-                        <span className="text-[11px] text-gray-400">{contact.time}</span>
-                      </div>
-                      <p className="text-xs text-gray-500 truncate">{contact.lastMsg}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ── RIGHT COLUMN: Booking Stats + Alerts, then Payments ── */}
-          <div className="flex flex-col gap-4">
 
             {/* Booking Stats + Quick Alerts + Recent Bookings */}
-            <div id="section-alerts" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
+            <div id="section-alerts" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16 h-full" style={cardShadow}>
               <h3 className="font-bold text-gray-800 mb-3">Booking Stats</h3>
 
               {/* Stat numbers row */}
-              <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="grid grid-cols-1 gap-2 mb-4 sm:grid-cols-3">
                 {BOOKING_STATS.map((item) => (
                   <div key={item.label} className="bg-blue-50 rounded-xl border border-blue-100 px-3 py-3 text-center">
                     <p className="text-xl font-bold text-blue-700">{item.count}</p>
@@ -1189,7 +1163,7 @@ function OwnerDashboard() {
               </div>
 
               {/* Top Properties + Alerts side by side */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Top Properties</p>
                   <div className="sh-scroll" style={{ maxHeight: "160px", overflowY: "auto" }}>
@@ -1221,7 +1195,7 @@ function OwnerDashboard() {
               {/* Recent Bookings */}
               <div className="mt-4 pt-3 border-t border-blue-50">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Bookings</p>
-                <div className="grid grid-cols-2 gap-x-4">
+                <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
                   {RECENT_BOOKINGS.map((item, index) => (
                     <div key={`${item}-${index}`} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
                       <div className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
@@ -1231,21 +1205,53 @@ function OwnerDashboard() {
                 </div>
               </div>
             </div>
+          </div>{/* end row 1 grid */}
 
-        <div id="section-payments" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
-          <div className="flex items-center justify-between mb-4">
+          {/* Row 2: Messages */}
+          <div id="section-messages" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
+              <h3 className="font-bold text-gray-800 mb-3">Messages</h3>
+              <div className="relative mb-3">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input value={msgSearch} onChange={(e) => setMsgSearch(e.target.value)} placeholder="Search people or message" className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50" />
+              </div>
+              <p className="text-xs text-gray-400 font-medium mb-2 px-1">All</p>
+              <div className="space-y-1 sh-scroll" style={{ maxHeight: "280px", overflowY: "auto", paddingRight: "2px" }}>
+                {filteredContacts.map((contact) => (
+                  <button key={contact.id} type="button" onClick={() => setFloating({ kind: "chat", contact })} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-blue-50 transition-colors text-left">
+                    <div className="relative">
+                      <AvatarCircle initials={contact.avatar} color="bg-blue-500" />
+                      {contact.unread && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                          {contact.unread}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-gray-800">{contact.name}</span>
+                        <span className="text-[11px] text-gray-400">{contact.time}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 truncate">{contact.lastMsg}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+          <div id="section-payments" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
+          <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="font-bold text-gray-800">Payouts</h3>
               <p className="text-xs text-gray-400 mt-0.5">Your earnings from completed check-ins</p>
             </div>
-            <button type="button" onClick={loadPaymentsData} className="text-xs border border-blue-200 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors font-medium">
+            <button type="button" onClick={loadPaymentsData} className="w-full text-xs border border-blue-200 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors font-medium sm:w-auto">
               Refresh
             </button>
           </div>
 
           {/* Post-onboarding return banner */}
           {onboardingBanner === "complete" && (
-            <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 flex items-center justify-between gap-3">
+            <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={14} className="text-green-600 shrink-0" />
                 <p className="text-xs font-bold text-green-800">Verification submitted! Your account is being reviewed — payouts will activate automatically.</p>
@@ -1254,7 +1260,7 @@ function OwnerDashboard() {
             </div>
           )}
           {onboardingBanner === "refresh" && (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center justify-between gap-3">
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs font-bold text-amber-800">Onboarding session expired. Please try again.</p>
               <button type="button" onClick={() => setOnboardingBanner(null)} className="text-amber-700 text-xs font-bold hover:underline">Dismiss</button>
             </div>
@@ -1262,7 +1268,7 @@ function OwnerDashboard() {
 
           {/* Account verification banner */}
           {!paymentsLoading && connectStatus && !connectStatus.onboarding_complete && (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-start justify-between gap-3">
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-bold text-amber-800">Identity verification required</p>
                 <p className="text-xs text-amber-700 mt-0.5">
@@ -1275,7 +1281,7 @@ function OwnerDashboard() {
                 type="button"
                 onClick={handleStartOnboarding}
                 disabled={onboardingBusy}
-                className="shrink-0 text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-60"
+                className="w-full shrink-0 text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-60 sm:w-auto"
               >
                 {onboardingBusy ? "Opening…" : "Verify Now"}
               </button>
@@ -1291,7 +1297,7 @@ function OwnerDashboard() {
 
           {/* Earnings summary */}
           {!paymentsLoading && (
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2">
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
                 <p className="text-xs text-gray-500 font-medium">Transferred</p>
                 <p className="text-lg font-bold text-blue-600">
@@ -1316,7 +1322,7 @@ function OwnerDashboard() {
               <p className="text-xs text-gray-400 py-4 text-center">No payouts yet — they appear after students check in.</p>
             ) : (
               <div className="overflow-x-auto sh-scroll" style={{ maxHeight: "260px", overflowY: "auto" }}>
-                <table className="w-full text-sm">
+                <table className="min-w-[760px] w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100">
                       {["Property", "Tenant", "Amount (EGP)", "Date", "Status", ""].map((h) => (
@@ -1362,10 +1368,9 @@ function OwnerDashboard() {
                 </table>
               </div>
             )}
-          </div>
-          </div>{/* end right column */}
-        </div>{/* end right column */}
-      </div>{/* end two-column grid */}
+          </div>{/* end section-payments */}
+        </div>{/* end outer flex */}
+        </div>{/* end dashboard stack */}
       </main>
 
       {floating?.kind === "chat" && <ChatWindow contact={floating.contact} onClose={() => setFloating(null)} />}
