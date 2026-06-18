@@ -368,7 +368,7 @@ const Home = () => {
       <Navbar />
 
       <main>
-        <section className="mx-auto mt-6 w-full max-w-[1500px] px-4">
+        <section className="mt-6 w-full px-3 md:px-6">
           <div className="relative h-[380px] overflow-hidden rounded-2xl shadow-sm md:h-[500px]">
             <img src={heroBanner} alt="Students finding rooms" className="h-full w-full object-cover object-top brightness-95" />
             <div className="absolute inset-0 flex items-center bg-gradient-to-r from-black/35 via-black/10 to-transparent px-6 md:px-16">
@@ -388,7 +388,7 @@ const Home = () => {
           </div>
         </section>
 
-        <section className="mx-auto mt-12 w-full max-w-[1500px] px-4">
+        <section className="mt-12 w-full px-3 md:px-6">
           <SectionHeader
             title="Featured"
             highlight="Properties"
@@ -411,9 +411,9 @@ const Home = () => {
               </div>
             }
           />
-          <div ref={featuredScrollRef} className="scrollbar-hide mt-6 flex gap-6 overflow-x-auto pb-4 scroll-smooth">
+          <div ref={featuredScrollRef} className="scrollbar-hide -mr-3 mt-6 flex snap-x snap-mandatory gap-6 overflow-x-auto pb-4 pr-3 scroll-smooth md:-mr-6 md:pr-6">
             {propertiesList.map((item) => (
-              <div key={item.id} className="w-[320px] flex-shrink-0 sm:w-[360px]">
+              <div key={item.id} className="w-[320px] flex-shrink-0 snap-start sm:w-[360px]">
                 <PropertyCard
                   property={item}
                   favoriteDisabled={true}
@@ -426,7 +426,7 @@ const Home = () => {
           </div>
         </section>
 
-        <section className="mx-auto mt-14 w-full max-w-[1500px] px-4">
+        <section className="mt-14 w-full px-3 md:px-6">
           <SectionHeader
             title="Find homes by"
             highlight="University"
@@ -458,10 +458,10 @@ const Home = () => {
             ))}
           </div>
 
-          <div ref={uniScrollRef} className="scrollbar-hide flex gap-6 overflow-x-auto pb-4 scroll-smooth">
+          <div ref={uniScrollRef} className="scrollbar-hide -mr-3 flex snap-x snap-mandatory gap-6 overflow-x-auto pb-4 pr-3 scroll-smooth md:-mr-6 md:pr-6">
             {filteredUniProperties.length > 0 ? (
               filteredUniProperties.map((item) => (
-                <div key={item.id} className="w-[320px] flex-shrink-0 sm:w-[360px]">
+                <div key={item.id} className="w-[320px] flex-shrink-0 snap-start sm:w-[360px]">
                   <PropertyCard
                     property={item}
                     favoriteDisabled={true}
@@ -481,7 +481,7 @@ const Home = () => {
           </div>
         </section>
 
-        <section className="mx-auto mt-14 w-full max-w-[1500px] px-4">
+        <section className="mt-14 w-full px-3 md:px-6">
           <SectionHeader
             title="Housing"
             highlight="Map"
@@ -547,7 +547,7 @@ const Home = () => {
           </div>
         </section>
 
-        <section className="mx-auto mt-16 w-full max-w-[1500px] px-4">
+        <section className="mt-16 w-full px-3 md:px-6">
           <div className="rounded-t-2xl bg-[#E6FBF6] px-6 py-12 md:px-12">
             <h2 className="text-3xl font-extrabold md:text-4xl">
               Booking <span className="text-[#155BC2]">Process</span>
@@ -577,7 +577,7 @@ const Home = () => {
           </div>
         </section>
 
-        <section className="mx-auto w-full max-w-[1500px] px-4">
+        <section className="w-full px-3 md:px-6">
           <div className="rounded-b-2xl bg-[#EEF2FF] px-6 py-14 md:px-12">
             <div className="grid gap-6 lg:grid-cols-12">
               <div className="lg:col-span-6">
@@ -603,7 +603,7 @@ const Home = () => {
           </div>
         </section>
 
-        <section className="mx-auto mt-16 grid w-full max-w-[1500px] gap-6 px-4 md:grid-cols-2">
+        <section className="mt-16 grid w-full gap-6 px-3 md:grid-cols-2 md:px-6">
           {[
             { title: "Partner With Us", text: "Offer students a seamless booking process and reliable housing support.", action: "Partner With Us" },
             { title: "List With Us", text: "List your properties efficiently and reach students looking near universities.", action: "List With Us" },
@@ -618,7 +618,7 @@ const Home = () => {
           ))}
         </section>
 
-        <section className="mx-auto mt-16 w-full max-w-[1500px] px-4 pb-20">
+        <section className="mt-16 w-full px-3 pb-20 md:px-6">
           <h2 className="text-3xl font-extrabold md:text-4xl">
             What <span className="text-[#155BC2]">Students</span> Say About Us?
           </h2>

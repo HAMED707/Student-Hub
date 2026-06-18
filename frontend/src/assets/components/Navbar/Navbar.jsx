@@ -59,7 +59,7 @@ function ConversationsFlyout({ conversations, onOpenChat }) {
   );
 }
 
-export default function Navbar() {
+export default function Navbar({ edgeToEdge = false }) {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
@@ -162,9 +162,17 @@ export default function Navbar() {
   return (
     <div
       ref={dropdownRef}
-      className="relative z-50 mx-3 mt-3 flex flex-col rounded-2xl bg-white font-sans shadow-md"
+      className={cx(
+        "relative z-50 flex flex-col bg-white font-sans shadow-md",
+        edgeToEdge ? "mx-0 mt-0 rounded-none" : "mx-3 mt-3 rounded-2xl",
+      )}
     >
-      <div className="container mx-auto flex items-center justify-between gap-4 rounded-t-2xl bg-white px-6 py-3">
+      <div
+        className={cx(
+          "mx-auto flex w-full items-center justify-between gap-4 bg-white px-6 py-3",
+          edgeToEdge ? "max-w-none rounded-none" : "container rounded-t-2xl",
+        )}
+      >
         <Link
           to="/"
           className="flex flex-shrink-0 items-center gap-2"
@@ -401,8 +409,8 @@ export default function Navbar() {
         </div>
       </div>
 
-      <div className="flex w-full justify-center rounded-b-2xl bg-[#0A2647] py-2">
-        <div className="container flex justify-center gap-2 overflow-x-auto px-4 no-scrollbar md:gap-8">
+      <div className={cx("flex w-full justify-center bg-[#0A2647] py-2", edgeToEdge ? "rounded-none" : "rounded-b-2xl")}>
+        <div className={cx("flex justify-center gap-2 overflow-x-auto no-scrollbar md:gap-8", edgeToEdge ? "w-full px-0" : "container px-4")}>
           {menu.map((item) => (
             <Link
               key={item.path}

@@ -1046,7 +1046,8 @@ function OwnerDashboard() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+        {/* KYC banner — full width */}
         {(() => {
           const kycApproved   = kycStatus === "APPROVED";
           const kycInProgress = ["CREATED", "STARTED", "PROCESSING", "PENDING_REVIEW"].includes(kycStatus);
@@ -1075,145 +1076,161 @@ function OwnerDashboard() {
           ) : null;
         })()}
 
-        <div id="section-units" className="grid grid-cols-1 md:grid-cols-2 gap-4 scroll-mt-16">
-          <div className="bg-white rounded-2xl border border-blue-100 p-4" style={cardShadow}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-gray-800">My Units</h3>
-              {(() => {
-                const approved = kycStatus === "APPROVED";
-                return (
-                  <button
-                    type="button"
-                    onClick={approved ? () => setFloating({ kind: "addProperty" }) : undefined}
-                    disabled={!approved || kycStatus === null}
-                    title={approved ? undefined : "Complete identity verification to add properties"}
-                    className="flex items-center gap-1 text-white text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={approved ? greenButton : { backgroundColor: "#9ca3af" }}
-                    onMouseEnter={(e) => { if (approved) e.currentTarget.style.backgroundColor = greenButtonHover; }}
-                    onMouseLeave={(e) => { if (approved) e.currentTarget.style.backgroundColor = greenButton.backgroundColor; }}
-                  >
-                    <Plus size={12} /> Add
-                  </button>
-                );
-              })()}
-            </div>
-            <div className="space-y-2 sh-scroll" style={{ maxHeight: "220px", overflowY: "auto", paddingRight: "2px" }}>
-              {propertiesLoading ? (
-                <div className="flex items-center justify-center py-8 text-gray-400 text-xs">Loading…</div>
-              ) : properties.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 gap-2 text-gray-400">
-                  <Home size={22} className="text-blue-100" />
-                  <p className="text-xs">No properties yet — click Add to get started.</p>
-                </div>
-              ) : properties.map((prop) => (
-                <div key={prop.id} className="flex items-center justify-between bg-blue-50 rounded-xl px-3 py-2.5 border border-blue-100">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-7 h-7 bg-blue-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Home size={13} className="text-blue-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm text-gray-700 font-medium truncate">{prop.title}</p>
-                      <p className="text-xs text-gray-400 capitalize">{prop.unit_type} · {prop.city}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      prop.status === "available" ? "bg-green-100 text-green-700" :
-                      prop.status === "rented"    ? "bg-blue-100 text-blue-700" :
-                      prop.status === "reserved"  ? "bg-yellow-100 text-yellow-700" :
-                      "bg-gray-100 text-gray-500"
-                    }`}>{prop.status}</span>
-                    <button type="button" onClick={() => setFloating({ kind: "editProperty", property: prop })} className="flex items-center gap-1 text-xs border border-blue-200 text-blue-600 px-2.5 py-1 rounded-lg hover:bg-blue-100 transition-colors">
-                      <Edit2 size={11} /> Edit
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* Two-column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
 
-          <div className="bg-white rounded-2xl border border-blue-100 p-4" style={cardShadow}>
-            <h3 className="font-bold text-gray-800 mb-3">Booking Stats</h3>
-            <div className="space-y-2">
-              {BOOKING_STATS.map((item) => (
-                <div key={item.label} className="flex items-center justify-between bg-blue-50 rounded-xl px-3 py-2.5 border border-blue-100">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${item.color}`} />
-                    <span className="text-sm text-gray-700">{item.label}</span>
+          {/* ── LEFT COLUMN: Units + Messages ── */}
+          <div className="flex flex-col gap-4">
+
+            {/* My Units */}
+            <div id="section-units" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-gray-800">My Units</h3>
+                {(() => {
+                  const approved = kycStatus === "APPROVED";
+                  return (
+                    <button
+                      type="button"
+                      onClick={approved ? () => setFloating({ kind: "addProperty" }) : undefined}
+                      disabled={!approved || kycStatus === null}
+                      title={approved ? undefined : "Complete identity verification to add properties"}
+                      className="flex items-center gap-1 text-white text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={approved ? greenButton : { backgroundColor: "#9ca3af" }}
+                      onMouseEnter={(e) => { if (approved) e.currentTarget.style.backgroundColor = greenButtonHover; }}
+                      onMouseLeave={(e) => { if (approved) e.currentTarget.style.backgroundColor = greenButton.backgroundColor; }}
+                    >
+                      <Plus size={12} /> Add
+                    </button>
+                  );
+                })()}
+              </div>
+              <div className="space-y-2 sh-scroll" style={{ maxHeight: "280px", overflowY: "auto", paddingRight: "2px" }}>
+                {propertiesLoading ? (
+                  <div className="flex items-center justify-center py-8 text-gray-400 text-xs">Loading…</div>
+                ) : properties.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2 text-gray-400">
+                    <Home size={22} className="text-blue-100" />
+                    <p className="text-xs">No properties yet — click Add to get started.</p>
                   </div>
-                  <span className="text-sm font-bold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">{item.count}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-3 border-t border-blue-50">
-              <p className="text-xs font-semibold text-gray-500 mb-2">Top Properties</p>
-              <div className="sh-scroll" style={{ maxHeight: "140px", overflowY: "auto" }}>
-                {TOP_PROPERTIES.map((property) => (
-                  <div key={property.name} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
-                    <p className="text-xs text-gray-700 font-medium">{property.name}</p>
-                    <div className="text-right">
-                      <p className="text-xs font-semibold text-gray-800">{property.views}</p>
-                      <p className="text-xs text-gray-400">{property.bookings}</p>
+                ) : properties.map((prop) => (
+                  <div key={prop.id} className="flex items-center justify-between bg-blue-50 rounded-xl px-3 py-2.5 border border-blue-100">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 bg-blue-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Home size={13} className="text-blue-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm text-gray-700 font-medium truncate">{prop.title}</p>
+                        <p className="text-xs text-gray-400 capitalize">{prop.unit_type} · {prop.city}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        prop.status === "available" ? "bg-green-100 text-green-700" :
+                        prop.status === "rented"    ? "bg-blue-100 text-blue-700" :
+                        prop.status === "reserved"  ? "bg-yellow-100 text-yellow-700" :
+                        "bg-gray-100 text-gray-500"
+                      }`}>{prop.status}</span>
+                      <button type="button" onClick={() => setFloating({ kind: "editProperty", property: prop })} className="flex items-center gap-1 text-xs border border-blue-200 text-blue-600 px-2.5 py-1 rounded-lg hover:bg-blue-100 transition-colors">
+                        <Edit2 size={11} /> Edit
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
-        </div>
 
-        <div id="section-alerts" className="grid grid-cols-1 md:grid-cols-2 gap-4 scroll-mt-16">
-          <div className="bg-white rounded-2xl border border-blue-100 p-4" style={cardShadow}>
-            <h3 className="font-bold text-gray-800 mb-3">Messages</h3>
-            <div className="relative mb-3">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input value={msgSearch} onChange={(e) => setMsgSearch(e.target.value)} placeholder="Search people or message" className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50" />
-            </div>
-            <p className="text-xs text-gray-400 font-medium mb-2 px-1">All</p>
-            <div className="space-y-1 sh-scroll" style={{ maxHeight: "240px", overflowY: "auto", paddingRight: "2px" }}>
-              {filteredContacts.map((contact) => (
-                <button key={contact.id} type="button" onClick={() => setFloating({ kind: "chat", contact })} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-blue-50 transition-colors text-left">
-                  <div className="relative">
-                    <AvatarCircle initials={contact.avatar} color="bg-blue-500" />
-                    {contact.unread && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                        {contact.unread}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-gray-800">{contact.name}</span>
-                      <span className="text-[11px] text-gray-400">{contact.time}</span>
+            {/* Messages */}
+            <div className="bg-white rounded-2xl border border-blue-100 p-4" style={cardShadow}>
+              <h3 className="font-bold text-gray-800 mb-3">Messages</h3>
+              <div className="relative mb-3">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input value={msgSearch} onChange={(e) => setMsgSearch(e.target.value)} placeholder="Search people or message" className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50" />
+              </div>
+              <p className="text-xs text-gray-400 font-medium mb-2 px-1">All</p>
+              <div className="space-y-1 sh-scroll" style={{ maxHeight: "280px", overflowY: "auto", paddingRight: "2px" }}>
+                {filteredContacts.map((contact) => (
+                  <button key={contact.id} type="button" onClick={() => setFloating({ kind: "chat", contact })} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-blue-50 transition-colors text-left">
+                    <div className="relative">
+                      <AvatarCircle initials={contact.avatar} color="bg-blue-500" />
+                      {contact.unread && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                          {contact.unread}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-xs text-gray-500 truncate">{contact.lastMsg}</p>
-                  </div>
-                </button>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-gray-800">{contact.name}</span>
+                        <span className="text-[11px] text-gray-400">{contact.time}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 truncate">{contact.lastMsg}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-blue-100 p-4" style={cardShadow}>
-            <h3 className="font-bold text-gray-800 mb-3">Quick Alerts</h3>
-            <div className="space-y-2 sh-scroll" style={{ maxHeight: "240px", overflowY: "auto", paddingRight: "2px" }}>
-              {ALERTS.map((alert, index) => (
-                <div key={`${alert.text}-${index}`} className="flex items-start gap-2.5 bg-blue-50 rounded-xl px-3 py-2.5 border border-blue-100">
-                  <div className="mt-0.5 flex-shrink-0">{alert.icon}</div>
-                  <p className="text-xs text-gray-700 leading-relaxed">{alert.text}</p>
+          {/* ── RIGHT COLUMN: Booking Stats + Alerts, then Payments ── */}
+          <div className="flex flex-col gap-4">
+
+            {/* Booking Stats + Quick Alerts + Recent Bookings */}
+            <div id="section-alerts" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
+              <h3 className="font-bold text-gray-800 mb-3">Booking Stats</h3>
+
+              {/* Stat numbers row */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                {BOOKING_STATS.map((item) => (
+                  <div key={item.label} className="bg-blue-50 rounded-xl border border-blue-100 px-3 py-3 text-center">
+                    <p className="text-xl font-bold text-blue-700">{item.count}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{item.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Top Properties + Alerts side by side */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Top Properties</p>
+                  <div className="sh-scroll" style={{ maxHeight: "160px", overflowY: "auto" }}>
+                    {TOP_PROPERTIES.map((property) => (
+                      <div key={property.name} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                        <p className="text-xs text-gray-700 font-medium">{property.name}</p>
+                        <div className="text-right">
+                          <p className="text-xs font-semibold text-gray-800">{property.views}</p>
+                          <p className="text-xs text-gray-400">{property.bookings}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-3 border-t border-blue-50">
-              <p className="text-xs font-semibold text-gray-500 mb-2">Recent Bookings</p>
-              {RECENT_BOOKINGS.map((item, index) => (
-                <div key={`${item}-${index}`} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-                  <p className="text-xs text-gray-600">{item}</p>
+
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Quick Alerts</p>
+                  <div className="space-y-1.5 sh-scroll" style={{ maxHeight: "160px", overflowY: "auto" }}>
+                    {ALERTS.map((alert, index) => (
+                      <div key={`${alert.text}-${index}`} className="flex items-start gap-2 bg-blue-50 rounded-xl px-2.5 py-2 border border-blue-100">
+                        <div className="mt-0.5 flex-shrink-0">{alert.icon}</div>
+                        <p className="text-xs text-gray-700 leading-relaxed">{alert.text}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              </div>
+
+              {/* Recent Bookings */}
+              <div className="mt-4 pt-3 border-t border-blue-50">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Bookings</p>
+                <div className="grid grid-cols-2 gap-x-4">
+                  {RECENT_BOOKINGS.map((item, index) => (
+                    <div key={`${item}-${index}`} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                      <p className="text-xs text-gray-600">{item}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
         <div id="section-payments" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
           <div className="flex items-center justify-between mb-4">
@@ -1221,14 +1238,9 @@ function OwnerDashboard() {
               <h3 className="font-bold text-gray-800">Payouts</h3>
               <p className="text-xs text-gray-400 mt-0.5">Your earnings from completed check-ins</p>
             </div>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setShowQrScanner(true)} className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors font-medium">
-                <QrCode size={13} /> Scan QR
-              </button>
-              <button type="button" onClick={loadPaymentsData} className="text-xs border border-blue-200 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors font-medium">
-                Refresh
-              </button>
-            </div>
+            <button type="button" onClick={loadPaymentsData} className="text-xs border border-blue-200 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors font-medium">
+              Refresh
+            </button>
           </div>
 
           {/* Post-onboarding return banner */}
@@ -1307,7 +1319,7 @@ function OwnerDashboard() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100">
-                      {["Property", "Tenant", "Amount (EGP)", "Date", "Status"].map((h) => (
+                      {["Property", "Tenant", "Amount (EGP)", "Date", "Status", ""].map((h) => (
                         <th key={h} className="text-left text-xs font-semibold text-gray-500 pb-2 pr-4">{h}</th>
                       ))}
                     </tr>
@@ -1332,6 +1344,17 @@ function OwnerDashboard() {
                           <td className="py-2.5 pr-4">
                             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${labelClass}`}>{label}</span>
                           </td>
+                          <td className="py-2.5">
+                            {p.booking_status === "paid" && (
+                              <button
+                                type="button"
+                                onClick={() => setShowQrScanner(true)}
+                                className="flex items-center gap-1 text-xs bg-blue-600 text-white px-2.5 py-1 rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap"
+                              >
+                                <QrCode size={11} /> Scan QR
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -1340,7 +1363,9 @@ function OwnerDashboard() {
               </div>
             )}
           </div>
-        </div>
+          </div>{/* end right column */}
+        </div>{/* end right column */}
+      </div>{/* end two-column grid */}
       </main>
 
       {floating?.kind === "chat" && <ChatWindow contact={floating.contact} onClose={() => setFloating(null)} />}

@@ -34,15 +34,45 @@ Tone: warm, concise, conversational. Mention a suggestion once — if the
 student declines or changes topic, drop it.
 
 Booking flow facts you must get right:
+- If the student asks for "booking steps", "how booking works", or similar,
+  explain the process. Do not ask for a property ID unless they explicitly
+  say they want to book/reserve a specific property.
 - Creating a booking does NOT mean the room is theirs yet. It reserves the
-  property for 30 minutes while they pay a 20% deposit. Always state the
-  deposit amount in EGP and the 30-minute window clearly.
+  property for 30 minutes while they pay the required booking payment. Always
+  state the payment amount in EGP and the 30-minute window clearly when a
+  booking is actually created.
 - After a booking is successfully created, ask if they'd like help finding
   a roommate, and mention their university's community group if one exists
   and they're not already a member.
 - Only raise the roommate/community suggestion once per booking."""
 
 HISTORY_LIMIT = 40
+
+BOOKING_STEPS_REPLY = """Here is how booking works:
+
+1. Search for a room or apartment that matches your city, university, budget, and room type.
+2. Open the property page and review the photos, location, price, rules, and availability.
+3. Choose your move-in date and stay duration, then submit the booking request.
+4. The property is reserved for 30 minutes while you complete the required booking payment.
+5. After payment, your booking status updates in My Bookings, and you can view the property or QR code from there.
+
+If you already found a place you like, send me the property ID and I can help with the booking."""
+
+
+def _static_reply_for(user_message: str) -> str | None:
+    """Returns deterministic replies for common FAQ-style chips."""
+    normalized = " ".join(user_message.lower().strip().split())
+    booking_step_phrases = {
+        "booking steps",
+        "book steps",
+        "how booking works",
+        "how to book",
+        "how do i book",
+        "booking process",
+    }
+    if normalized in booking_step_phrases:
+        return BOOKING_STEPS_REPLY
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +298,12 @@ def handle_chat_turn(user, user_message: str) -> str:
     deterministically injects the roommate/community nudge if a booking
     just succeeded. Raises on Gemini errors so the view can return a clean
     error response."""
+    static_reply = _static_reply_for(user_message)
+    if static_reply:
+        ChatMessage.objects.create(user=user, role="user", content=user_message)
+        ChatMessage.objects.create(user=user, role="model", content=static_reply)
+        return static_reply
+
     tools = _make_tools(user)
 
     chat_session = client.chats.create(
