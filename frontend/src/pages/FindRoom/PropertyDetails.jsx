@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowRight,
   ArrowUp,
+  Loader2,
   BadgeCheck,
   Banknote,
   Bath,
@@ -60,7 +61,7 @@ import { fetchProperties, fetchPropertyDetail } from "../../api/properties.js";
 import { fetchPropertyReviews } from "../../api/reviews.js";
 import { fetchMyProfile } from "../../api/accounts.js";
 import { createBooking } from "../../api/bookings.js";
-import { initiateDepositPayment } from "../../api/payments.js";
+import { createCheckoutSession } from "../../api/payments.js";
 import { fetchNearbyPlaces } from "../../api/services.js";
 import { useFavorites } from "../../hooks/useFavorites.js";
 import { useGlobalMessaging } from "../../context/messagingContext.js";
@@ -782,12 +783,14 @@ const PropertyDetails = () => {
   }, [bookingError]);
 
   const handleSubmitBooking = useCallback(async () => {
+    const unitLabel = { whole: "Whole property", room: "Full room", bed: "Bed" };
     try {
       setIsSubmittingBooking(true);
       setBookingError("");
       setPaymentLaunchUrl("");
       setCreatedBookingId(null);
-      const unitLabel = { whole: "Whole property", room: "Full room", bed: "Bed" };
+
+      // Step 1 — create the booking
       const createdBooking = await createBooking({
         property: currentProperty.id,
         move_in_date: bookingData.moveInDate,
@@ -797,34 +800,25 @@ const PropertyDetails = () => {
           unitLabel[bookingUnit] || "Whole property",
           bookingData.selectedRoomId ? `Room: ${bookingData.selectedRoomId}` : null,
           bookingData.selectedBedId ? `Bed: ${bookingData.selectedBedId}` : null,
-        ]
-          .filter(Boolean)
-          .join(" | "),
+        ].filter(Boolean).join(" | "),
       });
       setCreatedBookingId(createdBooking.id);
-      setBookingStep(4);
+      setBookingStep(4); // show "redirecting…" screen
+
+      // Step 2 — get Stripe checkout URL
+      const session = await createCheckoutSession(createdBooking.id);
+      setPaymentLaunchUrl(session.checkout_url);
+
+      // Step 3 — redirect to Stripe
+      window.location.href = session.checkout_url;
+
     } catch (error) {
-      setBookingError(getApiErrorMessage(error, "Booking request failed"));
+      setBookingError(getApiErrorMessage(error, "Booking failed. Please try again."));
+      setBookingStep(1);
     } finally {
       setIsSubmittingBooking(false);
     }
   }, [bookingData, bookingUnit, currentProperty.id]);
-
-  const handlePayNow = useCallback(async () => {
-    if (!createdBookingId) return;
-    try {
-      const paymentSession = await initiateDepositPayment({
-        booking_id: createdBookingId,
-        phone: "NA",
-      });
-      if (paymentSession?.iframe_url) {
-        setPaymentLaunchUrl(paymentSession.iframe_url);
-        window.open(paymentSession.iframe_url, "_blank", "noopener,noreferrer");
-      }
-    } catch {
-      setBookingError("Payment session failed. Please try from your bookings page.");
-    }
-  }, [createdBookingId]);
 
   const handleShare = useCallback(async () => {
     const shareData = { title: currentProperty.title, text: `Check this student accommodation: ${currentProperty.title}`, url: window.location.href };
@@ -1013,8 +1007,8 @@ const PropertyDetails = () => {
 
             <div className="mt-4 space-y-3 rounded-2xl bg-[#F8FAFC] p-4 text-sm font-bold text-slate-600">
               <p className="flex justify-between">
-                <span>Deposit (20%)</span>
-                <strong className="text-[#091E42]">EGP {Math.round(activeBookingOption.price * 0.2).toLocaleString()}</strong>
+                <span>Deposit (1 month)</span>
+                <strong className="text-[#091E42]">EGP {activeBookingOption.price.toLocaleString()}</strong>
               </p>
               <p className="flex justify-between">
                 <span>Available From</span>
@@ -1532,7 +1526,7 @@ const PropertyDetails = () => {
                 </button>
                 <div className="text-right">
                   <h2 className="text-xl font-black text-[#091E42]">
-                    {bookingStep === 4 ? "Booking request sent" : `Book ${currentProperty.title}`}
+                    {bookingStep === 4 ? "Payment in progress" : `Book ${currentProperty.title}`}
                   </h2>
                   {bookingStep !== 4 && (
                     <p className="mt-0.5 text-xs font-bold text-slate-400">
@@ -1556,7 +1550,7 @@ const PropertyDetails = () => {
                         <div className="mt-2 flex flex-wrap gap-2">
                           <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#155BC2]">{activeBookingOption.label}</span>
                           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">EGP {activeBookingOption.price.toLocaleString()}/mo</span>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">Deposit: EGP {Math.round(activeBookingOption.price * 0.2).toLocaleString()}</span>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">Deposit: EGP {activeBookingOption.price.toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
@@ -1668,35 +1662,30 @@ const PropertyDetails = () => {
 
               {bookingStep === 4 && (
                 <div className="mx-auto flex min-h-[380px] max-w-md flex-col items-center justify-center rounded-2xl bg-white p-8 text-center shadow-sm">
-                  <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-50 text-emerald-500">
-                    <Check className="h-10 w-10" />
+                  <div className="grid h-20 w-20 place-items-center rounded-full bg-blue-50 text-[#155BC2]">
+                    <Loader2 className="h-10 w-10 animate-spin" />
                   </div>
-                  <h3 className="mt-5 text-2xl font-black text-[#091E42]">Booking request sent!</h3>
+                  <h3 className="mt-5 text-2xl font-black text-[#091E42]">
+                    {paymentLaunchUrl ? "Redirecting to payment…" : "Setting up payment…"}
+                  </h3>
                   <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Your request for <strong>{currentProperty.title}</strong> has been submitted. Pay the deposit to move it into landlord review.
+                    You will be redirected to Stripe to complete your payment securely.
                   </p>
-                  {bookingError && (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">{bookingError}</div>
+                  {paymentLaunchUrl && (
+                    <a
+                      href={paymentLaunchUrl}
+                      className="mt-6 h-12 w-full inline-flex items-center justify-center rounded-full bg-[#155BC2] font-black text-white shadow-md transition hover:bg-[#0f4699]"
+                    >
+                      Open Payment Page
+                    </a>
                   )}
-                  <div className="mt-6 flex flex-col gap-3 w-full">
-                    <button
-                      type="button"
-                      onClick={handlePayNow}
-                      className="h-12 w-full rounded-full bg-[#155BC2] font-black text-white shadow-md transition hover:bg-[#0f4699]"
-                    >
-                      Pay Deposit Now
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate(createdBookingId ? `/payments?booking=${createdBookingId}` : "/payments")}
-                      className="h-11 w-full rounded-full border border-slate-200 font-black text-[#091E42] transition hover:border-[#155BC2] hover:text-[#155BC2]"
-                    >
-                      Go to My Bookings
-                    </button>
-                    <button type="button" onClick={() => setIsBookingOpen(false)} className="text-sm font-bold text-slate-400 hover:text-slate-600">
-                      Close
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/bookings")}
+                    className="mt-3 text-sm font-bold text-slate-400 hover:text-slate-600"
+                  >
+                    Go to my bookings
+                  </button>
                 </div>
               )}
             </div>

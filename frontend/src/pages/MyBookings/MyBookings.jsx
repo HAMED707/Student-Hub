@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Calendar,
@@ -12,10 +12,14 @@ import {
   Home,
   MapPin,
   MessageCircle,
+  QrCode,
   Trash2,
+  X,
 } from "lucide-react";
+import QRCode from "react-qr-code";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import { fetchMyBookings, updateBookingStatus } from "../../api/bookings.js";
+import { createCheckoutSession } from "../../api/payments.js";
 import { fetchPropertyDetail } from "../../api/properties.js";
 import { createPropertyReview } from "../../api/reviews.js";
 import {
@@ -30,6 +34,38 @@ import { getApiErrorMessage } from "../../utils/auth.js";
 import { buildDraftChatState } from "../../utils/messaging.js";
 import { withApiUrl } from "../../api/client.js";
 import { notifyPropertyReviewCreated } from "../../utils/reviews.js";
+
+const QrModal = ({ booking, onClose }) => {
+  if (!booking) return null;
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-black text-[#091E42]">Check-in QR Code</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Show this to your landlord at move-in</p>
+          </div>
+          <button onClick={onClose} className="rounded-full p-2 hover:bg-slate-100 transition">
+            <X size={18} className="text-slate-500" />
+          </button>
+        </div>
+
+        <div className="flex justify-center rounded-2xl bg-white p-4 border border-slate-100">
+          <QRCode value={booking.qrToken} size={220} />
+        </div>
+
+        <div className="mt-4 rounded-xl bg-slate-50 p-3 space-y-1 text-sm">
+          <p className="font-bold text-[#091E42] truncate">{booking.propertyTitle}</p>
+          <p className="text-slate-500 text-xs">Booking #{booking.id} · Move-in {formatBookingDate(booking.moveInDate)}</p>
+        </div>
+
+        <p className="mt-3 text-center text-xs text-slate-400">
+          Your landlord scans this to confirm check-in and release the payout.
+        </p>
+      </div>
+    </div>
+  );
+};
 
 const StatusBadge = ({ status }) => {
   const config = getStudentStatusMeta(status);
@@ -205,17 +241,29 @@ const BookingCard = ({
   navigate,
   onCancel,
   onOpenReview,
+  onShowQr,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [payingNow, setPayingNow] = useState(false);
   const statusMeta = getStudentStatusMeta(booking.status);
-  const canCancel = ["pending_payment", "deposit_paid"].includes(booking.status);
-  const canContinuePayment = ["pending_payment", "confirmed"].includes(booking.status);
+  const canCancel = booking.status === "pending_payment";
+  const canContinuePayment = booking.status === "pending_payment";
   const canLeaveReview = Boolean(booking.canReviewProperty);
   const hasReview = Boolean(booking.hasPropertyReview);
   const reviewBlockedUntilStay =
     !hasReview &&
     !canLeaveReview &&
-    ["pending_payment", "deposit_paid"].includes(booking.status);
+    booking.status === "pending_payment";
+
+  const handlePayNow = async () => {
+    try {
+      setPayingNow(true);
+      const session = await createCheckoutSession(booking.id);
+      window.location.href = session.checkout_url;
+    } catch {
+      setPayingNow(false);
+    }
+  };
 
   return (
     <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-shadow duration-200 hover:shadow-lg">
@@ -264,7 +312,7 @@ const BookingCard = ({
             <div className="flex items-center gap-2 text-gray-600">
               <CreditCard size={16} className="flex-shrink-0 text-green-500" />
               <span>
-                <strong>Deposit:</strong> {booking.depositAmount.toLocaleString()} EGP
+                <strong>Deposit:</strong> {booking.totalPrice.toLocaleString()} EGP
               </span>
             </div>
             <div className="col-span-2 flex items-center gap-2 text-gray-600">
@@ -289,11 +337,22 @@ const BookingCard = ({
           <div className="flex flex-col items-end gap-2">
             {canContinuePayment && (
               <button
-                onClick={() => navigate(`/payments?booking=${booking.id}`)}
-                className="flex items-center gap-2 rounded-lg bg-emerald-500 px-6 py-2 text-white transition-colors duration-200 hover:bg-emerald-600"
+                onClick={handlePayNow}
+                disabled={payingNow}
+                className="flex items-center gap-2 rounded-lg bg-emerald-500 px-6 py-2 text-white transition-colors duration-200 hover:bg-emerald-600 disabled:opacity-60"
               >
                 <CreditCard size={18} />
-                {booking.status === "pending_payment" ? "Pay Deposit" : "Pay Remaining"}
+                {payingNow ? "Redirecting…" : "Pay Now"}
+              </button>
+            )}
+
+            {booking.status === "paid" && booking.qrToken && (
+              <button
+                onClick={() => onShowQr(booking)}
+                className="flex items-center gap-2 rounded-lg bg-[#155BC2] px-6 py-2 text-white transition-colors duration-200 hover:bg-[#0f4699]"
+              >
+                <QrCode size={18} />
+                Show QR Code
               </button>
             )}
 
@@ -362,13 +421,10 @@ const BookingCard = ({
               <h5 className="mb-3 font-semibold text-gray-900">Payment Snapshot</h5>
               <div className="space-y-2 text-sm text-gray-600">
                 <p>
-                  <strong>Total:</strong> {booking.totalPrice.toLocaleString()} EGP
+                  <strong>Deposit:</strong> {booking.totalPrice.toLocaleString()} EGP
                 </p>
                 <p>
-                  <strong>Deposit:</strong> {booking.depositAmount.toLocaleString()} EGP
-                </p>
-                <p>
-                  <strong>Remaining:</strong> {booking.remainingAmount.toLocaleString()} EGP
+                  <strong>Status:</strong> {statusMeta.label}
                 </p>
                 {booking.expiresAt && (
                   <p>
@@ -444,7 +500,10 @@ const EmptyState = ({ tabName, navigate }) => (
 export default function MyBookings() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("All");
+  const [paymentBanner, setPaymentBanner] = useState(null); // "success" | "cancelled" | null
+  const [qrBooking, setQrBooking] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -462,10 +521,17 @@ export default function MyBookings() {
     : "";
 
   useEffect(() => {
-    if (highlightedBookingId) {
-      setActiveTab("All");
-    }
+    if (highlightedBookingId) setActiveTab("All");
   }, [highlightedBookingId]);
+
+  // Handle Stripe redirect back (/bookings?payment=success or /bookings/5?payment=success)
+  useEffect(() => {
+    const payment = searchParams.get("payment");
+    if (payment === "success" || payment === "cancelled") {
+      setPaymentBanner(payment);
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -506,8 +572,6 @@ export default function MyBookings() {
               moveInDate: booking.move_in_date,
               durationMonths: booking.duration_months,
               totalPrice: formatMoneyFromCents(booking.total_amount_cents),
-              depositAmount: formatMoneyFromCents(booking.deposit_amount_cents),
-              remainingAmount: formatMoneyFromCents(booking.remaining_amount_cents),
               status: booking.status,
               expiresAt: booking.expires_at,
               bookingDate: booking.created_at,
@@ -518,6 +582,7 @@ export default function MyBookings() {
                 [property?.city, property?.district].filter(Boolean).join(" - ") ||
                 "Address not available",
               message: booking.message || "",
+              qrToken: booking.qr_token || null,
               timeline: buildBookingTimeline(booking),
               canReviewProperty: Boolean(booking.can_review_property),
               hasPropertyReview: Boolean(booking.has_property_review),
@@ -700,6 +765,24 @@ export default function MyBookings() {
         </div>
 
         <div className="w-full overflow-y-auto px-6 py-8">
+          {paymentBanner === "success" && (
+            <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-5 w-5 shrink-0" />
+                <span>Payment confirmed! Your booking is now active. The landlord will be notified.</span>
+              </div>
+              <button type="button" onClick={() => setPaymentBanner(null)} className="shrink-0 text-emerald-500 hover:text-emerald-700">✕</button>
+            </div>
+          )}
+          {paymentBanner === "cancelled" && (
+            <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <span>Payment was cancelled. Your booking is still reserved — click "Pay Now" to try again.</span>
+              </div>
+              <button type="button" onClick={() => setPaymentBanner(null)} className="shrink-0 text-amber-500 hover:text-amber-700">✕</button>
+            </div>
+          )}
           {error && (
             <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
               <AlertCircle className="h-4 w-4 shrink-0" />
@@ -724,6 +807,7 @@ export default function MyBookings() {
                   navigate={navigate}
                   onCancel={handleCancelBooking}
                   onOpenReview={openReviewModal}
+                  onShowQr={setQrBooking}
                 />
               ))}
             </div>
@@ -732,6 +816,8 @@ export default function MyBookings() {
           )}
         </div>
       </main>
+
+      <QrModal booking={qrBooking} onClose={() => setQrBooking(null)} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ _make_tools(user) creates user-bound closures so the model cannot forge
 a different student's identity.
 """
 
+import os
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -24,6 +25,7 @@ from google.genai import types
 from chatbot.models import ChatMessage
 
 client = genai.Client()  # reads GEMINI_API_KEY (or Vertex env vars) automatically
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 
 SYSTEM_PROMPT = """You are the Student Hub assistant. You help students search
 for and book student housing (apartments, single rooms, or shared beds).
@@ -269,7 +271,7 @@ def handle_chat_turn(user, user_message: str) -> str:
     tools = _make_tools(user)
 
     chat_session = client.chats.create(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             tools=tools,

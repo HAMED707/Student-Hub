@@ -54,12 +54,10 @@ class StudentProfileAdmin(admin.ModelAdmin):
 class LandlordProfileAdmin(admin.ModelAdmin):
     """Admin view for LandlordProfile."""
 
-    list_display = ["user", "company_name", "is_id_verified", "total_income", "available_balance"]
-    list_filter = ["is_id_verified"]
-    search_fields = ["user__username", "company_name"]
-
-    # Allow admin to verify landlord IDs from this panel
-    readonly_fields = ["total_income", "available_balance"]
+    list_display = ["user", "company_name", "is_id_verified", "stripe_onboarding_complete", "stripe_account_id", "total_income"]
+    list_filter = ["is_id_verified", "stripe_onboarding_complete"]
+    search_fields = ["user__username", "company_name", "stripe_account_id"]
+    readonly_fields = ["total_income", "available_balance", "stripe_account_id", "stripe_onboarding_complete"]
 
 
 @admin.register(VerificationDocument)

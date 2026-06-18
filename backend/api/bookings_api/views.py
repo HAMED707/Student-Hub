@@ -79,15 +79,22 @@ class BookingCreateView(APIView):
                     )
 
                 booking_unit = request.data.get("booking_unit", "whole")
+                any_price = prop.price or prop.room_price or prop.bed_price
                 unit_price_map = {
-                    "whole": prop.price,
-                    "room":  prop.room_price or prop.price,
-                    "bed":   prop.bed_price  or prop.price,
+                    "whole": prop.price or any_price,
+                    "room":  prop.room_price or any_price,
+                    "bed":   prop.bed_price  or any_price,
                 }
-                unit_price = unit_price_map.get(booking_unit, prop.price)
+                unit_price = unit_price_map.get(booking_unit, any_price)
+
+                if unit_price is None:
+                    return Response(
+                        {"error": "This property has no price set for the selected booking unit."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
                 duration_months = serializer.validated_data["duration_months"]
-                total = int(unit_price * 100 * duration_months)
+                total = int(unit_price * 100)  # deposit = 1 month only; duration is informational
 
                 booking = serializer.save(
                     tenant             = request.user,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -12,6 +12,7 @@ import {
   LogOut,
   MoreVertical,
   Plus,
+  QrCode,
   Search,
   Send,
   Smile,
@@ -24,6 +25,7 @@ import {
 import logo from "../assets/brand/icons/logo.svg";
 import { apiRequest } from "../api/client.js";
 import { fetchKycStatus, createKycInquiry, syncKycStatus } from "../api/kyc.js";
+import { getConnectStatus, startOnboarding, getLandlordPayouts } from "../api/payments.js";
 import { clearSession } from "../utils/auth.js";
 import { CITIES, TRANSPORT_OPTIONS, UNIVERSITIES_BY_CITY } from "../utils/propertyConstants.js";
 import { buildPropertyFormState, buildPropertyPayload } from "../utils/propertyForm.js";
@@ -788,8 +790,84 @@ function CancelRequestsWindow({ onClose }) {
   );
 }
 
+function QrScannerModal({ onClose, onCheckin }) {
+  const scannerRef = useRef(null);
+  const html5QrRef = useRef(null);
+  const [result, setResult] = useState(null); // null | {ok, message}
+  const [scanning, setScanning] = useState(true);
+
+  useEffect(() => {
+    let scanner;
+    import("html5-qrcode").then(({ Html5Qrcode }) => {
+      scanner = new Html5Qrcode("qr-reader");
+      html5QrRef.current = scanner;
+      scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        async (decodedText) => {
+          if (!scanning) return;
+          setScanning(false);
+          await scanner.stop().catch(() => {});
+          const res = await onCheckin(decodedText);
+          setResult(res);
+        },
+        () => {},
+      ).catch(() => {
+        setResult({ ok: false, message: "Camera access denied. Please allow camera permission." });
+      });
+    });
+    return () => {
+      html5QrRef.current?.stop().catch(() => {});
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-black text-gray-900">Scan Check-in QR</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Point camera at the student's QR code</p>
+          </div>
+          <button onClick={onClose} className="rounded-full p-2 hover:bg-slate-100 transition">
+            <X size={18} className="text-slate-500" />
+          </button>
+        </div>
+
+        {!result ? (
+          <div id="qr-reader" ref={scannerRef} className="w-full rounded-2xl overflow-hidden" />
+        ) : result.ok ? (
+          <div className="rounded-2xl bg-green-50 border border-green-200 p-6 text-center">
+            <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
+            <p className="font-black text-green-800 text-lg">Check-in confirmed!</p>
+            <p className="text-sm text-green-700 mt-1">{result.message}</p>
+            <button onClick={onClose} className="mt-4 w-full rounded-xl bg-green-600 text-white py-2.5 text-sm font-bold hover:bg-green-700 transition">
+              Done
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-red-50 border border-red-200 p-6 text-center">
+            <p className="font-black text-red-800">Check-in failed</p>
+            <p className="text-sm text-red-600 mt-1">{result.message}</p>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => { setResult(null); setScanning(true); }} className="flex-1 rounded-xl border border-red-200 text-red-600 py-2.5 text-sm font-bold hover:bg-red-50 transition">
+                Try again
+              </button>
+              <button onClick={onClose} className="flex-1 rounded-xl bg-red-600 text-white py-2.5 text-sm font-bold hover:bg-red-700 transition">
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function OwnerDashboard() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [onboardingBanner, setOnboardingBanner] = useState(null);
   const [activeNav, setActiveNav] = useState("");
   const [floating, setFloating] = useState(null);
   const [msgSearch, setMsgSearch] = useState("");
@@ -797,6 +875,11 @@ function OwnerDashboard() {
   const [propertiesLoading, setPropertiesLoading] = useState(true);
   const [kycStatus, setKycStatus] = useState(null);
   const [kycStarting, setKycStarting] = useState(false);
+  const [connectStatus, setConnectStatus] = useState(null);
+  const [payouts, setPayouts] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [onboardingBusy, setOnboardingBusy] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
 
   useEffect(() => {
     fetchKycStatus()
@@ -814,6 +897,60 @@ function OwnerDashboard() {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [kycStatus]);
+
+  async function loadPaymentsData() {
+    setPaymentsLoading(true);
+    try {
+      const [status, payoutList] = await Promise.all([getConnectStatus(), getLandlordPayouts()]);
+      setConnectStatus(status);
+      setPayouts(payoutList || []);
+    } catch (_) {
+      // keep previous state
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }
+
+  useEffect(() => { loadPaymentsData(); }, []);
+
+  useEffect(() => {
+    const param = searchParams.get("onboarding");
+    if (param === "complete" || param === "refresh") {
+      setOnboardingBanner(param);
+      setSearchParams({}, { replace: true });
+      loadPaymentsData(); // re-fetch so status reflects the completed onboarding
+    }
+  }, []);
+
+  async function handleCheckin(qrToken) {
+    try {
+      const res = await apiRequest("/api/payments/checkin/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qr_token: qrToken }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        loadPaymentsData();
+        return { ok: true, message: `Payout of EGP ${data.landlord_amount_aed?.toLocaleString() || "—"} ${data.payout_status === "pending" ? "is pending — complete your account verification." : "transferred to your account."}` };
+      }
+      return { ok: false, message: data.error || "Check-in failed." };
+    } catch {
+      return { ok: false, message: "Network error. Please try again." };
+    }
+  }
+
+  async function handleStartOnboarding() {
+    setOnboardingBusy(true);
+    try {
+      const data = await startOnboarding();
+      if (data.onboarding_url) window.location.href = data.onboarding_url;
+    } catch (_) {
+      // silently fail — user can retry
+    } finally {
+      setOnboardingBusy(false);
+    }
+  }
 
   async function handleStartKyc() {
     setKycStarting(true);
@@ -1081,68 +1218,127 @@ function OwnerDashboard() {
         <div id="section-payments" className="bg-white rounded-2xl border border-blue-100 p-4 scroll-mt-16" style={cardShadow}>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-bold text-gray-800">My Payments</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Monitor income, manage withdrawals, and review commissions</p>
+              <h3 className="font-bold text-gray-800">Payouts</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Your earnings from completed check-ins</p>
             </div>
-            <div className="flex items-center gap-2 border border-blue-200 bg-blue-600 text-white rounded-lg px-3 py-1.5 cursor-pointer">
-              <span className="text-xs font-medium">All</span>
-              <ChevronDown size={12} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <StatCard label="Wallet" value="EGP 16,000" valueColor="text-blue-600" />
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-center flex flex-col items-center gap-2">
-              <p className="text-xs text-gray-500 font-medium">Available</p>
-              <p className="text-xl font-bold text-green-600">EGP 15,000</p>
-              <button
-                type="button"
-                onClick={() => setFloating({ kind: "withdraw" })}
-                className="text-white text-xs px-3 py-1.5 rounded-lg transition-colors font-medium w-full"
-                style={greenButton}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = greenButtonHover; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = greenButton.backgroundColor; }}
-              >
-                Request Withdraw
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setShowQrScanner(true)} className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                <QrCode size={13} /> Scan QR
+              </button>
+              <button type="button" onClick={loadPaymentsData} className="text-xs border border-blue-200 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors font-medium">
+                Refresh
               </button>
             </div>
           </div>
 
-          <div>
-            <p className="text-sm font-bold text-gray-800 mb-3">Transaction History</p>
-            <div className="overflow-x-auto sh-scroll" style={{ maxHeight: "260px", overflowY: "auto" }}>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    {["Units", "Tenant", "Amount", "Date", "Status", "Method"].map((heading) => (
-                      <th key={heading} className="text-left text-xs font-semibold text-gray-500 pb-2 pr-4">{heading}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {TRANSACTIONS.map((tx) => (
-                    <tr key={`${tx.property}-${tx.tenant}-${tx.date}`} className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors">
-                      <td className="py-2.5 pr-4 text-gray-700 whitespace-nowrap">{tx.property}</td>
-                      <td className="py-2.5 pr-4 text-gray-600">{tx.tenant}</td>
-                      <td className="py-2.5 pr-4 font-semibold text-gray-800">{tx.amount}</td>
-                      <td className="py-2.5 pr-4 text-gray-500 text-xs">{tx.date}</td>
-                      <td className="py-2.5 pr-4"><StatusBadge status={tx.status} /></td>
-                      <td className="py-2.5 text-gray-500 text-xs">{tx.method}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Post-onboarding return banner */}
+          {onboardingBanner === "complete" && (
+            <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+                <p className="text-xs font-bold text-green-800">Verification submitted! Your account is being reviewed — payouts will activate automatically.</p>
+              </div>
+              <button type="button" onClick={() => setOnboardingBanner(null)} className="text-green-700 text-xs font-bold hover:underline">Dismiss</button>
             </div>
-          </div>
+          )}
+          {onboardingBanner === "refresh" && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-bold text-amber-800">Onboarding session expired. Please try again.</p>
+              <button type="button" onClick={() => setOnboardingBanner(null)} className="text-amber-700 text-xs font-bold hover:underline">Dismiss</button>
+            </div>
+          )}
 
-          <div className="mt-4 pt-3 border-t border-blue-50 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-gray-700">Cancel Requests</p>
-              <p className="text-xs text-gray-400">2 pending cancellation requests</p>
+          {/* Account verification banner */}
+          {!paymentsLoading && connectStatus && !connectStatus.onboarding_complete && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-amber-800">Identity verification required</p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  {connectStatus.pending_earnings_aed > 0
+                    ? `EGP ${connectStatus.pending_earnings_aed.toLocaleString()} is held until you verify your account.`
+                    : "Verify your identity to receive payouts when students check in."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleStartOnboarding}
+                disabled={onboardingBusy}
+                className="shrink-0 text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-60"
+              >
+                {onboardingBusy ? "Opening…" : "Verify Now"}
+              </button>
             </div>
-            <button type="button" onClick={() => setFloating({ kind: "cancelRequests" })} className="text-xs border border-red-200 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors font-medium">
-              View Requests
-            </button>
+          )}
+
+          {!paymentsLoading && connectStatus?.onboarding_complete && (
+            <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 flex items-center gap-2">
+              <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+              <p className="text-xs font-bold text-green-800">Account verified — payouts are active</p>
+            </div>
+          )}
+
+          {/* Earnings summary */}
+          {!paymentsLoading && (
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500 font-medium">Transferred</p>
+                <p className="text-lg font-bold text-blue-600">
+                  EGP {payouts.filter(p => p.payout_status === "done").reduce((s, p) => s + (p.landlord_amount_egp || 0), 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500 font-medium">Deposits received</p>
+                <p className="text-lg font-bold text-amber-600">
+                  EGP {payouts.filter(p => p.booking_status === "paid").reduce((s, p) => s + p.deposit_egp, 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Payout history */}
+          <div>
+            <p className="text-sm font-bold text-gray-800 mb-3">Payout History</p>
+            {paymentsLoading ? (
+              <p className="text-xs text-gray-400 py-4 text-center">Loading…</p>
+            ) : payouts.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">No payouts yet — they appear after students check in.</p>
+            ) : (
+              <div className="overflow-x-auto sh-scroll" style={{ maxHeight: "260px", overflowY: "auto" }}>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      {["Property", "Tenant", "Amount (EGP)", "Date", "Status"].map((h) => (
+                        <th key={h} className="text-left text-xs font-semibold text-gray-500 pb-2 pr-4">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payouts.map((p) => {
+                      const isCheckedIn = p.booking_status === "finished";
+                      const payoutDone = p.payout_status === "done";
+                      const payoutPending = p.payout_status === "pending";
+                      const label = payoutDone ? "Transferred" : payoutPending ? "Payout pending" : isCheckedIn ? "Payout failed" : "Deposit received";
+                      const labelClass = payoutDone ? "bg-green-100 text-green-700" : payoutPending ? "bg-amber-100 text-amber-700" : isCheckedIn ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700";
+                      return (
+                        <tr key={p.booking_id} className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors">
+                          <td className="py-2.5 pr-4 text-gray-700 whitespace-nowrap text-xs">{p.property_title}</td>
+                          <td className="py-2.5 pr-4 text-gray-600 text-xs">{p.tenant_name}</td>
+                          <td className="py-2.5 pr-4 font-semibold text-gray-800">
+                            {(payoutDone ? p.landlord_amount_egp : p.deposit_egp).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 pr-4 text-gray-500 text-xs">
+                            {new Date(p.triggered_at || p.updated_at).toLocaleDateString("en-GB")}
+                          </td>
+                          <td className="py-2.5 pr-4">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${labelClass}`}>{label}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -1153,6 +1349,7 @@ function OwnerDashboard() {
       {floating?.kind === "withdraw" && <WithdrawWindow onClose={() => setFloating(null)} />}
       {floating?.kind === "cancelRequests" && <CancelRequestsWindow onClose={() => setFloating(null)} />}
       {floating?.kind === "profile" && <ProfileWindow onClose={() => setFloating(null)} />}
+      {showQrScanner && <QrScannerModal onClose={() => setShowQrScanner(false)} onCheckin={handleCheckin} />}
     </div>
   );
 }

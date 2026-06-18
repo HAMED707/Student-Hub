@@ -165,6 +165,7 @@ export default function App() {
           <Route path="/likes" element={<Like />} />
           <Route path="/favorites" element={<Like />} />
           <Route path="/bookings" element={<MyBookings />} />
+          <Route path="/bookings/:id" element={<MyBookings />} />
           <Route path="/my-bookings" element={<MyBookings />} />
           <Route path="/booking/:id" element={<MyBookings />} />
           <Route path="/payments" element={<Payments />} />

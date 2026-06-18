@@ -12,6 +12,7 @@ from api.payments_api.views import (
     CheckinScanView,
     ConnectOnboardingView,
     ConnectStatusView,
+    LandlordPayoutsView,
 )
 
 urlpatterns = [
@@ -19,4 +20,5 @@ urlpatterns = [
     path("checkin/", CheckinScanView.as_view(), name="payments-checkin"),
     path("connect/onboard/", ConnectOnboardingView.as_view(), name="payments-connect-onboard"),
     path("connect/status/", ConnectStatusView.as_view(), name="payments-connect-status"),
+    path("payouts/", LandlordPayoutsView.as_view(), name="payments-landlord-payouts"),
 ]

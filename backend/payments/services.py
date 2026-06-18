@@ -42,17 +42,17 @@ def create_checkout_session(booking) -> dict:
             payment_method_types=["card"],
             line_items=[{
                 "price_data": {
-                    "currency": "egp",
+                    "currency": "aed",
                     "unit_amount": booking.total_amount_cents,
                     "product_data": {"name": f"Booking #{booking.id} — {booking.property.title}"},
                 },
                 "quantity": 1,
             }],
             metadata={"booking_id": str(booking.id)},
-            success_url=f"{settings.FRONTEND_URL}/bookings/{booking.id}?payment=success",
-            cancel_url=f"{settings.FRONTEND_URL}/bookings/{booking.id}?payment=cancelled",
+            success_url=f"{settings.FRONTEND_URL}/bookings?payment=success&booking_id={booking.id}",
+            cancel_url=f"{settings.FRONTEND_URL}/bookings?payment=cancelled&booking_id={booking.id}",
         )
-    except stripe.error.StripeError as exc:
+    except Exception as exc:
         raise StripeError(f"Checkout session creation failed: {exc}") from exc
 
     return {
@@ -69,7 +69,7 @@ def construct_webhook_event(payload: bytes, sig_header: str):
     """
     try:
         return stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
-    except (stripe.error.SignatureVerificationError, ValueError) as exc:
+    except Exception as exc:
         raise StripeError(f"Webhook verification failed: {exc}") from exc
 
 
@@ -77,11 +77,11 @@ def construct_webhook_event(payload: bytes, sig_header: str):
 # Connect onboarding — landlord side
 # ---------------------------------------------------------------------------
 
-def ensure_connect_account(landlord) -> str:
+def create_minimal_connect_account(landlord) -> str:
     """
-    Returns the landlord's Stripe Express account id, creating one if it
-    doesn't exist yet. Does NOT complete onboarding — that happens via the
-    hosted Account Link the landlord is redirected to.
+    Creates a minimal Express account (country only) silently at signup.
+    No redirect, no form. The landlord can list and earn immediately.
+    Full onboarding (KYC) is deferred until they have pending earnings.
     """
     profile = landlord.landlord_profile
 
@@ -91,16 +91,54 @@ def ensure_connect_account(landlord) -> str:
     try:
         account = stripe.Account.create(
             type="express",
-            country="EG",
-            email=landlord.email,
+            country="AE",
             capabilities={"transfers": {"requested": True}},
         )
-    except stripe.error.StripeError as exc:
-        raise StripeError(f"Connect account creation failed: {exc}") from exc
+    except Exception as exc:
+        raise StripeError(f"Minimal Connect account creation failed: {exc}") from exc
 
     profile.stripe_account_id = account.id
     profile.save(update_fields=["stripe_account_id"])
     return account.id
+
+
+def ensure_connect_account(landlord) -> str:
+    """Returns existing account id, or creates a minimal one if needed.
+    Used by ConnectOnboardingView before generating an onboarding link."""
+    return create_minimal_connect_account(landlord)
+
+
+def flush_pending_payouts(stripe_account_id: str) -> list:
+    """
+    Transfers all PENDING payouts for the landlord whose onboarding just
+    completed. Called from the account.updated webhook handler.
+    Returns list of transfer ids that succeeded.
+    """
+    from django.utils import timezone
+    from payments.models import Payout
+
+    pending = Payout.objects.filter(
+        status=Payout.Status.PENDING,
+        booking__property__landlord__landlord_profile__stripe_account_id=stripe_account_id,
+    ).select_related("booking")
+
+    transfer_ids = []
+    for payout in pending:
+        try:
+            transfer_id = create_transfer(
+                stripe_account_id, payout.landlord_amount_cents, payout.booking_id
+            )
+            payout.stripe_transfer_id = transfer_id
+            payout.status = Payout.Status.DONE
+            payout.triggered_at = timezone.now()
+            payout.save()
+            transfer_ids.append(transfer_id)
+        except StripeError as exc:
+            logger.error("Deferred payout flush failed for payout %s: %s", payout.id, exc)
+            payout.status = Payout.Status.FAILED
+            payout.failure_reason = str(exc)
+            payout.save()
+    return transfer_ids
 
 
 def create_onboarding_link(stripe_account_id: str) -> str:
@@ -108,11 +146,11 @@ def create_onboarding_link(stripe_account_id: str) -> str:
     try:
         link = stripe.AccountLink.create(
             account=stripe_account_id,
-            refresh_url=f"{settings.FRONTEND_URL}/landlord/payouts/refresh",
-            return_url=f"{settings.FRONTEND_URL}/landlord/payouts/complete",
+            refresh_url=f"{settings.FRONTEND_URL}/owner?onboarding=refresh",
+            return_url=f"{settings.FRONTEND_URL}/owner?onboarding=complete",
             type="account_onboarding",
         )
-    except stripe.error.StripeError as exc:
+    except Exception as exc:
         raise StripeError(f"Onboarding link creation failed: {exc}") from exc
 
     return link.url
@@ -123,13 +161,17 @@ def get_connect_account_status(stripe_account_id: str) -> dict:
     webhook subscriber for account.updated events, at least for v1."""
     try:
         account = stripe.Account.retrieve(stripe_account_id)
-    except stripe.error.StripeError as exc:
+    except Exception as exc:
         raise StripeError(f"Could not retrieve Connect account: {exc}") from exc
+
+    capabilities = account.capabilities or {}
+    transfers_active = getattr(capabilities, "transfers", None) == "active"
 
     return {
         "charges_enabled": account.charges_enabled,
         "payouts_enabled": account.payouts_enabled,
         "details_submitted": account.details_submitted,
+        "transfers_active": transfers_active,
     }
 
 
@@ -152,11 +194,11 @@ def create_transfer(stripe_account_id: str, amount_cents: int, booking_id: int) 
     try:
         transfer = stripe.Transfer.create(
             amount=amount_cents,
-            currency="egp",
+            currency="aed",
             destination=stripe_account_id,
             metadata={"booking_id": str(booking_id)},
         )
-    except stripe.error.StripeError as exc:
+    except Exception as exc:
         raise StripeError(f"Transfer failed: {exc}") from exc
 
     return transfer.id

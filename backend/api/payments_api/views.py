@@ -3,16 +3,18 @@ Payments API views.
 
 Views:
     - CreateCheckoutSessionView → POST /api/payments/create-checkout-session/
-    - StripeWebhookView         → POST /api/webhooks/stripe/  (registered
-      directly in api/urls.py, mirroring how the Persona webhook is mounted)
+    - StripeWebhookView         → POST /api/webhooks/stripe/
     - CheckinScanView           → POST /api/payments/checkin/
     - ConnectOnboardingView     → POST /api/payments/connect/onboard/
     - ConnectStatusView         → GET  /api/payments/connect/status/
+    - LandlordPayoutsView       → GET  /api/payments/payouts/
 """
 
+import json
 import logging
 
 from django.db import transaction
+from django.db.models import Sum
 from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -23,6 +25,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.accounts_api.permissions import IsLandlord, IsStudent
+from accounts.models import LandlordProfile
 from bookings.models import Booking
 from payments.models import Payment, Payout
 from payments.services import (
@@ -30,9 +33,11 @@ from payments.services import (
     calculate_commission,
     construct_webhook_event,
     create_checkout_session,
+    create_minimal_connect_account,
     create_onboarding_link,
     create_transfer,
     ensure_connect_account,
+    flush_pending_payouts,
     get_connect_account_status,
 )
 from api.payments_api.serializers import (
@@ -107,31 +112,53 @@ class StripeWebhookView(View):
             logger.warning("Stripe webhook verification failed: %s", exc)
             return HttpResponse(status=400)
 
-        if event["type"] != "checkout.session.completed":
-            return HttpResponse(status=200)  # acknowledged, not acted on
+        # ── Student pays ───────────────────────────────────────────────
+        if event.type == "checkout.session.completed":
+            session = event.data.object
+            try:
+                payment = Payment.objects.select_related("booking").get(
+                    stripe_checkout_session_id=session.id
+                )
+            except Payment.DoesNotExist:
+                logger.warning("Stripe webhook: unknown checkout session %s", session.id)
+                return HttpResponse(status=200)
 
-        session = event["data"]["object"]
+            if payment.status == Payment.Status.PAID:
+                return HttpResponse(status=200)
 
-        try:
-            payment = Payment.objects.select_related("booking").get(
-                stripe_checkout_session_id=session["id"]
-            )
-        except Payment.DoesNotExist:
-            logger.warning("Stripe webhook for unknown checkout session %s", session.get("id"))
-            return HttpResponse(status=200)
+            payment.status = Payment.Status.PAID
+            payment.stripe_payment_intent_id = getattr(session, "payment_intent", None)
+            payment.raw_webhook_event = json.loads(request.body)
+            payment.paid_at = timezone.now()
+            payment.save()
 
-        if payment.status == Payment.Status.PAID:
-            return HttpResponse(status=200)  # idempotency — already processed
+            booking = payment.booking
+            booking.status = "paid"
+            booking.save(update_fields=["status"])
 
-        payment.status = Payment.Status.PAID
-        payment.stripe_payment_intent_id = session.get("payment_intent")
-        payment.raw_webhook_event = event
-        payment.paid_at = timezone.now()
-        payment.save()
+        # ── Landlord completes onboarding → flush pending payouts ──────
+        elif event.type == "account.updated":
+            connected_account_id = getattr(event, "account", None)
+            if not connected_account_id:
+                return HttpResponse(status=200)
 
-        booking = payment.booking
-        booking.status = "paid"
-        booking.save(update_fields=["status"])
+            data_obj = event.data.object
+            if not getattr(data_obj, "charges_enabled", False):
+                return HttpResponse(status=200)
+
+            try:
+                profile = LandlordProfile.objects.get(stripe_account_id=connected_account_id)
+            except LandlordProfile.DoesNotExist:
+                return HttpResponse(status=200)
+
+            if not profile.stripe_onboarding_complete:
+                profile.stripe_onboarding_complete = True
+                profile.save(update_fields=["stripe_onboarding_complete"])
+                transferred = flush_pending_payouts(connected_account_id)
+                logger.info(
+                    "Landlord %s onboarding complete — flushed %d pending payout(s)",
+                    profile.user_id, len(transferred),
+                )
 
         return HttpResponse(status=200)
 
@@ -173,11 +200,15 @@ class CheckinScanView(APIView):
                 return Response({"error": "This booking has already been checked in and paid out."}, status=status.HTTP_409_CONFLICT)
 
             landlord_profile = request.user.landlord_profile
+
+            # Ensure a Connect account id exists (created at signup, but
+            # backfill silently for landlords registered before this change)
             if not landlord_profile.stripe_account_id:
-                return Response(
-                    {"error": "You haven't completed payout onboarding yet. Visit your payout settings first."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                try:
+                    create_minimal_connect_account(request.user)
+                    landlord_profile.refresh_from_db()
+                except StripeError:
+                    pass
 
             commission_cents, landlord_cents = calculate_commission(booking.total_amount_cents)
 
@@ -189,31 +220,39 @@ class CheckinScanView(APIView):
                 },
             )
 
-            try:
-                transfer_id = create_transfer(
-                    landlord_profile.stripe_account_id, landlord_cents, booking.id
-                )
-            except StripeError as exc:
-                payout.status = Payout.Status.FAILED
-                payout.failure_reason = str(exc)
+            # Transfer immediately if onboarding is done; otherwise hold funds
+            # and let the account.updated webhook flush them later.
+            if landlord_profile.stripe_account_id and landlord_profile.stripe_onboarding_complete:
+                try:
+                    transfer_id = create_transfer(
+                        landlord_profile.stripe_account_id, landlord_cents, booking.id
+                    )
+                    payout.stripe_transfer_id = transfer_id
+                    payout.status = Payout.Status.DONE
+                    payout.triggered_at = timezone.now()
+                    payout.save()
+                except StripeError as exc:
+                    payout.status = Payout.Status.FAILED
+                    payout.failure_reason = str(exc)
+                    payout.save()
+                    logger.error("Immediate payout failed for booking %s: %s", booking.id, exc)
+                    # Don't return an error — booking still finishes, payout retried later
+            else:
+                # Deferred: payout stays PENDING until onboarding completes
+                payout.status = Payout.Status.PENDING
                 payout.save()
-                logger.error("Payout failed for booking %s: %s", booking.id, exc)
-                return Response({"error": "Payout failed. Please try again or contact support."}, status=status.HTTP_502_BAD_GATEWAY)
-
-            payout.stripe_transfer_id = transfer_id
-            payout.status = Payout.Status.DONE
-            payout.triggered_at = timezone.now()
-            payout.save()
 
             booking.payout_done = True
             booking.status = "finished"
             booking.save(update_fields=["payout_done", "status"])
 
+        payout_status = payout.status
         return Response(
             {
                 "booking_id": booking.id,
-                "landlord_amount_egp": landlord_cents / 100,
-                "commission_amount_egp": commission_cents / 100,
+                "landlord_amount_aed": landlord_cents / 100,
+                "commission_amount_aed": commission_cents / 100,
+                "payout_status": payout_status,
                 "status": "finished",
             },
             status=status.HTTP_200_OK,
@@ -263,16 +302,67 @@ class ConnectStatusView(APIView):
             logger.error("Could not fetch Connect status for landlord %s: %s", request.user.id, exc)
             return Response({"error": "Could not check payout status."}, status=status.HTTP_502_BAD_GATEWAY)
 
-        onboarding_complete = account_status["payouts_enabled"] and account_status["details_submitted"]
+        onboarding_complete = account_status["details_submitted"] and account_status["transfers_active"]
         if onboarding_complete != profile.stripe_onboarding_complete:
             profile.stripe_onboarding_complete = onboarding_complete
             profile.save(update_fields=["stripe_onboarding_complete"])
+
+        pending_cents = (
+            Payout.objects.filter(
+                status=Payout.Status.PENDING,
+                booking__property__landlord=request.user,
+            ).aggregate(total=Sum("landlord_amount_cents"))["total"] or 0
+        )
 
         return Response(
             {
                 "stripe_account_id": profile.stripe_account_id,
                 "onboarding_complete": onboarding_complete,
+                "pending_earnings_aed": pending_cents / 100,
                 **account_status,
             },
             status=status.HTTP_200_OK,
         )
+
+
+class LandlordPayoutsView(APIView):
+    """
+    GET /api/payments/payouts/
+    Returns all paid/finished bookings for the landlord as a single feed,
+    combining deposit-received events with their payout status.
+    """
+
+    permission_classes = [IsLandlord]
+
+    def get(self, request):
+        bookings = (
+            Booking.objects.filter(
+                property__landlord=request.user,
+                status__in=["paid", "finished"],
+            )
+            .select_related("tenant", "property")
+            .prefetch_related("payout")
+            .order_by("-updated_at")
+        )
+
+        data = []
+        for b in bookings:
+            payout = b.payout if hasattr(b, "payout") else None
+            try:
+                payout = b.payout
+            except Exception:
+                payout = None
+
+            data.append({
+                "booking_id": b.id,
+                "property_title": b.property.title,
+                "tenant_name": b.tenant.get_full_name().strip() or b.tenant.username,
+                "deposit_egp": b.total_amount_cents / 100,
+                "landlord_amount_egp": payout.landlord_amount_cents / 100 if payout else None,
+                "booking_status": b.status,
+                "payout_status": payout.status if payout else None,
+                "triggered_at": payout.triggered_at if payout else None,
+                "updated_at": b.updated_at,
+            })
+
+        return Response(data, status=status.HTTP_200_OK)

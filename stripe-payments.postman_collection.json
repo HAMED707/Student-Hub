@@ -1,231 +1,268 @@
 {
   "info": {
-    "name": "Student Hub — Stripe Payments",
-    "_postman_id": "stripe-payments-v1",
-    "description": "Full Stripe marketplace payment flow: booking → checkout → webhook → check-in → payout.\n\nFlow order:\n1. Auth (student + landlord)\n2. Student creates booking\n3. Student gets Stripe checkout URL\n4. Simulate webhook (checkout.session.completed)\n5. Landlord onboards via Connect\n6. Landlord scans QR / check-in → funds released\n\nSet base_url to http://localhost:8000/api before running.",
+    "name": "Stripe Payments",
+    "_postman_id": "stripe-v6",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url",       "value": "http://localhost:8000/api" },
+    { "key": "base",           "value": "http://localhost:8000/api" },
     { "key": "student_token",  "value": "" },
     { "key": "landlord_token", "value": "" },
+    { "key": "property_id",    "value": "" },
     { "key": "booking_id",     "value": "" },
-    { "key": "qr_token",       "value": "" },
-    { "key": "checkout_session_id", "value": "" }
+    { "key": "qr_token",       "value": "" }
   ],
   "item": [
     {
-      "name": "1. Auth",
+      "name": "─── SETUP ───────────────────────────────────",
       "item": [
         {
-          "name": "Login — student",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.collectionVariables.set('student_token', r.access);"
-                ]
-              }
-            }
-          ],
+          "name": "1 · Login student",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Login OK', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('student_token', pm.response.json().access);",
+            "console.log('✅ student_token saved');"
+          ]}}],
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
-            "url": "{{base_url}}/token/",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"test_student1\",\n  \"password\": \"Test1234!\"\n}"
-            }
+            "body": { "mode": "raw", "raw": "{\"username\":\"test_student1\",\"password\":\"Test1234!\"}" },
+            "url": "{{base}}/token/"
           }
         },
         {
-          "name": "Login — landlord",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.collectionVariables.set('landlord_token', r.access);"
-                ]
-              }
-            }
-          ],
+          "name": "2 · Login landlord",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Login OK', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('landlord_token', pm.response.json().access);",
+            "console.log('✅ landlord_token saved');"
+          ]}}],
           "request": {
+            "auth": { "type": "noauth" },
             "method": "POST",
-            "url": "{{base_url}}/token/",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"seed_landlord_001\",\n  \"password\": \"Pass1234!\"\n}"
-            }
+            "body": { "mode": "raw", "raw": "{\"username\":\"seed_landlord_001\",\"password\":\"Pass1234!\"}" },
+            "url": "{{base}}/token/"
+          }
+        },
+        {
+          "name": "3 · Pick available property",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Got properties', () => pm.response.to.have.status(200));",
+            "const list = pm.response.json().results ?? pm.response.json();",
+            "const p = list.find(x => x.status === 'available' && x.price);",
+            "if (p) {",
+            "  pm.collectionVariables.set('property_id', String(p.id));",
+            "  console.log('✅ property_id =', p.id, '|', p.title, '| price =', p.price, '| min_stay =', p.min_stay_months);",
+            "} else {",
+            "  console.error('❌ No available property with a price — run: python manage.py reset_test_data --keep-connect');",
+            "}"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{student_token}}" }],
+            "url": "{{base}}/properties/?status=available&page_size=10"
           }
         }
       ]
     },
     {
-      "name": "2. Booking",
+      "name": "─── STUDENT FLOW ────────────────────────────",
       "item": [
         {
-          "name": "Create booking",
+          "name": "4 · Create booking",
           "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.collectionVariables.set('booking_id', r.id);",
-                  "pm.collectionVariables.set('qr_token', r.qr_token);",
-                  "console.log('booking_id:', r.id, '| qr_token:', r.qr_token);"
-                ]
-              }
-            }
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('property_id')) throw new Error('Run step 3 first');"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "const r = pm.response.json();",
+              "if (pm.response.code === 201) {",
+              "  pm.collectionVariables.set('booking_id', String(r.id));",
+              "  pm.collectionVariables.set('qr_token', String(r.qr_token));",
+              "  console.log('✅ booking_id =', r.id);",
+              "  console.log('✅ qr_token   =', r.qr_token);",
+              "  console.log('✅ total      =', r.total_amount_cents / 100, 'AED');",
+              "} else {",
+              "  pm.test('Booking failed: ' + JSON.stringify(r), () => false);",
+              "}"
+            ]}}
           ],
           "request": {
             "method": "POST",
-            "url": "{{base_url}}/bookings/",
             "header": [
               { "key": "Content-Type",  "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{student_token}}" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"property\": 1,\n  \"move_in_date\": \"2025-09-01\",\n  \"duration_months\": 3,\n  \"booking_unit\": \"whole\",\n  \"message\": \"Postman test booking\"\n}"
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"property\": {{property_id}},\n  \"move_in_date\": \"2025-09-01\",\n  \"duration_months\": 12,\n  \"booking_unit\": \"whole\"\n}" },
+            "url": "{{base}}/bookings/"
           }
         },
+        {
+          "name": "5 · Get Stripe checkout URL",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('booking_id')) throw new Error('Run step 4 first');"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "const r = pm.response.json();",
+              "if (pm.response.code === 201) {",
+              "  console.log('');",
+              "  console.log('💳 OPEN THIS URL AND PAY:');",
+              "  console.log(r.checkout_url);",
+              "  console.log('');",
+              "  console.log('  Card:   4242 4242 4242 4242');",
+              "  console.log('  Expiry: 12/34  CVC: 123');",
+              "  console.log('');",
+              "  console.log('➡️  After paying watch Stripe CLI → run step 6');",
+              "} else {",
+              "  pm.test('Failed: ' + JSON.stringify(r), () => false);",
+              "}"
+            ]}}
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{student_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"booking_id\": {{booking_id}}}" },
+            "url": "{{base}}/payments/create-checkout-session/"
+          }
+        },
+        {
+          "name": "6 · Confirm booking is paid",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const bookings = pm.response.json();",
+            "const b = bookings.find(x => String(x.id) === pm.collectionVariables.get('booking_id'));",
+            "if (!b) { console.error('❌ Booking not found'); return; }",
+            "console.log('Booking status:', b.status);",
+            "if (b.status === 'paid') {",
+            "  pm.test('✅ Payment confirmed — ready for check-in', () => true);",
+            "  console.log('➡️  Now run step 7 (check-in)');",
+            "} else if (b.status === 'pending_payment') {",
+            "  pm.test('⏳ Webhook not received yet — check Stripe CLI terminal', () => false);",
+            "} else {",
+            "  pm.test('Status: ' + b.status, () => false);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{student_token}}" }],
+            "url": "{{base}}/bookings/my/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "─── LANDLORD CHECK-IN ───────────────────────",
+      "item": [
+        {
+          "name": "7 · Check-in (scan QR → release payout)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "if (!pm.collectionVariables.get('qr_token')) throw new Error('qr_token missing — run step 4 first');"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "const r = pm.response.json();",
+              "if (pm.response.code === 200) {",
+              "  pm.test('✅ Check-in complete — booking finished', () => true);",
+              "  console.log('');",
+              "  console.log('🎉 DONE!');",
+              "  console.log('  Status:              ', r.status);",
+              "  console.log('  Payout status:       ', r.payout_status);",
+              "  console.log('  Landlord receives:   ', r.landlord_amount_aed, 'AED');",
+              "  console.log('  Platform commission: ', r.commission_amount_aed, 'AED');",
+              "  if (r.payout_status === 'pending') {",
+              "    console.log('');",
+              "    console.log('ℹ️  Payout is PENDING — landlord must complete Connect onboarding');",
+              "    console.log('   Run the CONNECT ONBOARDING section below to release funds');",
+              "  }",
+              "} else {",
+              "  pm.test('Failed: ' + JSON.stringify(r), () => false);",
+              "}"
+            ]}}
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{landlord_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"qr_token\": \"{{qr_token}}\"}" },
+            "url": "{{base}}/payments/checkin/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "─── CONNECT ONBOARDING (one-time setup) ─────",
+      "item": [
+        {
+          "name": "A · Start onboarding",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "if (pm.response.code === 200) {",
+            "  pm.test('Onboarding URL received', () => true);",
+            "  console.log('');",
+            "  console.log('🏦 OPEN THIS URL TO COMPLETE LANDLORD KYC:');",
+            "  console.log(r.onboarding_url);",
+            "  console.log('');",
+            "  console.log('Test phone OTP: 000000');",
+            "  console.log('➡️  After completing, run B to verify + auto-flush pending payouts');",
+            "} else {",
+            "  pm.test('Failed: ' + JSON.stringify(r), () => false);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{landlord_token}}" }],
+            "url": "{{base}}/payments/connect/onboard/"
+          }
+        },
+        {
+          "name": "B · Check status + pending earnings",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const r = pm.response.json();",
+            "console.log('onboarding_complete:', r.onboarding_complete);",
+            "console.log('transfers_active:   ', r.transfers_active);",
+            "console.log('pending_earnings:   ', r.pending_earnings_aed, 'AED');",
+            "if (r.onboarding_complete) {",
+            "  pm.test('✅ Onboarding complete — pending payouts flushed automatically via webhook', () => true);",
+            "} else {",
+            "  pm.test('⏳ Not complete yet — finish the browser flow first', () => false);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{landlord_token}}" }],
+            "url": "{{base}}/payments/connect/status/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "─── UTILS ───────────────────────────────────",
+      "item": [
         {
           "name": "My bookings (student)",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/bookings/my/",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{student_token}}" }
-            ]
+            "header": [{ "key": "Authorization", "value": "Bearer {{student_token}}" }],
+            "url": "{{base}}/bookings/my/"
           }
         },
         {
-          "name": "Cancel booking (student)",
+          "name": "Cancel booking",
           "request": {
             "method": "PATCH",
-            "url": "{{base_url}}/bookings/{{booking_id}}/status/",
             "header": [
               { "key": "Content-Type",  "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{student_token}}" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"cancelled\"\n}"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "3. Checkout",
-      "item": [
-        {
-          "name": "Create Stripe checkout session",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "console.log('Open in browser to pay:', r.checkout_url);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "url": "{{base_url}}/payments/create-checkout-session/",
-            "header": [
-              { "key": "Content-Type",  "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{student_token}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"booking_id\": {{booking_id}}\n}"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "4. Webhook (simulate)",
-      "item": [
-        {
-          "name": "Stripe webhook — checkout.session.completed",
-          "request": {
-            "method": "POST",
-            "url": "{{base_url}}/webhooks/stripe/",
-            "header": [
-              { "key": "Content-Type",     "value": "application/json" },
-              { "key": "Stripe-Signature", "value": "t=fake,v1=fake" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"type\": \"checkout.session.completed\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"cs_test_REPLACE_WITH_REAL_SESSION_ID\",\n      \"payment_intent\": \"pi_test_REPLACE\"\n    }\n  }\n}"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "5. Landlord — Connect",
-      "item": [
-        {
-          "name": "Start Connect onboarding",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "console.log('Open to onboard landlord:', r.onboarding_url);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "url": "{{base_url}}/payments/connect/onboard/",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{landlord_token}}" }
-            ]
-          }
-        },
-        {
-          "name": "Check Connect status",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/payments/connect/status/",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{landlord_token}}" }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "6. Check-in (QR scan)",
-      "item": [
-        {
-          "name": "Scan QR — release funds to landlord",
-          "request": {
-            "method": "POST",
-            "url": "{{base_url}}/payments/checkin/",
-            "header": [
-              { "key": "Content-Type",  "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{landlord_token}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"qr_token\": \"{{qr_token}}\"\n}"
-            }
+            "body": { "mode": "raw", "raw": "{\"status\": \"cancelled\"}" },
+            "url": "{{base}}/bookings/{{booking_id}}/status/"
           }
         }
       ]

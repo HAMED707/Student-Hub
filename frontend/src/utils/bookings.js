@@ -1,10 +1,10 @@
 export const STUDENT_BOOKING_TABS = [
   "All",
   "Awaiting Payment",
-  "Pending Review",
-  "Confirmed",
-  "Completed",
+  "Paid",
+  "Finished",
   "Cancelled",
+  "Expired",
 ];
 
 export const STUDENT_STATUS_META = {
@@ -13,18 +13,13 @@ export const STUDENT_STATUS_META = {
     bg: "bg-amber-100",
     text: "text-amber-800",
   },
-  deposit_paid: {
-    label: "Pending Review",
+  paid: {
+    label: "Paid",
     bg: "bg-blue-100",
     text: "text-blue-800",
   },
-  confirmed: {
-    label: "Confirmed",
-    bg: "bg-green-100",
-    text: "text-green-800",
-  },
-  completed: {
-    label: "Completed",
+  finished: {
+    label: "Finished",
     bg: "bg-emerald-100",
     text: "text-emerald-800",
   },
@@ -69,21 +64,14 @@ export const buildBookingTimeline = (booking) => {
       date: createdDate,
     },
     {
-      step: "Deposit Paid",
-      completed: ["deposit_paid", "confirmed", "completed"].includes(status),
-      date: ["deposit_paid", "confirmed", "completed"].includes(status)
-        ? updatedDate
-        : null,
+      step: "Paid",
+      completed: ["paid", "finished"].includes(status),
+      date: ["paid", "finished"].includes(status) ? updatedDate : null,
     },
     {
-      step: "Confirmed",
-      completed: ["confirmed", "completed"].includes(status),
-      date: ["confirmed", "completed"].includes(status) ? updatedDate : null,
-    },
-    {
-      step: "Completed",
-      completed: status === "completed",
-      date: status === "completed" ? updatedDate : null,
+      step: "Finished",
+      completed: status === "finished",
+      date: status === "finished" ? updatedDate : null,
     },
   ];
 };

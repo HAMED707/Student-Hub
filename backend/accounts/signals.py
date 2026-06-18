@@ -22,4 +22,11 @@ def create_user_profile(sender, instance, created, **kwargs):
         StudentProfile.objects.get_or_create(user=instance)
 
     elif instance.role == "landlord":
-        LandlordProfile.objects.get_or_create(user=instance)
+        _, created_profile = LandlordProfile.objects.get_or_create(user=instance)
+        if created_profile:
+            try:
+                from payments.services import create_minimal_connect_account
+                create_minimal_connect_account(instance)
+            except Exception:
+                # Never block registration if Stripe is unreachable
+                pass

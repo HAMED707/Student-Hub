@@ -11,8 +11,8 @@ from bookings.models import Booking
 class BookingAdmin(admin.ModelAdmin):
     """Admin view for booking requests."""
 
-    list_display  = ("id", "tenant", "property", "booking_unit", "status", "move_in_date", "duration_months", "created_at")
-    list_filter   = ("status", "booking_unit", "move_in_date")
-    search_fields = ("tenant__username", "property__title")
+    list_display  = ("id", "tenant", "property", "booking_unit", "status", "total_amount_cents", "payout_done", "move_in_date", "created_at")
+    list_filter   = ("status", "booking_unit", "payout_done")
+    search_fields = ("tenant__username", "property__title", "qr_token")
     ordering      = ("-created_at",)
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("qr_token", "payout_done", "expires_at", "created_at", "updated_at")
