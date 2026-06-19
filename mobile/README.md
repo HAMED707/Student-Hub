@@ -1,17 +1,107 @@
-# student_hub
+# Student Hub
 
-A new Flutter project.
+Student Hub is a Flutter-based mobile application designed to help university students find suitable accommodation and compatible roommates. The application uses AI-powered recommendations to provide personalized housing suggestions based on user preferences.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+- User authentication with sign up and login
+- Browse available properties
+- AI-based property recommendations
+- Roommate matching
+- Property search and filtering
+- Favorite properties
+- Property details
+- User profile management
+- Firebase integration
+- Responsive user interface
 
-A few resources to get you started if this is your first Flutter project:
+## Technologies Used
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- Flutter
+- Dart
+- Firebase Authentication
+- Cloud Firestore
+- Firebase Storage
+- REST API
+- BLoC state management
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Project Structure
+
+```text
+mobile/
+├── android/
+├── assets/
+│   └── images/
+├── ios/
+├── lib/
+│   ├── community/
+│   ├── findroom/
+│   ├── homepage/
+│   ├── login/
+│   ├── profile/
+│   ├── roommate/
+│   ├── service/
+│   └── main.dart
+├── test/
+├── web/
+└── pubspec.yaml
+```
+
+## Installation
+
+### Prerequisites
+
+Make sure the following tools are installed before running the application:
+
+- Flutter SDK
+- Android Studio or Visual Studio Code
+- Android SDK
+- Git
+
+### Clone the Repository
+
+```bash
+git clone <repository_url>
+cd student_hub/mobile
+```
+
+### Install Dependencies
+
+```bash
+flutter pub get
+```
+
+### Run the Application
+
+```bash
+flutter run
+```
+
+## Screens
+
+- Splash Screen
+- Onboarding
+- Login and Registration
+- Home Screen
+- Property Details
+- Favorites
+- Profile
+- AI Recommendation
+- Roommate Matching
+
+## Future Improvements
+
+- Intelligent notifications
+- Smart property verification
+- Identity verification
+- Trust score system
+- Advanced analytics dashboard
+- Expanded AI dataset
+
+## Team
+
+Developed as a graduation project by the Student Hub Team.
+
+## License
+
+This project is intended for educational purposes only.
