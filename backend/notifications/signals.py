@@ -68,21 +68,63 @@ def welcome_notification(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Booking)
 def booking_notification(sender, instance, created, **kwargs):
     property_title = instance.property.title
+    update_fields = frozenset(kwargs.get("update_fields") or [])
+
+    shared_data = {
+        "booking_id":     instance.id,
+        "property_id":    instance.property.id,
+        "property_title": property_title,
+    }
 
     if created:
         n = push_notification(
-            recipient=instance.property.landlord,          # ← was .owner (bug fixed)
+            recipient=instance.property.landlord,
             actor=instance.tenant,
             notification_type="booking_request",
             title="New Booking Request",
             message=f"{instance.tenant.username} wants to book '{property_title}'.",
-            data={
-                "booking_id":     instance.id,
-                "property_id":    instance.property.id,
-                "property_title": property_title,
-            },
+            data=shared_data,
         )
         _broadcast(n)
+        return
+
+    # ── Landlord requests remaining payment → notify tenant ───────────────────
+    if "remaining_payment_requested" in update_fields and instance.remaining_payment_requested:
+        n = push_notification(
+            recipient=instance.tenant,
+            actor=instance.property.landlord,
+            notification_type="payment",
+            title="Remaining Payment Requested 💳",
+            message=f"Your landlord has requested the remaining balance for '{property_title}'. Please complete your payment.",
+            data={**shared_data, "payment_type": "remaining"},
+        )
+        _broadcast(n)
+        return
+
+    # ── Student pays remaining balance → notify both parties ──────────────────
+    if "remaining_paid" in update_fields and instance.remaining_paid:
+        n = push_notification(
+            recipient=instance.tenant,
+            actor=instance.property.landlord,
+            notification_type="payment",
+            title="Remaining Payment Confirmed ✅",
+            message=f"Your remaining balance for '{property_title}' has been received. You're all settled!",
+            data={**shared_data, "payment_type": "remaining"},
+        )
+        _broadcast(n)
+        ln = push_notification(
+            recipient=instance.property.landlord,
+            actor=instance.tenant,
+            notification_type="payment",
+            title="Remaining Balance Received 💰",
+            message=f"{instance.tenant.username} paid the remaining balance for '{property_title}'.",
+            data={**shared_data, "payment_type": "remaining"},
+        )
+        _broadcast(ln)
+        return
+
+    # ── Booking status changes ─────────────────────────────────────────────────
+    if update_fields and "status" not in update_fields:
         return
 
     TENANT_MESSAGES = {
@@ -99,13 +141,6 @@ def booking_notification(sender, instance, created, **kwargs):
     if instance.status not in TENANT_MESSAGES:
         return
 
-    shared_data = {
-        "booking_id":     instance.id,
-        "property_id":    instance.property.id,
-        "property_title": property_title,
-        "new_status":     instance.status,
-    }
-
     title, message = TENANT_MESSAGES[instance.status]
     n = push_notification(
         recipient=instance.tenant,
@@ -113,7 +148,7 @@ def booking_notification(sender, instance, created, **kwargs):
         notification_type="booking_update",
         title=title,
         message=message,
-        data=shared_data,
+        data={**shared_data, "new_status": instance.status},
     )
     _broadcast(n)
 
@@ -125,7 +160,7 @@ def booking_notification(sender, instance, created, **kwargs):
             notification_type="booking_update",
             title=landlord_title,
             message=landlord_message,
-            data=shared_data,
+            data={**shared_data, "new_status": instance.status},
         )
         _broadcast(ln)
 

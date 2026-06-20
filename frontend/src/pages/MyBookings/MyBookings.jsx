@@ -536,7 +536,7 @@ export default function MyBookings() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("All");
-  const [paymentBanner, setPaymentBanner] = useState(null); // "success" | "cancelled" | null
+  const [paymentBanner, setPaymentBanner] = useState(null); // "success" | "cancelled" | "remaining_success" | "remaining_cancelled" | null
   const [qrBooking, setQrBooking] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -558,10 +558,11 @@ export default function MyBookings() {
     if (highlightedBookingId) setActiveTab("All");
   }, [highlightedBookingId]);
 
-  // Handle Stripe redirect back (/bookings?payment=success or /bookings/5?payment=success)
+  // Handle Stripe redirect back
   useEffect(() => {
     const payment = searchParams.get("payment");
-    if (payment === "success" || payment === "cancelled") {
+    const KNOWN = ["success", "cancelled", "remaining_success", "remaining_cancelled"];
+    if (KNOWN.includes(payment)) {
       setPaymentBanner(payment);
       setSearchParams({}, { replace: true });
     }
@@ -806,7 +807,7 @@ export default function MyBookings() {
             <div className="mb-6 flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-700 sm:px-4">
               <div className="flex min-w-0 items-start gap-3">
                 <CheckCircle className="h-5 w-5 shrink-0" />
-                <span>Payment confirmed! Your booking is now active. The landlord will be notified.</span>
+                <span>Deposit confirmed! Your booking is now active. The landlord will be notified.</span>
               </div>
               <button type="button" onClick={() => setPaymentBanner(null)} className="shrink-0 text-emerald-500 hover:text-emerald-700">✕</button>
             </div>
@@ -816,6 +817,24 @@ export default function MyBookings() {
               <div className="flex min-w-0 items-start gap-3">
                 <AlertCircle className="h-5 w-5 shrink-0" />
                 <span>Payment was cancelled. Your booking is still reserved — click "Pay Now" to try again.</span>
+              </div>
+              <button type="button" onClick={() => setPaymentBanner(null)} className="shrink-0 text-amber-500 hover:text-amber-700">✕</button>
+            </div>
+          )}
+          {paymentBanner === "remaining_success" && (
+            <div className="mb-6 flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-700 sm:px-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <CheckCircle className="h-5 w-5 shrink-0" />
+                <span>Remaining balance paid! You are fully settled. The landlord has been notified.</span>
+              </div>
+              <button type="button" onClick={() => setPaymentBanner(null)} className="shrink-0 text-emerald-500 hover:text-emerald-700">✕</button>
+            </div>
+          )}
+          {paymentBanner === "remaining_cancelled" && (
+            <div className="mb-6 flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-semibold text-amber-700 sm:px-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <span>Remaining payment was cancelled. Click "Pay Remaining" on your booking to try again.</span>
               </div>
               <button type="button" onClick={() => setPaymentBanner(null)} className="shrink-0 text-amber-500 hover:text-amber-700">✕</button>
             </div>
