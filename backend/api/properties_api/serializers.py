@@ -42,8 +42,8 @@ class PropertySerializer(serializers.ModelSerializer):
     nearby_universities = UniversitySerializer(many=True, read_only=True)
     city                = serializers.SlugRelatedField(read_only=True, slug_field="name")
     transport_types     = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
-    average_rating      = serializers.FloatField(read_only=True)
-    review_count        = serializers.IntegerField(read_only=True)
+    average_rating      = serializers.SerializerMethodField()
+    review_count        = serializers.SerializerMethodField()
     landlord_id           = serializers.IntegerField(source="landlord.id", read_only=True)
     landlord_name         = serializers.CharField(source="landlord.get_full_name", read_only=True)
     landlord_picture      = serializers.ImageField(source="landlord.profile_picture", read_only=True)
@@ -89,6 +89,13 @@ class PropertySerializer(serializers.ModelSerializer):
     def get_university_distance(self, obj):
         return self.context.get("university_distance", None)
 
+    def get_average_rating(self, obj):
+        ratings = [review.rating for review in obj.reviews.all()]
+        return round(sum(ratings) / len(ratings), 1) if ratings else 0
+
+    def get_review_count(self, obj):
+        return len(obj.reviews.all())
+
 
 class PropertyListSerializer(serializers.ModelSerializer):
     """
@@ -97,8 +104,8 @@ class PropertyListSerializer(serializers.ModelSerializer):
     """
 
     cover_image          = serializers.SerializerMethodField()
-    average_rating       = serializers.FloatField(read_only=True)
-    review_count         = serializers.IntegerField(read_only=True)
+    average_rating       = serializers.SerializerMethodField()
+    review_count         = serializers.SerializerMethodField()
     landlord_name        = serializers.CharField(source="landlord.get_full_name", read_only=True)
     landlord_is_verified = serializers.BooleanField(source="landlord.is_verified", read_only=True)
     nearby_universities  = UniversitySerializer(many=True, read_only=True)
@@ -121,11 +128,20 @@ class PropertyListSerializer(serializers.ModelSerializer):
         ]
 
     def get_cover_image(self, obj):
-        cover = obj.images.filter(is_cover=True).first() or obj.images.first()
+        images = list(obj.images.all())
+        cover = next((image for image in images if image.is_cover), None)
+        cover = cover or (images[0] if images else None)
         if not cover:
             return None
         request = self.context.get("request")
         return request.build_absolute_uri(cover.image.url) if request else cover.image.url
+
+    def get_average_rating(self, obj):
+        value = getattr(obj, "list_average_rating", None)
+        return round(value, 1) if value is not None else 0
+
+    def get_review_count(self, obj):
+        return getattr(obj, "list_review_count", 0)
 
 
 class PropertyCreateSerializer(serializers.ModelSerializer):

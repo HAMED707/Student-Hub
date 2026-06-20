@@ -1,32 +1,60 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, ChevronRight, Check, AlertCircle } from 'lucide-react';
-import { registerUser, updateMyProfile, uploadVerificationDocument } from "../../../api/accounts.js";
+import { registerUser, updateMyProfile } from "../../../api/accounts.js";
 import { getApiErrorMessage, mapGenderToBackend } from "../../../utils/auth.js";
-
-// === المكونات الفرعية (خارج المكون الرئيسي) ===
 
 const InputField = ({ label, name, type = "text", placeholder, value, onChange, maxLength, error }) => (
     <div className="flex flex-col gap-2 w-full">
         <label className="text-sm font-bold text-gray-700">{label}</label>
         <div className="relative">
-            <input 
+            <input
                 type={type} name={name} value={value} onChange={onChange} placeholder={placeholder} maxLength={maxLength}
                 className={`w-full h-12 px-4 border rounded-lg outline-none transition text-gray-700 placeholder-gray-400
-                    ${error ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#1A56DB] focus:ring-1 focus:ring-[#1A56DB]'}`} 
+                    ${error ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#1A56DB] focus:ring-1 focus:ring-[#1A56DB]'}`}
             />
-            {error && <div className="flex items-center gap-1 mt-1 text-red-500 text-xs animate-fadeIn"><AlertCircle className="w-3 h-3" /> <span>{error}</span></div>}
+            {error && <div className="flex items-center gap-1 mt-1 text-red-500 text-xs"><AlertCircle className="w-3 h-3" /> <span>{error}</span></div>}
         </div>
     </div>
 );
+
+const PhoneField = ({ label, name, value, onChange, error }) => {
+    const localNumber = value.startsWith('+20') ? value.slice(3) : value;
+
+    const handleLocalChange = (e) => {
+        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+        onChange({ target: { name, value: '+20' + digits } });
+    };
+
+    return (
+        <div className="flex flex-col gap-2 w-full">
+            <label className="text-sm font-bold text-gray-700">{label}</label>
+            <div className={`flex h-12 border rounded-lg overflow-hidden transition
+                ${error ? 'border-red-500' : 'border-gray-300 focus-within:border-[#1A56DB] focus-within:ring-1 focus-within:ring-[#1A56DB]'}`}>
+                <span className="flex items-center px-3 bg-gray-100 text-gray-600 font-bold text-sm border-r border-gray-300 shrink-0">
+                    +20
+                </span>
+                <input
+                    type="tel"
+                    value={localNumber}
+                    onChange={handleLocalChange}
+                    placeholder="1XXXXXXXXX"
+                    maxLength={10}
+                    className="flex-1 px-3 outline-none text-gray-700 placeholder-gray-400 bg-white"
+                />
+            </div>
+            {error && <div className="flex items-center gap-1 mt-1 text-red-500 text-xs"><AlertCircle className="w-3 h-3" /> <span>{error}</span></div>}
+        </div>
+    );
+};
 
 const SelectField = ({ label, name, value, onChange, options, placeholder, disabled = false, error }) => (
     <div className="flex flex-col gap-2 w-full">
         <label className="text-sm font-bold text-gray-700">{label}</label>
         <div className="relative w-full">
-            <select 
+            <select
                 name={name} value={value} onChange={onChange} disabled={disabled}
-                className={`w-full h-12 px-4 border rounded-lg appearance-none outline-none cursor-pointer transition 
+                className={`w-full h-12 px-4 border rounded-lg appearance-none outline-none cursor-pointer transition
                     ${disabled ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700'}
                     ${error ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#1A56DB]'}`}
             >
@@ -39,154 +67,149 @@ const SelectField = ({ label, name, value, onChange, options, placeholder, disab
     </div>
 );
 
-const FileField = ({ label, name, onChange, error, fileName }) => (
-    <div className="flex flex-col gap-2 w-full">
-        <label className="text-sm font-bold text-gray-700">{label}</label>
-        <div className="relative">
-            <label className={`flex items-center justify-between w-full h-14 px-4 border rounded-lg cursor-pointer transition bg-white
-                ${error ? 'border-red-500' : 'border-gray-300 hover:border-[#1A56DB]'}`}>
-                <span className={`text-sm ${fileName ? 'text-gray-800' : 'text-gray-400'}`}>
-                    {fileName || "Choose File"}
-                </span>
-                <div className="bg-[#1A56DB] text-white text-xs px-4 py-2 rounded-md font-bold">Upload</div>
-                <input type="file" name={name} onChange={onChange} className="hidden" accept="image/*,.pdf" />
-            </label>
-            {error && <div className="flex items-center gap-1 mt-1 text-red-500 text-xs"><AlertCircle className="w-3 h-3" /> <span>{error}</span></div>}
-        </div>
-    </div>
-);
-
-// === المكون الرئيسي ===
-
-const egyptData = { "Cairo": ["Nasr City", "Maadi"], "Giza": ["Dokki", "Haram"], "Alexandria": ["Smouha"] };
+const EGYPT_CITIES = [
+    "Cairo", "Alexandria", "Giza", "Port Said", "Suez", "Ismailia",
+    "Damietta", "Mansoura", "Zagazig", "Banha", "Kafr El Sheikh",
+    "Tanta", "Shibin El Kom", "Damanhur", "Faiyum", "Beni Suef",
+    "Minya", "Asyut", "Sohag", "Qena", "Luxor", "Aswan",
+    "Hurghada", "Arish", "Sharm El Sheikh", "Mersa Matruh", "Kharga",
+];
 
 const LandlordRegister = () => {
     const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState(1);
-    
+    const [usernameCustomized, setUsernameCustomized] = useState(false);
+
     const [formData, setFormData] = useState({
-        firstName: '', lastName: '', gender: '', phone: '', dob: '', nationalId: '', governorate: '', city: '',
-        idFront: null, profilePhoto: null,
+        firstName: '', lastName: '', username: '', gender: '', phone: '+20', dob: '', nationalId: '', city: '',
         email: '', password: '', confirmPassword: ''
     });
 
-    const [fileNames, setFileNames] = useState({ idFront: '', profilePhoto: '' });
     const [errors, setErrors] = useState({});
-    const [availableCities, setAvailableCities] = useState([]);
     const [formError, setFormError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // backend field → { formField, step }
+    const FIELD_MAP = {
+        username:     { field: 'username',    step: 1 },
+        first_name:   { field: 'firstName',   step: 1 },
+        last_name:    { field: 'lastName',    step: 1 },
+        phone_number: { field: 'phone',       step: 1 },
+        national_id:  { field: 'nationalId',  step: 1 },
+        email:        { field: 'email',       step: 2 },
+        password:     { field: 'password',    step: 2 },
+    };
+
+    const autoUsername = (fn, ln) =>
+        `${fn}.${ln}`.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9._]/g, '');
+
     const handleChange = (e) => {
-        const { name, value, files } = e.target;
-        if (files) {
-            if (files[0]) {
-                setFormData(prev => ({ ...prev, [name]: files[0] }));
-                setFileNames(prev => ({ ...prev, [name]: files[0].name }));
-                if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
-                if (formError) setFormError('');
+        const { name, value } = e.target;
+
+        setFormData(prev => {
+            const updated = { ...prev, [name]: value };
+            if ((name === 'firstName' || name === 'lastName') && !usernameCustomized) {
+                const fn = name === 'firstName' ? value : prev.firstName;
+                const ln = name === 'lastName' ? value : prev.lastName;
+                updated.username = autoUsername(fn, ln);
             }
-        } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
-            if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
-            if (formError) setFormError('');
-            if (name === 'governorate') {
-                setAvailableCities(egyptData[value] || []);
-                setFormData(prev => ({ ...prev, governorate: value, city: '' }));
-            }
-        }
+            return updated;
+        });
+
+        if (name === 'username') setUsernameCustomized(true);
+        if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+        if (formError) setFormError('');
     };
 
     const validateStep = (step) => {
         let newErrors = {};
-        let isValid = true;
         if (step === 1) {
             if (!formData.firstName.trim()) newErrors.firstName = "Required";
             if (!formData.lastName.trim()) newErrors.lastName = "Required";
+            if (!formData.username.trim()) newErrors.username = "Required";
+            else if (!/^[a-z0-9._]{3,}$/.test(formData.username)) newErrors.username = "Lowercase letters, numbers, . and _ only (min 3 chars)";
             if (!formData.gender) newErrors.gender = "Required";
-            if (!formData.phone) newErrors.phone = "Required";
+            const localPhone = formData.phone.replace('+20', '');
+            if (!localPhone) newErrors.phone = "Required";
+            else if (!/^\d{10}$/.test(localPhone)) newErrors.phone = "Enter 10 digits after +20";
             if (!formData.dob) newErrors.dob = "Required";
             if (!formData.nationalId) newErrors.nationalId = "Required";
             else if (!/^\d{14}$/.test(formData.nationalId)) newErrors.nationalId = "Must be 14 digits";
-            if (!formData.governorate) newErrors.governorate = "Required";
             if (!formData.city) newErrors.city = "Required";
         }
         if (step === 2) {
-            if (!formData.idFront) newErrors.idFront = "ID (Front) is required";
-            if (!formData.profilePhoto) newErrors.profilePhoto = "Profile photo is required";
-        }
-        if (step === 3) {
             if (!formData.email.trim()) newErrors.email = "Required";
-            else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid Email";
+            else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid email";
             if (!formData.password) newErrors.password = "Required";
-            else if (formData.password.length < 8) newErrors.password = "Min 8 chars";
+            else if (formData.password.length < 8) newErrors.password = "Min 8 characters";
             if (!formData.confirmPassword) newErrors.confirmPassword = "Please confirm password";
-            else if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords mismatch";
+            else if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords do not match";
         }
-        if (Object.keys(newErrors).length > 0) { setErrors(newErrors); isValid = false; }
-        return isValid;
+        if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return false; }
+        return true;
     };
 
-    const handleNext = async () => { 
-        if (validateStep(currentStep)) {
-            if (currentStep < 3) setCurrentStep(prev => prev + 1); 
-            else {
-                try {
-                    setIsSubmitting(true);
-                    setFormError('');
-                    const payload = {
-                        username: `${formData.firstName}.${formData.lastName}`.toLowerCase().replace(/\s+/g, ""),
-                        email: formData.email,
-                        first_name: formData.firstName,
-                        last_name: formData.lastName,
-                        password: formData.password,
-                        phone_number: formData.phone,
-                        gender: mapGenderToBackend(formData.gender),
-                        date_of_birth: formData.dob,
-                        city: `${formData.city}, ${formData.governorate}`,
-                        role: "landlord",
-                    };
-                    await registerUser(payload);
-                    await updateMyProfile({
-                        city: `${formData.city}, ${formData.governorate}`,
-                        landlord_profile: {
-                            national_id: formData.nationalId,
-                        },
-                    });
-
-                    if (formData.profilePhoto) {
-                        const profilePayload = new FormData();
-                        profilePayload.append("profile_picture", formData.profilePhoto);
-                        await updateMyProfile(profilePayload);
-                    }
-
-                    if (formData.idFront) {
-                        const documentPayload = new FormData();
-                        documentPayload.append("doc_type", "national_id");
-                        documentPayload.append("file", formData.idFront);
-                        await uploadVerificationDocument(documentPayload);
-                    }
-
-                    navigate("/owner/overview");
-                } catch (error) {
-                    setFormError(getApiErrorMessage(error, "Registration failed"));
-                } finally {
-                    setIsSubmitting(false);
+    const handleApiError = (error) => {
+        const data = error?.data;
+        if (data && typeof data === 'object') {
+            for (const [backendKey, { field, step }] of Object.entries(FIELD_MAP)) {
+                if (data[backendKey]) {
+                    const msg = Array.isArray(data[backendKey]) ? data[backendKey][0] : String(data[backendKey]);
+                    setErrors({ [field]: msg });
+                    setCurrentStep(step);
+                    return;
                 }
             }
         }
+        setFormError(getApiErrorMessage(error, "Registration failed"));
     };
+
+    const handleNext = async () => {
+        if (!validateStep(currentStep)) return;
+        if (currentStep < 2) {
+            setCurrentStep(prev => prev + 1);
+        } else {
+            try {
+                setIsSubmitting(true);
+                setFormError('');
+                const payload = {
+                    username: formData.username,
+                    email: formData.email,
+                    first_name: formData.firstName,
+                    last_name: formData.lastName,
+                    password: formData.password,
+                    phone_number: formData.phone,
+                    gender: mapGenderToBackend(formData.gender),
+                    date_of_birth: formData.dob,
+                    city: formData.city,
+                    role: "landlord",
+                };
+                await registerUser(payload);
+                await updateMyProfile({
+                    city: formData.city,
+                    landlord_profile: { national_id: formData.nationalId },
+                });
+                navigate("/owner/overview");
+            } catch (error) {
+                handleApiError(error);
+            } finally {
+                setIsSubmitting(false);
+            }
+        }
+    };
+
     const handleBack = () => { setErrors({}); if (currentStep > 1) setCurrentStep(prev => prev - 1); };
 
     return (
         <div className="flex h-screen w-full bg-white overflow-hidden font-sans">
             <div className="w-full lg:w-[60%] flex flex-col h-full relative">
-                
-                {/* Header: زر العودة */}
+
                 <div className="px-12 md:px-20 pt-8 shrink-0">
-                     <button onClick={() => navigate(-1)} className={`text-gray-500 hover:text-[#1A56DB] transition-colors ${currentStep === 1 ? 'block' : 'invisible'}`}><ArrowLeft className="w-6 h-6" /></button>
+                    <button onClick={() => navigate(-1)} className={`text-gray-500 hover:text-[#1A56DB] transition-colors ${currentStep === 1 ? 'block' : 'invisible'}`}>
+                        <ArrowLeft className="w-6 h-6" />
+                    </button>
                 </div>
 
-                {/* Body: المحتوى */}
                 <div className="flex-1 flex flex-col justify-center px-12 md:px-20 overflow-y-auto custom-scrollbar">
                     <div className="w-full max-w-4xl mx-auto">
                         {formError && (
@@ -195,74 +218,72 @@ const LandlordRegister = () => {
                                 <span>{formError}</span>
                             </div>
                         )}
+
                         {currentStep === 1 && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
-                                <InputField label="First name" name="firstName" placeholder="Enter First name" value={formData.firstName} onChange={handleChange} error={errors.firstName} />
-                                <InputField label="Last name" name="lastName" placeholder="Enter Last name" value={formData.lastName} onChange={handleChange} error={errors.lastName} />
-                                <SelectField label="Gender" name="gender" placeholder="Select Gender" value={formData.gender} onChange={handleChange} options={["Male", "Female"]} error={errors.gender} />
-                                <InputField label="Phone" name="phone" placeholder="Enter Phone" value={formData.phone} onChange={handleChange} error={errors.phone} />
+                                <InputField label="First name" name="firstName" placeholder="Enter first name" value={formData.firstName} onChange={handleChange} error={errors.firstName} />
+                                <InputField label="Last name" name="lastName" placeholder="Enter last name" value={formData.lastName} onChange={handleChange} error={errors.lastName} />
+                                <div className="md:col-span-2">
+                                    <InputField label="Username" name="username" placeholder="e.g. john.doe" value={formData.username} onChange={handleChange} error={errors.username} />
+                                    <p className="mt-1 text-xs text-gray-400">Auto-generated from your name — you can change it.</p>
+                                </div>
+                                <SelectField label="Gender" name="gender" placeholder="Select gender" value={formData.gender} onChange={handleChange} options={["Male", "Female"]} error={errors.gender} />
+                                <PhoneField label="Phone" name="phone" value={formData.phone} onChange={handleChange} error={errors.phone} />
                                 <InputField label="Date of birth" name="dob" type="date" value={formData.dob} onChange={handleChange} error={errors.dob} />
-                                <InputField label="National ID" name="nationalId" placeholder="14 Digits ID" value={formData.nationalId} onChange={handleChange} maxLength={14} error={errors.nationalId} />
-                                <SelectField label="Governorate" name="governorate" placeholder="Select" value={formData.governorate} onChange={handleChange} options={Object.keys(egyptData)} error={errors.governorate} />
-                                <SelectField label="City" name="city" placeholder="Select" value={formData.city} onChange={handleChange} options={availableCities} disabled={!formData.governorate} error={errors.city} />
+                                <InputField label="National ID" name="nationalId" placeholder="14 digit national ID" value={formData.nationalId} onChange={handleChange} maxLength={14} error={errors.nationalId} />
+                                <SelectField label="City" name="city" placeholder="Select city" value={formData.city} onChange={handleChange} options={EGYPT_CITIES} error={errors.city} />
                             </div>
                         )}
+
                         {currentStep === 2 && (
-                            <div className="flex flex-col gap-8 animate-fadeIn">
-                                <FileField label="Upload ID (Front)" name="idFront" onChange={handleChange} error={errors.idFront} fileName={fileNames.idFront} />
-                                <FileField label="Upload Profile Photos" name="profilePhoto" onChange={handleChange} error={errors.profilePhoto} fileName={fileNames.profilePhoto} />
-                            </div>
-                        )}
-                        {currentStep === 3 && (
                             <div className="flex flex-col gap-6 animate-fadeIn">
-                                <InputField label="Email" name="email" type="email" placeholder="Enter Email" value={formData.email} onChange={handleChange} error={errors.email} />
-                                <InputField label="Password" name="password" type="password" placeholder="Enter Password" value={formData.password} onChange={handleChange} error={errors.password} />
-                                <InputField label="Confirm password" name="confirmPassword" type="password" placeholder="Confirm Password" value={formData.confirmPassword} onChange={handleChange} error={errors.confirmPassword} />
+                                <InputField label="Email" name="email" type="email" placeholder="Enter email" value={formData.email} onChange={handleChange} error={errors.email} />
+                                <InputField label="Password" name="password" type="password" placeholder="Enter password" value={formData.password} onChange={handleChange} error={errors.password} />
+                                <InputField label="Confirm password" name="confirmPassword" type="password" placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} error={errors.confirmPassword} />
                             </div>
                         )}
-                        
-                        {/* الأزرار */}
+
                         <div className="flex justify-between items-center mt-10 mb-2 w-full">
-                            <button onClick={handleBack} className={`flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-300 px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition ${currentStep === 1 ? 'invisible' : 'visible'}`}><ArrowLeft className="w-5 h-5" /> Back</button>
+                            <button onClick={handleBack} className={`flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-300 px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition ${currentStep === 1 ? 'invisible' : 'visible'}`}>
+                                <ArrowLeft className="w-5 h-5" /> Back
+                            </button>
                             <button
                                 onClick={handleNext}
                                 disabled={isSubmitting}
-                                className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                                className="flex items-center gap-2 bg-[#1A56DB] text-white px-10 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
                             >
-                                {currentStep === 3 ? (isSubmitting ? "Creating..." : "Create Account") : "NEXT"} <ChevronRight className="w-5 h-5" />
+                                {currentStep === 2 ? (isSubmitting ? "Creating..." : "Create Account") : "Next"} <ChevronRight className="w-5 h-5" />
                             </button>
                         </div>
                     </div>
                 </div>
 
-                {/* Footer: شريط التقدم */}
+                {/* Step indicator — 2 steps */}
                 <div className="px-12 md:px-20 pb-8 pt-2 bg-white shrink-0">
                     <div className="flex items-center justify-center w-full mt-2">
-                        <div className="flex items-center w-full max-w-lg relative">
+                        <div className="flex items-center w-full max-w-xs relative">
                             <div className="flex flex-col items-center relative z-10">
-                                <div className={`w-4 h-4 rounded-full flex items-center justify-center transition-all duration-300 ${currentStep > 1 ? 'bg-[#1A56DB]' : 'border-2 border-[#1A56DB] bg-white'}`}>{currentStep > 1 ? <Check className="w-3 h-3 text-white" /> : <div className="w-2 h-2 rounded-full bg-[#1A56DB]"></div>}</div>
-                                <span className="absolute -bottom-6 text-[10px] font-bold text-[#1A56DB]">Basic Information</span>
+                                <div className={`w-4 h-4 rounded-full flex items-center justify-center transition-all duration-300 ${currentStep > 1 ? 'bg-[#1A56DB]' : 'border-2 border-[#1A56DB] bg-white'}`}>
+                                    {currentStep > 1 ? <Check className="w-3 h-3 text-white" /> : <div className="w-2 h-2 rounded-full bg-[#1A56DB]" />}
+                                </div>
+                                <span className="absolute -bottom-6 text-[10px] font-bold text-[#1A56DB] whitespace-nowrap">Basic Information</span>
                             </div>
-                            <div className={`h-[1px] flex-1 mx-2 ${currentStep > 1 ? 'bg-[#1A56DB]' : 'bg-gray-300'}`}></div>
+                            <div className={`h-[1px] flex-1 mx-2 ${currentStep > 1 ? 'bg-[#1A56DB]' : 'bg-gray-300'}`} />
                             <div className="flex flex-col items-center relative z-10">
-                                <div className={`w-3 h-3 rounded-full flex items-center justify-center transition-all duration-300 ${currentStep > 2 ? 'bg-[#1A56DB]' : (currentStep === 2 ? 'w-4 h-4 border-2 border-[#1A56DB] bg-white' : 'bg-gray-300')}`}>{currentStep > 2 ? <Check className="w-2 h-2 text-white" /> : (currentStep === 2 && <div className="w-2 h-2 rounded-full bg-[#1A56DB]"></div>)}</div>
-                                <span className={`absolute -bottom-6 text-[10px] font-bold ${currentStep >= 2 ? 'text-[#1A56DB]' : 'text-gray-400'}`}>Documents</span>
-                            </div>
-                            <div className={`h-[1px] flex-1 mx-2 ${currentStep > 2 ? 'bg-[#1A56DB]' : 'bg-gray-300'}`}></div>
-                            <div className="flex flex-col items-center relative z-10">
-                                <div className={`w-3 h-3 rounded-full flex items-center justify-center transition-all duration-300 ${currentStep === 3 ? 'w-4 h-4 border-2 border-[#1A56DB] bg-white' : 'bg-gray-300'}`}>{currentStep === 3 && <div className="w-2 h-2 rounded-full bg-[#1A56DB]"></div>}</div>
-                                <span className={`absolute -bottom-6 text-[10px] font-bold ${currentStep === 3 ? 'text-[#1A56DB]' : 'text-gray-400'}`}>Password</span>
+                                <div className={`w-3 h-3 rounded-full flex items-center justify-center transition-all duration-300 ${currentStep === 2 ? 'w-4 h-4 border-2 border-[#1A56DB] bg-white' : 'bg-gray-300'}`}>
+                                    {currentStep === 2 && <div className="w-2 h-2 rounded-full bg-[#1A56DB]" />}
+                                </div>
+                                <span className={`absolute -bottom-6 text-[10px] font-bold whitespace-nowrap ${currentStep === 2 ? 'text-[#1A56DB]' : 'text-gray-400'}`}>Password</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* اليمين: صورة المالك */}
             <div className="hidden lg:flex w-[40%] bg-[#3245FF] relative items-center justify-center overflow-hidden">
                 <div className="absolute inset-0 opacity-20"><svg viewBox="0 0 500 500" className="w-full h-full"><path d="M0,100 C150,200 350,0 500,100 L500,500 L0,500 Z" fill="white" /></svg></div>
                 <div className="relative z-10 w-[80%] h-[75%]">
-                    <div className="absolute inset-0 bg-white/10 backdrop-blur-md rounded-[45px] border border-white/20"></div>
+                    <div className="absolute inset-0 bg-white/10 backdrop-blur-md rounded-[45px] border border-white/20" />
                     <div className="absolute top-12 left-10 z-30 max-w-[250px]">
                         <h2 className="text-2xl font-bold text-white mb-4">Create Landlord Account</h2>
                         <p className="text-sm text-blue-100/80 leading-relaxed">Provide your details to list and manage your properties.</p>

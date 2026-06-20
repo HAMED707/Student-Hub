@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework import status
-from django.db.models import Count, Q
+from django.db.models import Avg, Count, Prefetch, Q
 from properties.models import Property, PropertyImage, University
 from api.accounts_api.permissions import IsLandlord
 from api.properties_api.serializers import (
@@ -26,22 +26,27 @@ from api.properties_api.serializers import (
     UniversitySerializer,
 )
 
-import logging
-
-from services.google_maps import (
-    get_distance_to_university,
-    GoogleMapsError,
-)
-
-logger = logging.getLogger(__name__)
-
-TRANSPORT_TO_MODE = {
-    "walk": "walking",
-    "metro": "transit",
-    "transport": "transit",
-}
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def property_list_queryset():
+    """Load everything PropertyListSerializer needs in a fixed query count."""
+    return (
+        Property.objects
+        .select_related("landlord", "city")
+        .prefetch_related(
+            "images",
+            Prefetch(
+                "nearby_universities",
+                queryset=University.objects.select_related("city"),
+            ),
+            "transport_types",
+        )
+        .annotate(
+            list_average_rating=Avg("reviews__rating"),
+            list_review_count=Count("reviews", distinct=True),
+        )
+    )
+
 
 def apply_filters(queryset, params):
     """
@@ -116,13 +121,19 @@ class PropertyListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get(self, request):
-        queryset = Property.objects.select_related("landlord").prefetch_related("images")
+        queryset = property_list_queryset()
 
         # Default to available only — frontend can pass status=rented to override
         if not request.query_params.get("status"):
             queryset = queryset.filter(status="available")
 
         queryset = apply_filters(queryset, request.query_params)
+        try:
+            limit = min(max(int(request.query_params.get("limit", 0)), 0), 100)
+        except (TypeError, ValueError):
+            limit = 0
+        if limit:
+            queryset = queryset[:limit]
         serializer = PropertyListSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -137,10 +148,8 @@ class FeaturedPropertiesView(APIView):
 
     def get(self, request):
         queryset = (
-            Property.objects
+            property_list_queryset()
             .filter(is_featured=True, status="available")
-            .select_related("landlord")
-            .prefetch_related("images")
         )
         serializer = PropertyListSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -156,12 +165,10 @@ class UniversityPropertiesView(APIView):
 
     def get(self, request):
         queryset = (
-            Property.objects
+            property_list_queryset()
             .filter(status="available")
             .exclude(nearby_universities__isnull=True)
             .distinct()
-            .select_related("landlord")
-            .prefetch_related("images")
         )
         queryset = apply_filters(queryset, request.query_params)
         serializer = PropertyListSerializer(queryset, many=True, context={"request": request})
@@ -200,8 +207,16 @@ class PropertyDetailView(APIView):
         try:
             prop = (
                 Property.objects
-                .select_related("landlord")
-                .prefetch_related("images")
+                .select_related("landlord", "city")
+                .prefetch_related(
+                    "images",
+                    Prefetch(
+                        "nearby_universities",
+                        queryset=University.objects.select_related("city"),
+                    ),
+                    "transport_types",
+                    "reviews",
+                )
                 .get(id=property_id)
             )
         except Property.DoesNotExist:
@@ -210,38 +225,11 @@ class PropertyDetailView(APIView):
         # NOTE: use F() to avoid race conditions if we ever add concurrency
         from django.db.models import F
         Property.objects.filter(id=property_id).update(view_count=F("view_count") + 1)
-        prop.refresh_from_db(fields=["view_count"])
-
-        university_distance = None
-        nearest_university = prop.nearby_universities.first()
-
-        if prop.latitude and prop.longitude and nearest_university:
-            first_transport = prop.transport_types.first()
-            mode = TRANSPORT_TO_MODE.get(
-                first_transport.name if first_transport else None,
-                "walking"
-            )
-
-            try:
-                university_distance = get_distance_to_university(
-                    origin_lat=float(prop.latitude),
-                    origin_lng=float(prop.longitude),
-                    destination=nearest_university.name,
-                    mode=mode,
-                )
-            except GoogleMapsError as exc:
-                logger.warning(
-                    "Distance Matrix failed for property %s: %s",
-                    property_id,
-                    exc,
-                )
+        prop.view_count += 1
 
         serializer = PropertySerializer(
             prop,
-            context={
-                "request": request,
-                "university_distance": university_distance,
-            },
+            context={"request": request},
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -278,7 +266,18 @@ class PropertyCreateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        serializer = PropertyCreateSerializer(data=request.data)
+        serializer_data = request.data
+        if hasattr(request.data, "getlist"):
+            # Convert multipart QueryDict values to ordinary Python lists. DRF's
+            # ListField otherwise treats repeated file keys like a single HTML
+            # input and can drop all but one selected image.
+            serializer_data = request.data.dict()
+            for field_name in ("nearby_universities", "transport_types", "uploaded_images"):
+                values = request.data.getlist(field_name)
+                if values:
+                    serializer_data[field_name] = values
+
+        serializer = PropertyCreateSerializer(data=serializer_data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

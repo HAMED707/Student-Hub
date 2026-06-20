@@ -114,6 +114,25 @@ class MessageView(APIView):
         )
         conv.touch()
 
+        # Push to chat WebSocket group so both participants see it in real-time
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                f"chat_{conv.id}",
+                {
+                    "type": "chat_message",
+                    "conversation_id": conv.id,
+                    "id": message.id,
+                    "sender": request.user.id,
+                    "sender_name": request.user.get_full_name(),
+                    "body": message.body,
+                    "is_read": message.is_read,
+                    "created_at": message.created_at.isoformat(),
+                },
+            )
+
         return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
 

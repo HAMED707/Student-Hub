@@ -93,6 +93,7 @@ class Property(models.Model):
     GENDER_CHOICES = [
         ("male", "Males Only"),
         ("female", "Females Only"),
+        ("any", "Any Gender"),
     ]
 
     # ── Ownership ────────────────────────────────────────────

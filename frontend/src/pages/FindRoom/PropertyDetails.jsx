@@ -272,6 +272,25 @@ const SERVICE_CATEGORIES = [
 
 function NearbyMapController({ activePlace, propertyCenter }) {
   const map = useMap();
+
+  useEffect(() => {
+    const resizeMap = () => map.invalidateSize({ pan: false });
+    const frame = window.requestAnimationFrame(resizeMap);
+    const container = map.getContainer();
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(resizeMap)
+      : null;
+
+    observer?.observe(container);
+    window.addEventListener("resize", resizeMap);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener("resize", resizeMap);
+    };
+  }, [map]);
+
   useEffect(() => {
     if (activePlace) {
       map.flyTo([activePlace.lat, activePlace.lng], 16, { animate: true, duration: 1 });
@@ -472,10 +491,11 @@ const PropertyDetails = () => {
   const [bookingError, setBookingError] = useState("");
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
   const [paymentLaunchUrl, setPaymentLaunchUrl] = useState("");
-  const [createdBookingId, setCreatedBookingId] = useState(null);
   const { favoriteIdSet, toggleFavorite } = useFavorites();
   const similarScrollRef = useRef(null);
   const sectionRefs = useRef({});
+  const tabScrollLockRef = useRef(null);
+  const tabScrollTimerRef = useRef(null);
   const bookingCardRef = useRef(null);
   const [showBookingCta, setShowBookingCta] = useState(false);
 
@@ -505,24 +525,31 @@ const PropertyDetails = () => {
 
     try {
       const detail = await fetchPropertyDetail(id);
-      const reviewsPayload = await fetchPropertyReviews(id).catch(() => null);
+      setDynamicProperty(normalizePropertyDetail(detail, null));
+      setIsLoading(false);
 
-      setDynamicProperty(normalizePropertyDetail(detail, reviewsPayload));
+      fetchPropertyReviews(id)
+        .then((reviewsPayload) => {
+          setDynamicProperty(normalizePropertyDetail(detail, reviewsPayload));
+        })
+        .catch(() => {});
 
       const firstUni = Array.isArray(detail.nearby_universities) ? detail.nearby_universities[0]?.name : null;
-      const similar = await fetchProperties({
+      fetchProperties({
         city: detail.city,
         university: firstUni,
         status: "available",
-      }).catch(() => []);
-
-      if (Array.isArray(similar)) {
-        const normalized = similar
-          .filter((p) => p.id !== detail.id)
-          .slice(0, 4)
-          .map(normalizePropertyCard);
-        if (normalized.length > 0) setLiveSimilarProperties(normalized);
-      }
+        limit: 5,
+      })
+        .then((similar) => {
+          if (!Array.isArray(similar)) return;
+          const normalized = similar
+            .filter((p) => p.id !== detail.id)
+            .slice(0, 4)
+            .map(normalizePropertyCard);
+          if (normalized.length > 0) setLiveSimilarProperties(normalized);
+        })
+        .catch(() => {});
     } catch (error) {
       if (error?.response?.status === 404) {
         setNotFound(true);
@@ -599,7 +626,9 @@ const PropertyDetails = () => {
   );
 
   useEffect(() => {
-    if (!currentProperty.lat) return;
+    // Do not query nearby services for the hard-coded fallback coordinates while
+    // the real property is still loading.
+    if (!dynamicProperty || !currentProperty.lat) return;
     const lat = userCoords?.lat ?? currentProperty.lat;
     const lng = userCoords?.lng ?? currentProperty.lng;
     setServiceLoading(true);
@@ -615,7 +644,7 @@ const PropertyDetails = () => {
         setServiceError(err.message || "Unable to load nearby services.");
       })
       .finally(() => setServiceLoading(false));
-  }, [serviceCategory, currentProperty.lat, currentProperty.lng, userCoords]);
+  }, [serviceCategory, currentProperty.lat, currentProperty.lng, dynamicProperty, userCoords]);
 
   // ── Memos ──
   const availableRooms = useMemo(
@@ -661,18 +690,6 @@ const PropertyDetails = () => {
 
   const selectedRoom = currentProperty.rooms.find((r) => r.id === bookingData.selectedRoomId);
 
-  const highlights = useMemo(
-    () => [
-      { label: "Distance to University", value: currentProperty.distance, icon: Clock },
-      { label: "Available Rooms", value: `${availableRooms.length} options`, icon: Bed },
-      { label: "High-speed WiFi", value: "Included", icon: Wifi },
-      { label: "Security", value: "Secure access", icon: ShieldCheck },
-      { label: "Furnished", value: "Move-in ready", icon: Home },
-      { label: "Utilities", value: "Mostly included", icon: Zap },
-    ],
-    [availableRooms.length, currentProperty.distance],
-  );
-
   const tabs = useMemo(
     () => [
       { id: "details",    label: "Details" },
@@ -698,6 +715,7 @@ const PropertyDetails = () => {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
+        if (tabScrollLockRef.current) return;
         const visible = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
@@ -711,6 +729,10 @@ const PropertyDetails = () => {
     });
     return () => observer.disconnect();
   }, [tabs]);
+
+  useEffect(() => () => {
+    if (tabScrollTimerRef.current) window.clearTimeout(tabScrollTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const card = bookingCardRef.current;
@@ -735,8 +757,22 @@ const PropertyDetails = () => {
   );
 
   const scrollToSection = useCallback((sectionId) => {
+    const section = sectionRefs.current[sectionId];
+    if (!section) return;
+
     setActiveTab(sectionId);
-    sectionRefs.current[sectionId]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    tabScrollLockRef.current = sectionId;
+
+    if (tabScrollTimerRef.current) window.clearTimeout(tabScrollTimerRef.current);
+
+    const stickyNavOffset = window.innerWidth < 640 ? 76 : 92;
+    const top = section.getBoundingClientRect().top + window.scrollY - stickyNavOffset;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+
+    tabScrollTimerRef.current = window.setTimeout(() => {
+      tabScrollLockRef.current = null;
+      setActiveTab(sectionId);
+    }, 700);
   }, []);
 
   const nextImage = useCallback(() => {
@@ -773,9 +809,8 @@ const PropertyDetails = () => {
       duration: "6",
     });
     setPaymentLaunchUrl("");
-    setCreatedBookingId(null);
     setIsBookingOpen(true);
-  }, [id, navigate, showNotice, currentProperty.bookingOptions]);
+  }, [id, navigate, showNotice, currentProperty.availableFrom, currentProperty.bookingOptions]);
 
   const updateBooking = useCallback((patch) => {
     if (bookingError) setBookingError("");
@@ -788,7 +823,6 @@ const PropertyDetails = () => {
       setIsSubmittingBooking(true);
       setBookingError("");
       setPaymentLaunchUrl("");
-      setCreatedBookingId(null);
 
       // Step 1 — create the booking
       const createdBooking = await createBooking({
@@ -802,7 +836,6 @@ const PropertyDetails = () => {
           bookingData.selectedBedId ? `Bed: ${bookingData.selectedBedId}` : null,
         ].filter(Boolean).join(" | "),
       });
-      setCreatedBookingId(createdBooking.id);
       setBookingStep(4); // show "redirecting…" screen
 
       // Step 2 — get Stripe checkout URL
@@ -901,12 +934,14 @@ const PropertyDetails = () => {
   if (notFound) return <NotFoundState navigate={navigate} />;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-[#091E42]">
+    <div className="min-h-screen overflow-x-clip bg-[#F8FAFC] font-sans text-[#091E42]">
       <style>{`
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeInUp .4s ease-out both; }
         .details-map .leaflet-container { width: 100%; height: 100%; border-radius: 18px; z-index: 1; }
         .nearby-map .leaflet-container { width: 100%; height: 100%; border-radius: 18px; z-index: 1; }
+        .nearby-map .leaflet-control-attribution { max-width: 78%; white-space: normal; font-size: 8px; line-height: 1.2; }
+        .nearby-map .leaflet-popup-content { max-width: min(220px, calc(100vw - 5rem)); margin: 12px 16px; overflow-wrap: anywhere; }
         .details-map-pin {
           width: 38px; height: 38px; border-radius: 999px; border: 4px solid white;
           box-shadow: 0 14px 28px rgba(9, 30, 66, .24); display: grid; place-items: center;
@@ -1007,8 +1042,12 @@ const PropertyDetails = () => {
 
             <div className="mt-4 space-y-3 rounded-2xl bg-[#F8FAFC] p-4 text-sm font-bold text-slate-600">
               <p className="flex justify-between">
-                <span>Deposit (1 month)</span>
-                <strong className="text-[#091E42]">EGP {activeBookingOption.price.toLocaleString()}</strong>
+                <span>Deposit (20%)</span>
+                <strong className="text-[#091E42]">EGP {Math.round(activeBookingOption.price * 0.2).toLocaleString()}</strong>
+              </p>
+              <p className="flex justify-between text-slate-400">
+                <span>Remaining (80%)</span>
+                <span>EGP {Math.round(activeBookingOption.price * 0.8).toLocaleString()}</span>
               </p>
               <p className="flex justify-between">
                 <span>Available From</span>
@@ -1099,6 +1138,7 @@ const PropertyDetails = () => {
                   key={tab.id}
                   type="button"
                   onClick={() => scrollToSection(tab.id)}
+                  aria-current={activeTab === tab.id ? "page" : undefined}
                   className={`h-9 shrink-0 rounded-xl px-4 text-xs font-black transition active:scale-95 sm:text-sm ${
                     activeTab === tab.id
                       ? "bg-[#155BC2] text-white shadow-sm"
@@ -1135,13 +1175,13 @@ const PropertyDetails = () => {
                   <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Property</p>
                   <ul className="space-y-1.5">
                     {[
-                      { label: "Type",   value: PROPERTY_TYPE_LABELS[currentProperty.propertyType] || currentProperty.propertyType || "—", Icon: Building2 },
-                      { label: "Floor",  value: currentProperty.floor != null ? `Floor ${currentProperty.floor}` : "Ground", Icon: Home },
-                      { label: "Area",   value: currentProperty.areaSqm ? `${currentProperty.areaSqm} m²` : "—", Icon: Ruler },
-                      { label: "Gender", value: GENDER_LABELS[currentProperty.genderPreference] || "Any", Icon: Users2 },
-                    ].map(({ label, value, Icon }) => (
+                      { label: "Type",   value: PROPERTY_TYPE_LABELS[currentProperty.propertyType] || currentProperty.propertyType || "—", icon: Building2 },
+                      { label: "Floor",  value: currentProperty.floor != null ? `Floor ${currentProperty.floor}` : "Ground", icon: Home },
+                      { label: "Area",   value: currentProperty.areaSqm ? `${currentProperty.areaSqm} m²` : "—", icon: Ruler },
+                      { label: "Gender", value: GENDER_LABELS[currentProperty.genderPreference] || "Any", icon: Users2 },
+                    ].map(({ label, value, icon }) => (
                       <li key={label} className="flex items-center gap-2">
-                        <Icon className="h-3.5 w-3.5 shrink-0 text-[#155BC2]" />
+                        {React.createElement(icon, { className: "h-3.5 w-3.5 shrink-0 text-[#155BC2]" })}
                         <span className="text-xs text-slate-500">{label}:</span>
                         <span className="text-xs font-bold text-[#091E42]">{value}</span>
                       </li>
@@ -1154,12 +1194,12 @@ const PropertyDetails = () => {
                   <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Rooms</p>
                   <ul className="space-y-1.5">
                     {[
-                      { label: "Rooms",     value: `${currentProperty.numRooms || currentProperty.rooms.length}`, Icon: Bed },
-                      { label: "Beds",      value: `${currentProperty.numBeds || currentProperty.rooms.reduce((s, r) => s + r.beds.length, 0)}`, Icon: Bed },
-                      { label: "Bathrooms", value: `${currentProperty.numBathrooms || 1}`, Icon: Bath },
-                    ].map(({ label, value, Icon }) => (
+                      { label: "Rooms",     value: `${currentProperty.numRooms || currentProperty.rooms.length}`, icon: Bed },
+                      { label: "Beds",      value: `${currentProperty.numBeds || currentProperty.rooms.reduce((s, r) => s + r.beds.length, 0)}`, icon: Bed },
+                      { label: "Bathrooms", value: `${currentProperty.numBathrooms || 1}`, icon: Bath },
+                    ].map(({ label, value, icon }) => (
                       <li key={label} className="flex items-center gap-2">
-                        <Icon className="h-3.5 w-3.5 shrink-0 text-[#155BC2]" />
+                        {React.createElement(icon, { className: "h-3.5 w-3.5 shrink-0 text-[#155BC2]" })}
                         <span className="text-xs text-slate-500">{label}:</span>
                         <span className="text-xs font-bold text-[#091E42]">{value}</span>
                       </li>
@@ -1172,13 +1212,13 @@ const PropertyDetails = () => {
                   <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Location & Stay</p>
                   <ul className="space-y-1.5">
                     {[
-                      { label: "University", value: currentProperty.nearbyUniversity || "—", Icon: GraduationCap },
-                      { label: "Distance",   value: currentProperty.distanceToUniversity || currentProperty.distance || "—", Icon: Clock },
-                      { label: "Min stay",   value: `${currentProperty.minStayMonths || 1} mo`, Icon: CalendarDays },
-                      { label: "Max stay",   value: currentProperty.maxStayMonths ? `${currentProperty.maxStayMonths} mo` : "Flexible", Icon: CalendarDays },
-                    ].map(({ label, value, Icon }) => (
+                      { label: "University", value: currentProperty.nearbyUniversity || "—", icon: GraduationCap },
+                      { label: "Distance",   value: currentProperty.distanceToUniversity || currentProperty.distance || "—", icon: Clock },
+                      { label: "Min stay",   value: `${currentProperty.minStayMonths || 1} mo`, icon: CalendarDays },
+                      { label: "Max stay",   value: currentProperty.maxStayMonths ? `${currentProperty.maxStayMonths} mo` : "Flexible", icon: CalendarDays },
+                    ].map(({ label, value, icon }) => (
                       <li key={label} className="flex items-center gap-2">
-                        <Icon className="h-3.5 w-3.5 shrink-0 text-[#155BC2]" />
+                        {React.createElement(icon, { className: "h-3.5 w-3.5 shrink-0 text-[#155BC2]" })}
                         <span className="text-xs text-slate-500">{label}:</span>
                         <span className="text-xs font-bold text-[#091E42]">{value}</span>
                       </li>
@@ -1232,11 +1272,11 @@ const PropertyDetails = () => {
             <SectionTitle title="Location & nearby services" subtitle="Explore the property location and find essential spots around your accommodation." />
 
             {/* Controls */}
-            <div className="mb-4 flex flex-wrap gap-2">
+            <div className="mb-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
               <button
                 type="button"
                 onClick={handleUseMyLocation}
-                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-bold transition active:scale-95 ${
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-sm font-bold transition active:scale-95 sm:w-auto ${
                   userCoords
                     ? "border-[#155BC2] bg-[#155BC2] text-white"
                     : "border-slate-200 bg-white text-slate-700 hover:border-[#155BC2] hover:text-[#155BC2]"
@@ -1248,14 +1288,14 @@ const PropertyDetails = () => {
               <button
                 type="button"
                 onClick={handleGetDirections}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-[#155BC2] hover:text-[#155BC2] active:scale-95"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-[#155BC2] hover:text-[#155BC2] active:scale-95 sm:w-auto"
               >
                 <Navigation className="h-4 w-4" /> Get Directions to Property
               </button>
               <button
                 type="button"
                 onClick={openGoogleMaps}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-[#155BC2] hover:text-[#155BC2] active:scale-95"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-[#155BC2] hover:text-[#155BC2] active:scale-95 sm:w-auto"
               >
                 <ExternalLink className="h-4 w-4" /> Open in Google Maps
               </button>
@@ -1284,10 +1324,10 @@ const PropertyDetails = () => {
             </div>
 
             {/* Map + places list */}
-            <div className="grid gap-4 lg:grid-cols-[2fr_1fr]" style={{ height: "520px" }}>
+            <div className="grid min-w-0 gap-4 lg:h-[520px] lg:grid-cols-[2fr_1fr]">
 
               {/* Map */}
-              <div className="nearby-map overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div className="nearby-map h-[340px] min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:h-[420px] sm:rounded-3xl lg:h-full">
                 <MapContainer
                   center={propertyCenter}
                   zoom={14}
@@ -1330,7 +1370,7 @@ const PropertyDetails = () => {
               </div>
 
               {/* Places list */}
-              <div className="flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex h-[360px] min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:h-[420px] sm:rounded-3xl lg:h-full">
                 {/* Search */}
                 <div className="border-b border-slate-100 p-4">
                   <div className="relative">
@@ -1340,7 +1380,7 @@ const PropertyDetails = () => {
                       value={serviceSearch}
                       onChange={(e) => setServiceSearch(e.target.value)}
                       placeholder="Find a place..."
-                      className="w-full rounded-2xl bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-2xl bg-slate-50 py-2.5 pl-10 pr-4 text-base font-semibold text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 sm:text-sm"
                     />
                   </div>
                 </div>
@@ -1550,7 +1590,7 @@ const PropertyDetails = () => {
                         <div className="mt-2 flex flex-wrap gap-2">
                           <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#155BC2]">{activeBookingOption.label}</span>
                           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">EGP {activeBookingOption.price.toLocaleString()}/mo</span>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">Deposit: EGP {activeBookingOption.price.toLocaleString()}</span>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">Deposit (20%): EGP {Math.round(activeBookingOption.price * 0.2).toLocaleString()}</span>
                         </div>
                       </div>
                     </div>

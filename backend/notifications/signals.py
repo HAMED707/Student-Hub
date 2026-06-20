@@ -2,6 +2,8 @@
 notifications/signals.py
 """
 
+import logging
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from asgiref.sync import async_to_sync
@@ -15,11 +17,14 @@ from messaging.models import Message
 from api.notifications_api.serializers import NotificationSerializer
 from notifications.services import push_notification
 
+logger = logging.getLogger(__name__)
+
 
 def _broadcast(notification):
     """
     After saving a notification to DB, push it live to the user's
     personal WebSocket group: notifications_<user_id>
+    Errors here are non-fatal — the notification is already persisted in DB.
     """
     channel_layer = get_channel_layer()
     if channel_layer is None:
@@ -27,13 +32,20 @@ def _broadcast(notification):
 
     payload = NotificationSerializer(notification).data
 
-    async_to_sync(channel_layer.group_send)(
-        f"notifications_{notification.recipient.id}",
-        {
-            "type": "notify",  # maps to NotificationConsumer.notify()
-            **payload,
-        },
-    )
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"notifications_{notification.recipient.id}",
+            {
+                "type": "notify",  # maps to NotificationConsumer.notify()
+                **payload,
+            },
+        )
+    except Exception:
+        logger.exception(
+            "Failed to broadcast notification %s to user %s — notification is in DB, real-time delivery skipped",
+            notification.id,
+            notification.recipient.id,
+        )
 
 
 # ── Accounts: welcome ─────────────────────────────────────────────────────────
@@ -73,33 +85,49 @@ def booking_notification(sender, instance, created, **kwargs):
         _broadcast(n)
         return
 
-    STATUS_MESSAGES = {
-        "paid":      ("Payment Received 💰",  f"Payment confirmed for '{property_title}'. Check in to release funds to the landlord."),
+    TENANT_MESSAGES = {
+        "paid":      ("Payment Received 💰",  f"Your deposit for '{property_title}' has been confirmed. The landlord will scan your QR code to complete check-in."),
         "finished":  ("Stay Completed 🏁",    f"Your stay at '{property_title}' has been marked as completed."),
         "cancelled": ("Booking Cancelled",    f"Your booking for '{property_title}' has been cancelled."),
     }
 
-    if instance.status not in STATUS_MESSAGES:
+    LANDLORD_MESSAGES = {
+        "paid":      ("Deposit Received 💰",  f"{instance.tenant.username} paid the deposit for '{property_title}'. Scan their QR code to confirm check-in."),
+        "cancelled": ("Booking Cancelled",    f"{instance.tenant.username}'s booking for '{property_title}' has been cancelled."),
+    }
+
+    if instance.status not in TENANT_MESSAGES:
         return
 
-    title, message = STATUS_MESSAGES[instance.status]
+    shared_data = {
+        "booking_id":     instance.id,
+        "property_id":    instance.property.id,
+        "property_title": property_title,
+        "new_status":     instance.status,
+    }
 
-    recipient = instance.tenant
-
+    title, message = TENANT_MESSAGES[instance.status]
     n = push_notification(
-        recipient=recipient,
+        recipient=instance.tenant,
         actor=instance.property.landlord,
         notification_type="booking_update",
         title=title,
         message=message,
-        data={
-            "booking_id":     instance.id,
-            "property_id":    instance.property.id,
-            "property_title": property_title,
-            "new_status":     instance.status,
-        },
+        data=shared_data,
     )
     _broadcast(n)
+
+    if instance.status in LANDLORD_MESSAGES:
+        landlord_title, landlord_message = LANDLORD_MESSAGES[instance.status]
+        ln = push_notification(
+            recipient=instance.property.landlord,
+            actor=instance.tenant,
+            notification_type="booking_update",
+            title=landlord_title,
+            message=landlord_message,
+            data=shared_data,
+        )
+        _broadcast(ln)
 
 
 # ── Reviews ───────────────────────────────────────────────────────────────────

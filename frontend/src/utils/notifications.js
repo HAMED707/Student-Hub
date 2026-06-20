@@ -32,7 +32,8 @@ export const getNotificationTone = (notificationType = "") => {
   if (notificationType.includes("booking")) return "warning";
   if (notificationType.includes("message")) return "info";
   if (notificationType.includes("review")) return "info";
-  return "info";
+  if (notificationType.includes("roommate")) return "info";
+  return "system"; // welcome, system → ShieldCheck icon
 };
 
 export const mapNotification = (raw = {}) => {

@@ -25,7 +25,7 @@ export function NotificationsProvider({ children }) {
   const [authState, setAuthState] = useState(() => getAuthSnapshot());
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [connectionState, setConnectionState] = useState("idle");
   const [latestNotification, setLatestNotification] = useState(null);
@@ -185,9 +185,7 @@ export function NotificationsProvider({ children }) {
       };
 
       socket.onerror = () => {
-        if (!isCancelled && socket.readyState === WebSocket.OPEN) {
-          setConnectionState("degraded");
-        }
+        // onclose fires immediately after every error and owns reconnect/degraded logic
       };
     };
 

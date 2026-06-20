@@ -311,9 +311,7 @@ export function useMessagingInbox(routeState) {
       };
 
       socket.onerror = () => {
-        if (!isCancelled && socket.readyState === WebSocket.OPEN) {
-          setConnectionState("degraded");
-        }
+        // onclose fires immediately after every error; reconnect logic lives there
       };
     };
 
@@ -337,13 +335,21 @@ export function useMessagingInbox(routeState) {
     if (latestNotification?.notificationType !== "new_message") return;
 
     const conversationId = String(latestNotification.data?.conversation_id || "");
-    if (!conversationId || conversationId === activeConversationIdRef.current) return;
+    if (!conversationId) return;
 
-    refreshConversations();
+    if (conversationId === activeConversationIdRef.current) {
+      // Active conversation: reload history as a reliable fallback in case the
+      // chat WebSocket hadn't delivered the message yet (REST-sent messages,
+      // brief WS reconnect window, etc.). Idempotent — overwrites same state.
+      loadConversationHistory(conversationId);
+    } else {
+      refreshConversations();
+    }
   }, [
     latestNotification?.data?.conversation_id,
     latestNotification?.id,
     latestNotification?.notificationType,
+    loadConversationHistory,
     refreshConversations,
   ]);
 

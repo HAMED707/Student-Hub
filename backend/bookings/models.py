@@ -47,10 +47,17 @@ class Booking(models.Model):
     message         = models.TextField(null=True, blank=True)
 
     # ── Financial Snapshot ────────────────────────────────────
+    # total_amount_cents  = deposit only (20% of unit price).
+    # remaining_amount_cents = the 80% balance, paid later if landlord requests.
     # Copied from property price at booking time; never changes even if
-    # the landlord later edits the listing. Commission split is computed
-    # on the Payout record at payout time, not here.
-    total_amount_cents = models.PositiveIntegerField()
+    # the landlord later edits the listing.
+    total_amount_cents      = models.PositiveIntegerField()
+    remaining_amount_cents  = models.PositiveIntegerField(default=0)
+
+    # Set to True by the landlord from the QR-scan success screen when they
+    # want the student to pay the remaining 80% on the platform.
+    remaining_payment_requested = models.BooleanField(default=False)
+    remaining_paid              = models.BooleanField(default=False)
 
     # ── Check-in / payout ─────────────────────────────────────
     qr_token    = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)

@@ -176,25 +176,27 @@ function CommentThread({ postId, commentCount, currentUser }) {
                     <span className="text-xs font-bold text-[#091E42]">{aName}</span>
                     <span className="text-xs text-slate-400">{formatCommunityRelative(c.created_at)}</span>
                   </div>
-                  <p className="text-sm text-slate-600 mt-0.5 leading-5">{c.text}</p>
+                  <p className="mt-0.5 break-words text-sm leading-5 text-slate-600">{c.text}</p>
                 </div>
               </div>
             );
           })}
-          <div className="flex gap-2 items-center">
-            <UserAvatar name={currentUser?.name || ""} src={avatarUrl(currentUser)} size={26} />
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-              placeholder={`Reply as ${currentUser?.name || "you"}…`}
-              className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-[#155BC2] bg-slate-50"
-            />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <UserAvatar name={currentUser?.name || ""} src={avatarUrl(currentUser)} size={26} />
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                placeholder={`Reply as ${currentUser?.name || "you"}…`}
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm outline-none focus:border-[#155BC2]"
+              />
+            </div>
             <button
               type="button"
               onClick={submit}
               disabled={submitting || !draft.trim()}
-              className="text-xs font-bold text-white bg-[#155BC2] rounded-xl px-3 py-1.5 disabled:opacity-40"
+              className="w-full rounded-xl bg-[#155BC2] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40 sm:w-auto"
             >
               Reply
             </button>
@@ -209,7 +211,7 @@ function CommentThread({ postId, commentCount, currentUser }) {
 
 function PostCard({ post, currentUser, onVote }) {
   return (
-    <article className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+    <article className="overflow-hidden rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:rounded-3xl sm:p-5">
       <div className="flex">
         <VoteRail
           score={post.voteScore}
@@ -219,16 +221,16 @@ function PostCard({ post, currentUser, onVote }) {
 
         <div className="flex-1 min-w-0">
           {post.title ? (
-            <h3 className="font-black text-[#091E42] text-base leading-snug mb-1">{post.title}</h3>
+            <h3 className="mb-1 break-words text-base font-black leading-snug text-[#091E42]">{post.title}</h3>
           ) : null}
 
-          <div className="flex items-center gap-2 mb-2">
+          <div className="mb-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <UserAvatar name={post.authorName} src={post.authorAvatar} size={22} />
-            <span className="text-xs font-semibold text-slate-500">{post.authorName}</span>
+            <span className="max-w-full truncate text-xs font-semibold text-slate-500">{post.authorName}</span>
             <span className="text-xs text-slate-400">· {post.createdAtLabel}</span>
           </div>
 
-          <p className="text-sm text-slate-700 leading-6 whitespace-pre-wrap">{post.content}</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{post.content}</p>
 
           {post.image ? (
             <img src={post.image} alt="Post" className="mt-3 rounded-2xl w-full object-cover max-h-64" />
@@ -280,7 +282,7 @@ function Composer({ group, currentUser, onSubmit }) {
   }
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-3xl sm:p-5">
       <input
         autoFocus
         value={title}
@@ -353,16 +355,16 @@ function GroupHeader({ group, onJoin, onLeave, joining, onOpenChat }) {
   if (!group) return null;
   return (
     <div className="mb-5">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:flex-wrap">
+        <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2">
             {group.categoryValue === "university" && (
               <GraduationCap size={18} className="text-[#155BC2] flex-shrink-0" />
             )}
-            <h1 className="text-xl font-black text-[#091E42] truncate">{group.name}</h1>
+            <h1 className="break-words text-lg font-black text-[#091E42] sm:truncate sm:text-xl">{group.name}</h1>
           </div>
           {group.description ? (
-            <p className="text-sm text-slate-500 mt-1 leading-5">{group.description}</p>
+            <p className="mt-1 break-words text-sm leading-5 text-slate-500">{group.description}</p>
           ) : null}
           <div className="flex items-center gap-1.5 mt-1 text-slate-400">
             <Users size={13} />
@@ -370,12 +372,12 @@ function GroupHeader({ group, onJoin, onLeave, joining, onOpenChat }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex w-full items-center gap-2 sm:w-auto sm:flex-shrink-0">
           {group.isMember && (
             <button
               type="button"
               onClick={onOpenChat}
-              className="flex items-center gap-1.5 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl px-3 py-2 hover:bg-slate-50 transition-colors"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 sm:flex-none"
             >
               <MessageCircle size={14} />
               Chat
@@ -385,7 +387,7 @@ function GroupHeader({ group, onJoin, onLeave, joining, onOpenChat }) {
             type="button"
             onClick={group.isMember ? onLeave : onJoin}
             disabled={joining}
-            className={`text-xs font-bold rounded-xl px-4 py-2 transition-colors disabled:opacity-40 ${
+            className={`flex-1 rounded-xl px-4 py-2 text-xs font-bold transition-colors disabled:opacity-40 sm:flex-none ${
               group.isMember
                 ? "bg-white border border-slate-200 text-slate-600 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600"
                 : "bg-[#155BC2] text-white hover:bg-[#1249a3]"
@@ -420,11 +422,11 @@ function NewGroupModal({ onClose, onCreate }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl p-6 w-[360px] shadow-xl"
+        className="w-full max-w-[360px] rounded-3xl bg-white p-4 shadow-xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
@@ -498,7 +500,7 @@ function Sidebar({ groups, selectedId, onSelect, onNewGroup }) {
   );
 
   return (
-    <aside className="w-60 flex-shrink-0 border-r border-slate-100 bg-white flex flex-col overflow-hidden">
+    <aside className="hidden w-60 flex-shrink-0 flex-col overflow-hidden border-r border-slate-100 bg-white lg:flex">
       <div className="px-4 py-4 border-b border-slate-100">
         <p className="text-xs font-black uppercase tracking-widest text-[#155BC2]">Community</p>
         <h2 className="mt-0.5 text-lg font-black text-[#091E42]">Groups</h2>
@@ -703,10 +705,10 @@ export default function Community() {
   const isFeedLoading = Boolean(loadingCatalog || loadingPostsByGroup[selectedGroupId]);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-[#091E42] flex flex-col">
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-slate-50 font-sans text-[#091E42]">
       <Navbar activePage="/community" />
 
-      <div className="flex flex-1 overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
+      <div className="flex min-h-0 flex-1 flex-col overflow-visible lg:flex-row lg:overflow-hidden">
         <Sidebar
           groups={allGroups}
           selectedId={selectedGroupId}
@@ -714,7 +716,33 @@ export default function Community() {
           onNewGroup={() => setShowNewGroup(true)}
         />
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <div className="sticky top-0 z-30 flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur lg:hidden">
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">Select community group</span>
+            <select
+              value={selectedGroupId}
+              onChange={(event) => setGroup(event.target.value, "feed")}
+              className="h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-[#091E42] outline-none focus:border-[#155BC2]"
+            >
+              {allGroups.length === 0 ? <option value="">No groups yet</option> : null}
+              {allGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name} ({group.memberCount})
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setShowNewGroup(true)}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#155BC2] text-white"
+            aria-label="Create a new group"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+
+        <main className="mx-auto w-full min-w-0 max-w-5xl flex-1 p-3 sm:p-5 lg:overflow-y-auto lg:p-6">
           {selectedGroup ? (
             <>
               <GroupHeader
@@ -726,8 +754,8 @@ export default function Community() {
               />
 
               {viewMode === "chat" ? (
-                <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden" style={{ height: "calc(100vh - 280px)" }}>
-                  <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+                <div className="h-[65dvh] min-h-[420px] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:rounded-3xl lg:h-[calc(100vh-280px)]">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-4">
                     <span className="text-sm font-bold text-slate-600">Group Chat</span>
                     <button
                       type="button"
@@ -752,7 +780,7 @@ export default function Community() {
                   onPost={handlePost}
                 />
               ) : (
-                <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center shadow-sm">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center shadow-sm sm:rounded-3xl sm:p-10">
                   <GraduationCap size={32} className="mx-auto text-slate-300 mb-3" />
                   <p className="text-slate-500 font-semibold mb-4">
                     Join this group to see posts and join the conversation.

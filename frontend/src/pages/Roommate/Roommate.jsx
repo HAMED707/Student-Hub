@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   Send,
   UserRound,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
@@ -46,7 +47,7 @@ const tabs = [
 ];
 
 const fieldClassName =
-  "mt-1 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#155BC2]";
+  "mt-1 block min-w-0 max-w-full w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-base outline-none focus:border-[#155BC2] sm:px-4 sm:text-sm";
 
 // ── Pure helpers ──────────────────────────────────────────────────────────
 
@@ -226,8 +227,8 @@ export default function Roommate() {
 
   // ── Data loading ────────────────────────────────────────────────────────
 
-  const loadRoommateData = async () => {
-    setLoading(true);
+  const loadRoommateData = async ({ showLoader = true } = {}) => {
+    if (showLoader) setLoading(true);
     setError("");
     setMatchesError("");
     try {
@@ -299,7 +300,7 @@ export default function Roommate() {
     } catch (err) {
       setError(err.message || "Unable to load roommate data.");
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
@@ -385,7 +386,7 @@ export default function Roommate() {
         message: requestMessage,
       });
       setRequestTarget(null);
-      await loadRoommateData();
+      await loadRoommateData({ showLoader: false });
       setActiveTab("requests");
     } catch (err) {
       setError(err.message || "Failed to send roommate request.");
@@ -458,7 +459,7 @@ export default function Roommate() {
       ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
-      await loadRoommateData();
+      await loadRoommateData({ showLoader: false });
     } catch (err) {
       setError(err.message || "Failed to save roommate profile.");
     } finally {
@@ -475,6 +476,30 @@ export default function Roommate() {
         receiverRole: "Student",
       }),
     });
+
+  const closeRoommateProfile = useCallback(() => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set("tab", "discover");
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    if (activeTab !== "profile") return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") closeRoommateProfile();
+    };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [activeTab, closeRoommateProfile]);
 
   // ── JSX ──────────────────────────────────────────────────────────────────
 
@@ -1062,12 +1087,40 @@ export default function Roommate() {
 
         {/* ══ PROFILE TAB ═════════════════════════════════════════ */}
         {!loading && activeTab === "profile" ? (
-          <Section
-            title="My Roommate Profile"
-            description="Keep your profile complete to get accurate match scores. Fields here also sync with your student profile."
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center overflow-hidden bg-slate-950/45 p-0 backdrop-blur-sm sm:p-4"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeRoommateProfile();
+            }}
           >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="roommate-profile-title"
+              className="flex h-[100dvh] min-h-0 w-full min-w-0 max-w-4xl flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl sm:border sm:border-slate-100"
+            >
+              <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:gap-4 sm:px-6 sm:py-4">
+                <div className="min-w-0">
+                  <h2 id="roommate-profile-title" className="text-base font-black text-[#091E42] sm:text-lg">
+                    My Roommate Profile
+                  </h2>
+                  <p className="mt-1 text-xs leading-4 text-slate-500 sm:text-sm sm:leading-5">
+                    Keep your profile complete to get accurate match scores. Fields here also sync with your student profile.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeRoommateProfile}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+                  aria-label="Close roommate profile"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </header>
+
+              <div className="min-h-0 min-w-0 flex-1 overscroll-contain overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-6 sm:py-5">
             {/* Completeness bar */}
-            <div className="mb-6 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:mb-6 sm:p-4">
               <div className="mb-2 flex items-center justify-between text-sm">
                 <span className="font-bold text-slate-600">Profile completeness</span>
                 <span
@@ -1097,8 +1150,8 @@ export default function Roommate() {
             </div>
 
             {/* Visibility toggle */}
-            <div className="mb-6 flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-              <div>
+            <div className="mb-5 flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 sm:mb-6 sm:px-4">
+              <div className="min-w-0">
                 <p className="text-sm font-bold text-slate-700">Visible in roommate discovery</p>
                 <p className="mt-0.5 text-xs text-slate-400">
                   Other students can find and contact you
@@ -1128,7 +1181,7 @@ export default function Roommate() {
 
             {/* Section: My lifestyle */}
             <p className="mb-4 text-sm font-black text-[#091E42]">My lifestyle</p>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid min-w-0 gap-4 md:grid-cols-2 [&>*]:min-w-0">
               <label className="block">
                 <span className="text-sm font-bold text-slate-600">City</span>
                 <input
@@ -1297,7 +1350,7 @@ export default function Roommate() {
             <p className="mb-4 mt-8 text-sm font-black text-[#091E42]">
               What I want in a roommate
             </p>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid min-w-0 gap-4 md:grid-cols-2 [&>*]:min-w-0">
               <label className="block">
                 <span className="text-sm font-bold text-slate-600">Preferred smoking</span>
                 <select
@@ -1368,27 +1421,39 @@ export default function Roommate() {
             {error && activeTab === "profile" ? (
               <p className="mt-4 text-sm font-semibold text-rose-600">{error}</p>
             ) : null}
-            <button
-              type="button"
-              onClick={handleSaveRoommateProfile}
-              disabled={saving}
-              className={`mt-6 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white transition-colors disabled:cursor-not-allowed disabled:bg-slate-300 ${
-                saved ? "bg-emerald-600" : "bg-[#155BC2]"
-              }`}
-            >
-              {saved ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Saved!
-                </>
-              ) : (
-                <>
-                  <Users className="h-4 w-4" />
-                  {saving ? "Saving…" : "Save roommate profile"}
-                </>
-              )}
-            </button>
-          </Section>
+              </div>
+
+              <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:justify-end sm:px-6 sm:py-3">
+                <button
+                  type="button"
+                  onClick={closeRoommateProfile}
+                  className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveRoommateProfile}
+                  disabled={saving}
+                  className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white transition-colors disabled:cursor-not-allowed disabled:bg-slate-300 ${
+                    saved ? "bg-emerald-600" : "bg-[#155BC2]"
+                  }`}
+                >
+                  {saved ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Saved!
+                    </>
+                  ) : (
+                    <>
+                      <Users className="h-4 w-4" />
+                      {saving ? "Saving…" : "Save roommate profile"}
+                    </>
+                  )}
+                </button>
+              </footer>
+            </section>
+          </div>
         ) : null}
       </main>
 

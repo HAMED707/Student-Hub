@@ -126,15 +126,22 @@ class StripeWebhookView(View):
             if payment.status == Payment.Status.PAID:
                 return HttpResponse(status=200)
 
-            payment.status = Payment.Status.PAID
-            payment.stripe_payment_intent_id = getattr(session, "payment_intent", None)
-            payment.raw_webhook_event = json.loads(request.body)
-            payment.paid_at = timezone.now()
-            payment.save()
+            with transaction.atomic():
+                payment.status = Payment.Status.PAID
+                payment.stripe_payment_intent_id = getattr(session, "payment_intent", None)
+                payment.raw_webhook_event = json.loads(request.body)
+                payment.paid_at = timezone.now()
+                payment.save()
 
-            booking = payment.booking
-            booking.status = "paid"
-            booking.save(update_fields=["status"])
+                booking = payment.booking
+                payment_type = (session.metadata.to_dict() if session.metadata else {}).get("payment_type", "deposit")
+
+                if payment_type == "remaining":
+                    booking.remaining_paid = True
+                    booking.save(update_fields=["remaining_paid"])
+                else:
+                    booking.status = "paid"
+                    booking.save(update_fields=["status"])
 
         # ── Landlord completes onboarding → flush pending payouts ──────
         elif event.type == "account.updated":
@@ -366,3 +373,105 @@ class LandlordPayoutsView(APIView):
             })
 
         return Response(data, status=status.HTTP_200_OK)
+
+
+class RequestRemainingPaymentView(APIView):
+    """
+    POST /api/payments/request-remaining/
+    Body: {"booking_id": 123}
+
+    Landlord-only. Called from the QR-scan success screen when the landlord
+    wants the student to pay the remaining 80% on the platform.
+    Sets remaining_payment_requested=True on the booking.
+    """
+
+    permission_classes = [IsLandlord]
+
+    def post(self, request):
+        booking_id = request.data.get("booking_id")
+        if not booking_id:
+            return Response({"error": "booking_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            booking = Booking.objects.get(id=booking_id, property__landlord=request.user)
+        except Booking.DoesNotExist:
+            return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if booking.status != "finished":
+            return Response(
+                {"error": "Can only request remaining payment after check-in (booking must be finished)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if booking.remaining_amount_cents == 0:
+            return Response({"error": "No remaining amount on this booking."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if booking.remaining_paid:
+            return Response({"error": "Remaining amount is already paid."}, status=status.HTTP_400_BAD_REQUEST)
+
+        booking.remaining_payment_requested = True
+        booking.save(update_fields=["remaining_payment_requested"])
+
+        return Response({"message": "Remaining payment request sent to student."}, status=status.HTTP_200_OK)
+
+
+class CreateRemainingCheckoutSessionView(APIView):
+    """
+    POST /api/payments/pay-remaining/
+    Body: {"booking_id": 123}
+
+    Student-only. Creates a Stripe Checkout Session for the remaining 80%
+    of the booking. Only available when the landlord has requested it.
+    """
+
+    permission_classes = [IsStudent]
+
+    def post(self, request):
+        booking_id = request.data.get("booking_id")
+        if not booking_id:
+            return Response({"error": "booking_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            booking = Booking.objects.get(id=booking_id, tenant=request.user)
+        except Booking.DoesNotExist:
+            return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not booking.remaining_payment_requested:
+            return Response({"error": "Remaining payment has not been requested yet."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if booking.remaining_paid:
+            return Response({"error": "Remaining amount is already paid."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if booking.remaining_amount_cents == 0:
+            return Response({"error": "No remaining amount on this booking."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            import stripe
+            from django.conf import settings
+            session = stripe.checkout.Session.create(
+                mode="payment",
+                payment_method_types=["card"],
+                line_items=[{
+                    "price_data": {
+                        "currency": "aed",
+                        "unit_amount": booking.remaining_amount_cents,
+                        "product_data": {"name": f"Remaining balance — Booking #{booking.id} — {booking.property.title}"},
+                    },
+                    "quantity": 1,
+                }],
+                metadata={"booking_id": str(booking.id), "payment_type": "remaining"},
+                success_url=f"{settings.FRONTEND_URL}/bookings?payment=remaining_success&booking_id={booking.id}",
+                cancel_url=f"{settings.FRONTEND_URL}/bookings?payment=remaining_cancelled&booking_id={booking.id}",
+            )
+        except Exception as exc:
+            logger.error("Remaining checkout session failed for booking %s: %s", booking.id, exc)
+            return Response({"error": "Could not start payment. Please try again."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        Payment.objects.create(
+            booking=booking,
+            stripe_checkout_session_id=session.id,
+            amount_cents=booking.remaining_amount_cents,
+            status=Payment.Status.PENDING,
+        )
+
+        return Response({"checkout_url": session.url}, status=status.HTTP_201_CREATED)

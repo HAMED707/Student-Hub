@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -26,6 +26,8 @@ import ChatbotWidget from "../../assets/components/ChatbotWidget/ChatbotWidget.j
 import logoFull from "../../assets/brand/icons/logo.svg";
 import heroBanner from "../../assets/images/banners/hero_banner.png";
 import studentsGroupImage from "../../assets/images/banners/image.png";
+import { fetchFeaturedProperties, fetchProperties } from "../../api/properties.js";
+import { normalizePropertyCard } from "../../utils/properties.js";
 
 const partnerLogos = [
   { name: "EELU", src: "https://upload.wikimedia.org/wikipedia/commons/e/e6/Eelu_logo.png", link: "https://www.eelu.edu.eg/" },
@@ -316,6 +318,23 @@ const Home = () => {
   const uniScrollRef = useRef(null);
   const [selectedUniversity, setSelectedUniversity] = useState("Cairo University");
   const [testimonialIndex, setTestimonialIndex] = useState(0);
+  const [featuredProperties, setFeaturedProperties] = useState([]);
+
+  useEffect(() => {
+    fetchFeaturedProperties()
+      .then((data) => {
+        const list = Array.isArray(data) ? data : (data?.results ?? []);
+        setFeaturedProperties(list.slice(0, 6).map(normalizePropertyCard));
+      })
+      .catch(() => {
+        fetchProperties({ status: "available" })
+          .then((data) => {
+            const list = Array.isArray(data) ? data : (data?.results ?? []);
+            setFeaturedProperties(list.slice(0, 6).map(normalizePropertyCard));
+          })
+          .catch(() => {});
+      });
+  }, []);
 
   const filteredUniProperties = useMemo(
     () => uniPropertiesData.filter((item) => item.university === selectedUniversity),
@@ -412,17 +431,15 @@ const Home = () => {
             }
           />
           <div ref={featuredScrollRef} className="scrollbar-hide -mr-3 mt-6 flex snap-x snap-mandatory gap-6 overflow-x-auto pb-4 pr-3 scroll-smooth md:-mr-6 md:pr-6">
-            {propertiesList.map((item) => (
-              <div key={item.id} className="w-[320px] flex-shrink-0 snap-start sm:w-[360px]">
-                <PropertyCard
-                  property={item}
-                  favoriteDisabled={true}
-                  onFavoriteDisabled={() =>
-                    window.alert("Favorites on the home page will work after these cards are connected to live backend listings.")
-                  }
-                />
-              </div>
-            ))}
+            {featuredProperties.length === 0 ? (
+              <p className="py-8 text-sm text-slate-400">Loading properties…</p>
+            ) : (
+              featuredProperties.map((item) => (
+                <div key={item.id} className="w-[320px] flex-shrink-0 snap-start sm:w-[360px]">
+                  <PropertyCard property={item} />
+                </div>
+              ))
+            )}
           </div>
         </section>
 

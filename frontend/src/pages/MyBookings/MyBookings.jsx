@@ -19,7 +19,7 @@ import {
 import QRCode from "react-qr-code";
 import Navbar from "../../assets/components/Navbar/Navbar.jsx";
 import { fetchMyBookings, updateBookingStatus } from "../../api/bookings.js";
-import { createCheckoutSession } from "../../api/payments.js";
+import { createCheckoutSession, createRemainingCheckoutSession } from "../../api/payments.js";
 import { fetchPropertyDetail } from "../../api/properties.js";
 import { createPropertyReview } from "../../api/reviews.js";
 import {
@@ -38,8 +38,8 @@ import { notifyPropertyReviewCreated } from "../../utils/reviews.js";
 const QrModal = ({ booking, onClose }) => {
   if (!booking) return null;
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-2xl sm:rounded-3xl sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-lg font-black text-[#091E42]">Check-in QR Code</h3>
@@ -50,7 +50,7 @@ const QrModal = ({ booking, onClose }) => {
           </button>
         </div>
 
-        <div className="flex justify-center rounded-2xl bg-white p-4 border border-slate-100">
+        <div className="flex justify-center rounded-2xl border border-slate-100 bg-white p-3 [&>svg]:h-auto [&>svg]:max-w-full sm:p-4">
           <QRCode value={booking.qrToken} size={220} />
         </div>
 
@@ -72,7 +72,7 @@ const StatusBadge = ({ status }) => {
 
   return (
     <div
-      className={`${config.bg} ${config.text} rounded-full px-4 py-2 text-sm font-semibold`}
+      className={`${config.bg} ${config.text} w-fit whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold`}
     >
       {config.label}
     </div>
@@ -80,12 +80,12 @@ const StatusBadge = ({ status }) => {
 };
 
 const StatusTimeline = ({ timeline }) => (
-  <div className="flex items-center justify-between gap-4 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-6">
+  <div className="flex flex-col gap-3 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 px-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4 sm:py-6">
     {timeline.map((item, index) => (
-      <div key={item.step} className="flex flex-1 items-center">
-        <div className="flex flex-1 flex-col items-center">
+      <div key={item.step} className="flex min-w-0 flex-1 items-center">
+        <div className="flex min-w-0 flex-1 items-center sm:flex-col sm:justify-center">
           <div
-            className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold transition-all ${
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-all sm:h-10 sm:w-10 ${
               item.completed
                 ? "bg-green-500 text-white"
                 : "bg-gray-300 text-gray-600"
@@ -93,23 +93,25 @@ const StatusTimeline = ({ timeline }) => (
           >
             {item.completed ? <CheckCircle size={20} /> : index + 1}
           </div>
-          <p
-            className={`mt-2 text-center text-sm font-semibold ${
-              item.completed ? "text-green-600" : "text-gray-500"
-            }`}
-          >
-            {item.step}
-          </p>
-          {item.date && (
-            <p className="mt-1 text-xs text-gray-400">
-              {formatBookingDate(item.date)}
+          <div className="ml-3 min-w-0 sm:ml-0">
+            <p
+              className={`text-sm font-semibold sm:mt-2 sm:text-center ${
+                item.completed ? "text-green-600" : "text-gray-500"
+              }`}
+            >
+              {item.step}
             </p>
-          )}
+            {item.date && (
+              <p className="mt-0.5 text-xs text-gray-400 sm:mt-1 sm:text-center">
+                {formatBookingDate(item.date)}
+              </p>
+            )}
+          </div>
         </div>
 
         {index < timeline.length - 1 && (
           <div
-            className={`mx-2 h-1 flex-1 ${
+            className={`mx-2 hidden h-1 flex-1 sm:block ${
               timeline[index + 1].completed ? "bg-green-500" : "bg-gray-300"
             }`}
           />
@@ -139,11 +141,11 @@ const ReviewModal = ({
   if (!booking) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 p-4">
-      <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 p-2 sm:p-4">
+      <div className="max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-2xl font-bold text-gray-900">Review your stay</h3>
+            <h3 className="text-xl font-bold text-gray-900 sm:text-2xl">Review your stay</h3>
             <p className="mt-1 text-sm text-gray-600">
               Submit feedback for {booking.propertyTitle} using booking #{booking.id}.
             </p>
@@ -213,18 +215,18 @@ const ReviewModal = ({
           {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
           {success && <p className="text-sm font-medium text-emerald-600">{success}</p>}
 
-          <div className="flex justify-end gap-3">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="w-full rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {submitting ? "Submitting..." : "Submit Review"}
             </button>
@@ -245,6 +247,7 @@ const BookingCard = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [payingNow, setPayingNow] = useState(false);
+  const [payingRemaining, setPayingRemaining] = useState(false);
   const statusMeta = getStudentStatusMeta(booking.status);
   const canCancel = booking.status === "pending_payment";
   const canContinuePayment = booking.status === "pending_payment";
@@ -254,6 +257,10 @@ const BookingCard = ({
     !hasReview &&
     !canLeaveReview &&
     booking.status === "pending_payment";
+  const canPayRemaining =
+    booking.remainingPaymentRequested &&
+    !booking.remainingPaid &&
+    booking.remainingAmountEgp > 0;
 
   const handlePayNow = async () => {
     try {
@@ -265,32 +272,42 @@ const BookingCard = ({
     }
   };
 
+  const handlePayRemaining = async () => {
+    try {
+      setPayingRemaining(true);
+      const session = await createRemainingCheckoutSession(booking.id);
+      window.location.href = session.checkout_url;
+    } catch {
+      setPayingRemaining(false);
+    }
+  };
+
   return (
     <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-shadow duration-200 hover:shadow-lg">
       <div
         id={`student-booking-${booking.id}`}
         className={isHighlighted ? "ring-2 ring-blue-500 ring-offset-2" : ""}
       >
-      <div className="flex items-center gap-6 p-6">
+      <div className="flex flex-col gap-4 p-3 sm:p-5 lg:flex-row lg:items-center lg:gap-6 lg:p-6">
         <div
-          className="flex-shrink-0 cursor-pointer transition-opacity hover:opacity-80"
+          className="w-full flex-shrink-0 cursor-pointer transition-opacity hover:opacity-80 sm:w-auto"
           onClick={() => navigate(`/property/${booking.propertyId}`)}
         >
           <img
             src={booking.propertyImage}
             alt={booking.propertyTitle}
-            className="h-32 w-48 rounded-lg object-cover"
+            className="h-48 w-full rounded-xl object-cover sm:h-32 sm:w-48 sm:rounded-lg"
           />
         </div>
 
         <div className="min-w-0 flex-1">
           <h3
-            className="mb-3 cursor-pointer text-xl font-bold text-gray-900 transition-colors hover:text-blue-600"
+            className="mb-3 break-words text-lg font-bold text-gray-900 transition-colors hover:text-blue-600 sm:cursor-pointer sm:text-xl"
             onClick={() => navigate(`/property/${booking.propertyId}`)}
           >
             {booking.propertyTitle}
           </h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div className="flex items-center gap-2 text-gray-600">
               <FileText size={16} className="flex-shrink-0 text-blue-500" />
               <span>
@@ -312,20 +329,20 @@ const BookingCard = ({
             <div className="flex items-center gap-2 text-gray-600">
               <CreditCard size={16} className="flex-shrink-0 text-green-500" />
               <span>
-                <strong>Deposit:</strong> {booking.totalPrice.toLocaleString()} EGP
+                <strong>Deposit (20%):</strong> {booking.totalPrice.toLocaleString()} EGP
               </span>
             </div>
-            <div className="col-span-2 flex items-center gap-2 text-gray-600">
+            <div className="flex min-w-0 items-start gap-2 text-gray-600 sm:col-span-2 sm:items-center">
               <MapPin size={16} className="flex-shrink-0 text-blue-500" />
-              <span>{booking.propertyAddress}</span>
+              <span className="min-w-0 break-words">{booking.propertyAddress}</span>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-shrink-0 flex-col items-end gap-4">
+        <div className="flex w-full flex-shrink-0 flex-col items-stretch gap-3 border-t border-gray-100 pt-4 lg:w-auto lg:items-end lg:border-0 lg:pt-0">
           <StatusBadge status={booking.status} />
 
-          <div className="text-right">
+          <div className="text-left lg:text-right">
             <p className="text-xs font-semibold text-gray-500">
               {statusMeta.label}
             </p>
@@ -334,7 +351,7 @@ const BookingCard = ({
             </p>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex w-full flex-col items-stretch gap-2 [&>button]:justify-center [&>button]:text-center lg:items-end">
             {canContinuePayment && (
               <button
                 onClick={handlePayNow}
@@ -356,6 +373,23 @@ const BookingCard = ({
               </button>
             )}
 
+            {canPayRemaining && (
+              <button
+                onClick={handlePayRemaining}
+                disabled={payingRemaining}
+                className="flex items-center gap-2 rounded-lg bg-purple-600 px-6 py-2 text-white transition-colors duration-200 hover:bg-purple-700 disabled:opacity-60"
+              >
+                <CreditCard size={18} />
+                {payingRemaining ? "Redirecting…" : `Pay Remaining (EGP ${booking.remainingAmountEgp.toLocaleString()})`}
+              </button>
+            )}
+
+            {booking.remainingPaid && (
+              <span className="flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm font-bold text-emerald-700">
+                <CheckCircle size={16} /> Fully Paid
+              </span>
+            )}
+
             {canLeaveReview && (
               <button
                 onClick={() => onOpenReview(booking)}
@@ -373,7 +407,7 @@ const BookingCard = ({
             )}
 
             {reviewBlockedUntilStay && (
-              <div className="max-w-[220px] text-right text-xs font-medium text-slate-500">
+              <div className="max-w-none text-left text-xs font-medium text-slate-500 lg:max-w-[220px] lg:text-right">
                 Review opens after the booking becomes confirmed or completed.
               </div>
             )}
@@ -399,7 +433,7 @@ const BookingCard = ({
 
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-1 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-800"
+            className="flex items-center gap-1 self-start text-sm font-semibold text-blue-600 transition-colors hover:text-blue-800 lg:self-auto"
           >
             View Details
             {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -408,7 +442,7 @@ const BookingCard = ({
       </div>
 
       {isExpanded && (
-        <div className="border-t border-gray-200 bg-gray-50 p-6">
+        <div className="border-t border-gray-200 bg-gray-50 p-3 sm:p-6">
           <div className="mb-6">
             <h4 className="mb-4 text-lg font-bold text-gray-900">
               Booking Progress
@@ -416,12 +450,12 @@ const BookingCard = ({
             <StatusTimeline timeline={booking.timeline} />
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-6">
+          <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div>
               <h5 className="mb-3 font-semibold text-gray-900">Payment Snapshot</h5>
               <div className="space-y-2 text-sm text-gray-600">
                 <p>
-                  <strong>Deposit:</strong> {booking.totalPrice.toLocaleString()} EGP
+                  <strong>Deposit (20%):</strong> {booking.totalPrice.toLocaleString()} EGP
                 </p>
                 <p>
                   <strong>Status:</strong> {statusMeta.label}
@@ -459,7 +493,7 @@ const BookingCard = ({
                     }),
                   })
                 }
-                className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white transition-colors hover:bg-blue-600"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white transition-colors hover:bg-blue-600 sm:w-auto"
               >
                 <MessageCircle size={16} />
                 Chat with Host
@@ -482,15 +516,15 @@ const BookingCard = ({
 };
 
 const EmptyState = ({ tabName, navigate }) => (
-  <div className="flex flex-col items-center justify-center px-6 py-16">
-    <Home size={64} className="mb-4 text-gray-300" />
-    <h3 className="mb-2 text-2xl font-bold text-gray-900">No bookings found</h3>
-    <p className="mb-6 text-lg text-gray-600">
+  <div className="flex flex-col items-center justify-center px-3 py-12 text-center sm:px-6 sm:py-16">
+    <Home size={52} className="mb-4 text-gray-300 sm:h-16 sm:w-16" />
+    <h3 className="mb-2 text-xl font-bold text-gray-900 sm:text-2xl">No bookings found</h3>
+    <p className="mb-6 text-base text-gray-600 sm:text-lg">
       You don&apos;t have any {tabName.toLowerCase()} bookings yet.
     </p>
     <button
       onClick={() => navigate("/find-room")}
-      className="rounded-lg bg-blue-500 px-8 py-3 font-semibold text-white transition-colors hover:bg-blue-600"
+      className="w-full rounded-lg bg-blue-500 px-8 py-3 font-semibold text-white transition-colors hover:bg-blue-600 sm:w-auto"
     >
       Explore Properties
     </button>
@@ -531,7 +565,7 @@ export default function MyBookings() {
       setPaymentBanner(payment);
       setSearchParams({}, { replace: true });
     }
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -572,6 +606,9 @@ export default function MyBookings() {
               moveInDate: booking.move_in_date,
               durationMonths: booking.duration_months,
               totalPrice: formatMoneyFromCents(booking.total_amount_cents),
+              remainingAmountEgp: formatMoneyFromCents(booking.remaining_amount_cents),
+              remainingPaymentRequested: Boolean(booking.remaining_payment_requested),
+              remainingPaid: Boolean(booking.remaining_paid),
               status: booking.status,
               expiresAt: booking.expires_at,
               bookingDate: booking.created_at,
@@ -729,20 +766,20 @@ export default function MyBookings() {
 
       <main className="w-full">
         <div className="border-b border-gray-200 bg-white">
-          <div className="px-6 py-8">
-            <h1 className="mb-2 text-4xl font-bold text-gray-900">My Bookings</h1>
+          <div className="px-4 py-6 sm:px-6 sm:py-8">
+            <h1 className="mb-2 text-2xl font-bold text-gray-900 sm:text-4xl">My Bookings</h1>
             <p className="text-gray-600">
               Track your booking requests and current stay status.
             </p>
           </div>
 
-          <div className="overflow-x-auto border-t border-gray-200 px-6 py-0 scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-blue-400">
+          <div className="no-scrollbar overflow-x-auto border-t border-gray-200 px-3 py-0 sm:px-6">
             <div className="flex gap-2">
               {STUDENT_BOOKING_TABS.map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`whitespace-nowrap border-b-4 px-6 py-4 text-sm font-semibold transition-all ${
+                  className={`whitespace-nowrap border-b-4 px-4 py-3 text-sm font-semibold transition-all sm:px-6 sm:py-4 ${
                     activeTab === tab
                       ? "border-blue-500 bg-blue-50 text-blue-600"
                       : "border-transparent text-gray-600 hover:text-gray-900"
@@ -764,10 +801,10 @@ export default function MyBookings() {
           </div>
         </div>
 
-        <div className="w-full overflow-y-auto px-6 py-8">
+        <div className="mx-auto w-full max-w-7xl px-3 py-5 sm:px-6 sm:py-8">
           {paymentBanner === "success" && (
-            <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-              <div className="flex items-center gap-3">
+            <div className="mb-6 flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-700 sm:px-4">
+              <div className="flex min-w-0 items-start gap-3">
                 <CheckCircle className="h-5 w-5 shrink-0" />
                 <span>Payment confirmed! Your booking is now active. The landlord will be notified.</span>
               </div>
@@ -775,8 +812,8 @@ export default function MyBookings() {
             </div>
           )}
           {paymentBanner === "cancelled" && (
-            <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-              <div className="flex items-center gap-3">
+            <div className="mb-6 flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-semibold text-amber-700 sm:px-4">
+              <div className="flex min-w-0 items-start gap-3">
                 <AlertCircle className="h-5 w-5 shrink-0" />
                 <span>Payment was cancelled. Your booking is still reserved — click "Pay Now" to try again.</span>
               </div>

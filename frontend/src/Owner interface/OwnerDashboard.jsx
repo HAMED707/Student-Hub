@@ -32,9 +32,9 @@ import {
   markConversationRead,
   sendConversationMessage,
 } from "../api/messaging.js";
-import { getConnectStatus, startOnboarding, getLandlordPayouts } from "../api/payments.js";
+import { getConnectStatus, startOnboarding, getLandlordPayouts, requestRemainingPayment } from "../api/payments.js";
 import { clearSession, getApiErrorMessage, getStoredUser } from "../utils/auth.js";
-import { mapConversation, mapMessage } from "../utils/messaging.js";
+import { buildChatSocketUrl, mapConversation, mapMessage, mapSocketMessage } from "../utils/messaging.js";
 import { CITIES, TRANSPORT_OPTIONS, UNIVERSITIES_BY_CITY } from "../utils/propertyConstants.js";
 import { buildPropertyFormState, buildPropertyPayload } from "../utils/propertyForm.js";
 
@@ -120,13 +120,17 @@ function StatusBadge({ status }) {
   return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{status}</span>;
 }
 
-function FloatingWindow({ title, subtitle, onClose, children, width = "w-80", height }) {
+function FloatingWindow({ title, subtitle, onClose, children, width = "w-80", height, fullOnMobile = false }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center ${fullOnMobile ? "p-0 sm:p-3" : "p-3"}`}>
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
       <div
-        className={`relative mx-auto max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-2xl ${width} ${height ?? ""} flex flex-col overflow-hidden border border-blue-100`}
-        style={{ maxHeight: "90vh" }}
+        className={`relative bg-white shadow-2xl flex flex-col overflow-hidden border border-blue-100 ${
+          fullOnMobile
+            ? "rounded-none sm:rounded-2xl sm:mx-auto sm:max-w-[calc(100vw-1.5rem)]"
+            : "rounded-2xl mx-auto max-w-[calc(100vw-1.5rem)]"
+        } ${width} ${height ?? ""}`}
+        style={fullOnMobile ? undefined : { maxHeight: "90vh" }}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
           <div>
@@ -314,11 +318,13 @@ function ChatWindow({ conversation, currentUserId, onClose, onMessageSent }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const scrollRef = useRef(null);
+  const wsRef = useRef(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
+  // Load history on open
   useEffect(() => {
     let isCancelled = false;
 
@@ -339,10 +345,36 @@ function ChatWindow({ conversation, currentUserId, onClose, onMessageSent }) {
     }
 
     loadMessages();
-    return () => {
-      isCancelled = true;
+    return () => { isCancelled = true; };
+  }, [conversation.id, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // WebSocket for real-time incoming messages
+  useEffect(() => {
+    const url = buildChatSocketUrl(conversation.id);
+    if (!url) return;
+
+    const ws = new WebSocket(url);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type !== "chat_message") return;
+        // skip own echoes — we add sent messages from the REST response
+        if (String(payload.sender) === String(currentUserId)) return;
+        const mapped = mapSocketMessage(payload, currentUserId);
+        setMessages((prev) => {
+          if (prev.some((m) => String(m.id) === String(mapped.id))) return prev;
+          return [...prev, mapped];
+        });
+      } catch { /* ignore malformed */ }
     };
-  }, [conversation.id, currentUserId, onMessageSent]);
+
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [conversation.id, currentUserId]);
 
   async function send() {
     const trimmed = input.trim();
@@ -350,22 +382,18 @@ function ChatWindow({ conversation, currentUserId, onClose, onMessageSent }) {
 
     setSending(true);
     setError("");
-    const optimisticMessage = {
-      id: `temp-${Date.now()}`,
-      text: trimmed,
-      from: "me",
-      time: "Just now",
-    };
-    setMessages((prev) => [...prev, optimisticMessage]);
     setInput("");
 
     try {
       const created = await sendConversationMessage(conversation.id, trimmed);
       const mapped = mapMessage(created, currentUserId);
-      setMessages((prev) => prev.map((message) => (message.id === optimisticMessage.id ? mapped : message)));
+      // add the real message directly (no optimistic) so the WS echo (same ID) is a no-op
+      setMessages((prev) => {
+        if (prev.some((m) => String(m.id) === String(mapped.id))) return prev;
+        return [...prev, mapped];
+      });
       onMessageSent?.();
     } catch (sendError) {
-      setMessages((prev) => prev.filter((message) => message.id !== optimisticMessage.id));
       setError(getApiErrorMessage(sendError, "Failed to send message."));
       setInput(trimmed);
     } finally {
@@ -374,38 +402,45 @@ function ChatWindow({ conversation, currentUserId, onClose, onMessageSent }) {
   }
 
   return (
-    <FloatingWindow title={conversation.name} subtitle={conversation.role || "Student"} onClose={onClose} width="w-80" height="h-[420px]">
+    <FloatingWindow
+      title={conversation.name}
+      subtitle={conversation.role || "Student"}
+      onClose={onClose}
+      width="w-full sm:w-[400px]"
+      height="h-[100dvh] sm:h-[520px]"
+      fullOnMobile
+    >
       <div className="flex flex-col h-full">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
           {loading ? (
             <div className="flex h-full items-center justify-center text-xs text-gray-400">Loading…</div>
           ) : messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-xs text-gray-400">No messages yet.</div>
           ) : messages.map((msg) => (
-            <div key={msg.id} className={`flex items-end ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
+            <div key={msg.id} className={`flex items-end gap-1.5 ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
               {msg.from === "them" && (
-                <img src={conversation.avatar} alt={conversation.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                <img src={conversation.avatar} alt={conversation.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
               )}
-              <div className={`max-w-[70%] rounded-2xl px-3 py-2 text-sm ${msg.from === "me" ? "bg-blue-600 text-white ml-2" : "bg-gray-100 text-gray-800 ml-2"}`}>
+              <div className={`max-w-[80%] sm:max-w-[70%] rounded-2xl px-3 py-2 text-sm ${msg.from === "me" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800"}`}>
                 <p>{msg.text}</p>
-                {msg.time && <p className={`mt-1 text-[10px] ${msg.from === "me" ? "text-blue-100" : "text-gray-400"}`}>{msg.time}</p>}
+                {msg.time && <p className={`mt-0.5 text-[10px] ${msg.from === "me" ? "text-blue-100" : "text-gray-400"}`}>{msg.time}</p>}
               </div>
             </div>
           ))}
         </div>
         {error && <p className="border-t border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">{error}</p>}
         <div className="border-t border-gray-100 px-3 py-2 flex items-center gap-2">
-          <button type="button" className="text-gray-400 hover:text-blue-500 transition-colors" aria-label="Attach image"><ImageIcon size={16} /></button>
-          <button type="button" className="text-gray-400 hover:text-blue-500 transition-colors text-xs font-bold border border-gray-300 rounded px-1">GIF</button>
+          <button type="button" className="hidden sm:block text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0" aria-label="Attach image"><ImageIcon size={16} /></button>
+          <button type="button" className="hidden sm:block text-gray-400 hover:text-blue-500 transition-colors text-xs font-bold border border-gray-300 rounded px-1 flex-shrink-0">GIF</button>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Start a new message"
-            className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5 outline-none focus:border-blue-400 focus:bg-white transition-colors"
+            placeholder="Type a message…"
+            className="flex-1 min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5 outline-none focus:border-blue-400 focus:bg-white transition-colors"
           />
-          <button type="button" className="text-gray-400 hover:text-blue-500 transition-colors" aria-label="Emoji"><Smile size={16} /></button>
-          <button type="button" onClick={send} disabled={!input.trim() || sending} className="text-blue-600 hover:text-blue-700 transition-colors disabled:text-gray-300" aria-label="Send"><Send size={16} /></button>
+          <button type="button" className="hidden sm:block text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0" aria-label="Emoji"><Smile size={16} /></button>
+          <button type="button" onClick={send} disabled={!input.trim() || sending} className="text-blue-600 hover:text-blue-700 transition-colors disabled:text-gray-300 flex-shrink-0" aria-label="Send"><Send size={16} /></button>
         </div>
       </div>
     </FloatingWindow>
@@ -458,7 +493,7 @@ function NumberStepper({ label, value, onChange, min = 0 }) {
   );
 }
 
-function PropertyWizard({ title, initialData, onSubmit, onClose, submitLabel = "Save", showPhotos = true }) {
+function PropertyWizard({ title, initialData, onSubmit, onClose, submitLabel = "Save", showPhotos = true, existingImages = [] }) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(initialData);
   const [universities, setUniversities] = useState([]);
@@ -467,6 +502,15 @@ function PropertyWizard({ title, initialData, onSubmit, onClose, submitLabel = "
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
   const firstCityLoad = useRef(true);
+
+  const imagePreviews = useMemo(
+    () => images.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [images],
+  );
+
+  useEffect(() => () => {
+    imagePreviews.forEach(({ url }) => URL.revokeObjectURL(url));
+  }, [imagePreviews]);
 
   const set = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }));
 
@@ -506,6 +550,18 @@ function PropertyWizard({ title, initialData, onSubmit, onClose, submitLabel = "
         transportTypes: exists ? prev.transportTypes.filter((t) => t !== value) : [...prev.transportTypes, value],
       };
     });
+  }
+
+  function addImages(event) {
+    const selected = Array.from(event.target.files || []);
+    setImages((current) => {
+      const known = new Set(current.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
+      return [
+        ...current,
+        ...selected.filter((file) => !known.has(`${file.name}:${file.size}:${file.lastModified}`)),
+      ];
+    });
+    event.target.value = "";
   }
 
   function validateStep() {
@@ -733,20 +789,47 @@ function PropertyWizard({ title, initialData, onSubmit, onClose, submitLabel = "
             </div>
             {showPhotos && (
               <div>
-                <label className={labelCls}>Photos (optional — first photo becomes cover)</label>
+                <label className={labelCls}>
+                  {existingImages.length > 0 ? "Add more photos" : "Photos (optional — first photo becomes cover)"}
+                </label>
+                {existingImages.length > 0 && (
+                  <div className="mb-3">
+                    <p className="mb-2 text-xs text-gray-400">Current photos ({existingImages.length})</p>
+                    <div className="flex flex-wrap gap-2">
+                      {existingImages.map((image) => (
+                        <img
+                          key={image.id ?? image.image}
+                          src={withApiUrl(image.image)}
+                          alt="Current property"
+                          className="h-14 w-14 rounded-lg border border-gray-200 object-cover"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full border-2 border-dashed border-gray-200 rounded-xl py-6 flex flex-col items-center gap-2 text-gray-400 hover:border-blue-300 hover:text-blue-400 transition-colors"
                 >
                   <Upload size={20} />
-                  <span className="text-xs">{images.length > 0 ? `${images.length} photo${images.length > 1 ? "s" : ""} selected` : "Click to upload photos"}</span>
+                  <span className="text-xs">{images.length > 0 ? `${images.length} new photo${images.length > 1 ? "s" : ""} selected` : "Click to select one or more photos"}</span>
                 </button>
-                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => setImages(Array.from(e.target.files))} />
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={addImages} />
                 {images.length > 0 && (
                   <div className="flex gap-2 mt-2 flex-wrap">
-                    {images.map((img) => (
-                      <img key={img.name} src={URL.createObjectURL(img)} alt={img.name} className="w-14 h-14 object-cover rounded-lg border border-gray-200" />
+                    {imagePreviews.map(({ file, url }, index) => (
+                      <div key={`${file.name}:${file.size}:${file.lastModified}`} className="relative">
+                        <img src={url} alt={file.name} className="w-14 h-14 object-cover rounded-lg border border-gray-200" />
+                        <button
+                          type="button"
+                          onClick={() => setImages((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                          aria-label={`Remove ${file.name}`}
+                          className="absolute -right-1.5 -top-1.5 rounded-full bg-red-500 p-0.5 text-white shadow"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -815,11 +898,13 @@ function AddPropertyWindow({ onClose, onPropertyAdded }) {
 
 function EditPropertyWindow({ property, onClose, onPropertyUpdated }) {
   const [initialData, setInitialData] = useState(null);
+  const [existingImages, setExistingImages] = useState([]);
 
   useEffect(() => {
     apiRequest(`/api/properties/${property.id}/`)
       .then((res) => res.json())
       .then((full) => {
+        setExistingImages(Array.isArray(full.images) ? full.images : []);
         setInitialData(buildPropertyFormState({
           ...full,
           nearby_universities: (full.nearby_universities ?? []).map((u) => u.id),
@@ -827,15 +912,16 @@ function EditPropertyWindow({ property, onClose, onPropertyUpdated }) {
         }));
       })
       .catch(() => {
+        setExistingImages(property.cover_image ? [{ id: "cover", image: property.cover_image }] : []);
         setInitialData(buildPropertyFormState({
           ...property,
           nearby_universities: (property.nearby_universities ?? []).map((u) => u.id),
           transport_types: property.transport_types ?? [],
         }));
       });
-  }, [property.id]);
+  }, [property]);
 
-  async function handleSubmit(formData) {
+  async function handleSubmit(formData, images) {
     const payload = buildPropertyPayload(formData);
     const res = await apiRequest(`/api/properties/${property.id}/edit/`, {
       method: "PATCH",
@@ -846,6 +932,19 @@ function EditPropertyWindow({ property, onClose, onPropertyUpdated }) {
       const data = await res.json().catch(() => ({}));
       const msg = data?.detail || Object.values(data).flat().find((v) => typeof v === "string") || "Failed to save changes.";
       throw new Error(msg);
+    }
+
+    if (images.length > 0) {
+      const imageData = new FormData();
+      images.forEach((image) => imageData.append("images", image));
+      const imageRes = await apiRequest(`/api/properties/${property.id}/images/`, {
+        method: "POST",
+        body: imageData,
+      });
+      if (!imageRes.ok) {
+        const data = await imageRes.json().catch(() => ({}));
+        throw new Error(data?.error || data?.detail || "Property updated, but the new photos could not be uploaded.");
+      }
     }
     onPropertyUpdated?.();
   }
@@ -865,7 +964,8 @@ function EditPropertyWindow({ property, onClose, onPropertyUpdated }) {
       onSubmit={handleSubmit}
       onClose={onClose}
       submitLabel="Save Changes"
-      showPhotos={false}
+      showPhotos
+      existingImages={existingImages}
     />
   );
 }
@@ -931,11 +1031,13 @@ function CancelRequestsWindow({ onClose }) {
   );
 }
 
-function QrScannerModal({ onClose, onCheckin }) {
+function QrScannerModal({ onClose, onCheckin, onRequestRemaining }) {
   const scannerRef = useRef(null);
   const html5QrRef = useRef(null);
-  const [result, setResult] = useState(null); // null | {ok, message}
+  const [result, setResult] = useState(null); // null | {ok, message, bookingId}
   const [scanning, setScanning] = useState(true);
+  const [requestingRemaining, setRequestingRemaining] = useState(false);
+  const [remainingRequested, setRemainingRequested] = useState(false);
 
   useEffect(() => {
     let scanner;
@@ -962,6 +1064,19 @@ function QrScannerModal({ onClose, onCheckin }) {
     };
   }, []);
 
+  async function handleRequestRemaining() {
+    if (!result?.bookingId) return;
+    setRequestingRemaining(true);
+    try {
+      await onRequestRemaining(result.bookingId);
+      setRemainingRequested(true);
+    } catch {
+      // silently fail — user can retry from dashboard
+    } finally {
+      setRequestingRemaining(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
@@ -982,7 +1097,22 @@ function QrScannerModal({ onClose, onCheckin }) {
             <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
             <p className="font-black text-green-800 text-lg">Check-in confirmed!</p>
             <p className="text-sm text-green-700 mt-1">{result.message}</p>
-            <button onClick={onClose} className="mt-4 w-full rounded-xl bg-green-600 text-white py-2.5 text-sm font-bold hover:bg-green-700 transition">
+
+            {!remainingRequested ? (
+              <button
+                onClick={handleRequestRemaining}
+                disabled={requestingRemaining}
+                className="mt-4 w-full rounded-xl border-2 border-blue-500 bg-blue-50 text-blue-700 py-2.5 text-sm font-bold hover:bg-blue-100 transition disabled:opacity-60"
+              >
+                {requestingRemaining ? "Sending request…" : "Request remaining 80% payment from student"}
+              </button>
+            ) : (
+              <p className="mt-4 rounded-xl bg-blue-50 border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700">
+                Student has been notified to pay the remaining balance online.
+              </p>
+            )}
+
+            <button onClick={onClose} className="mt-3 w-full rounded-xl bg-green-600 text-white py-2.5 text-sm font-bold hover:bg-green-700 transition">
               Done
             </button>
           </div>
@@ -1106,7 +1236,11 @@ function OwnerDashboard() {
       const data = await res.json();
       if (res.ok) {
         loadPaymentsData();
-        return { ok: true, message: `Payout of EGP ${data.landlord_amount_aed?.toLocaleString() || "—"} ${data.payout_status === "pending" ? "is pending — complete your account verification." : "transferred to your account."}` };
+        return {
+          ok: true,
+          message: `Payout of EGP ${data.landlord_amount_aed?.toLocaleString() || "—"} ${data.payout_status === "pending" ? "is pending — complete your account verification." : "transferred to your account."}`,
+          bookingId: data.booking_id,
+        };
       }
       return { ok: false, message: data.error || "Check-in failed." };
     } catch {
@@ -1203,7 +1337,7 @@ function OwnerDashboard() {
   const recentBookings = dashboardData?.recent_bookings || [];
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: "Inter, sans-serif" }}>
+    <div className="min-h-screen overflow-x-hidden bg-white" style={{ fontFamily: "Inter, sans-serif" }}>
       <style>
         {`
           .sh-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -1630,7 +1764,7 @@ function OwnerDashboard() {
           onSaved={setOwnerProfile}
         />
       )}
-      {showQrScanner && <QrScannerModal onClose={() => setShowQrScanner(false)} onCheckin={handleCheckin} />}
+      {showQrScanner && <QrScannerModal onClose={() => setShowQrScanner(false)} onCheckin={handleCheckin} onRequestRemaining={(bookingId) => requestRemainingPayment(bookingId)} />}
     </div>
   );
 }

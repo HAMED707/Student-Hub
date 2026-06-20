@@ -13,15 +13,15 @@ const InputField = ({ label, name, type = "text", placeholder, value, onChange, 
     <div className="flex flex-col gap-2 w-full">
         <label className="text-sm font-bold text-gray-700">{label}</label>
         <div className="relative">
-            <input 
-                type={type} 
-                name={name} 
-                value={value} 
-                onChange={onChange} 
-                placeholder={placeholder} 
+            <input
+                type={type}
+                name={name}
+                value={value}
+                onChange={onChange}
+                placeholder={placeholder}
                 maxLength={maxLength}
                 className={`w-full h-12 px-4 border rounded-lg outline-none transition text-gray-700 placeholder-gray-400
-                    ${error ? 'border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:border-[#1A56DB] focus:ring-1 focus:ring-[#1A56DB]'}`} 
+                    ${error ? 'border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:border-[#1A56DB] focus:ring-1 focus:ring-[#1A56DB]'}`}
             />
             {error && (
                 <div className="flex items-center gap-1 mt-1 text-red-500 text-xs animate-fadeIn">
@@ -32,6 +32,41 @@ const InputField = ({ label, name, type = "text", placeholder, value, onChange, 
         </div>
     </div>
 );
+
+const PhoneField = ({ label, name, value, onChange, error }) => {
+    const localNumber = value.startsWith('+20') ? value.slice(3) : value;
+
+    const handleLocalChange = (e) => {
+        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+        onChange({ target: { name, value: '+20' + digits } });
+    };
+
+    return (
+        <div className="flex flex-col gap-2 w-full">
+            <label className="text-sm font-bold text-gray-700">{label}</label>
+            <div className={`flex h-12 border rounded-lg overflow-hidden transition
+                ${error ? 'border-red-500' : 'border-gray-300 focus-within:border-[#1A56DB] focus-within:ring-1 focus-within:ring-[#1A56DB]'}`}>
+                <span className="flex items-center px-3 bg-gray-100 text-gray-600 font-bold text-sm border-r border-gray-300 shrink-0">
+                    +20
+                </span>
+                <input
+                    type="tel"
+                    value={localNumber}
+                    onChange={handleLocalChange}
+                    placeholder="1XXXXXXXXX"
+                    maxLength={10}
+                    className="flex-1 px-3 outline-none text-gray-700 placeholder-gray-400 bg-white"
+                />
+            </div>
+            {error && (
+                <div className="flex items-center gap-1 mt-1 text-red-500 text-xs animate-fadeIn">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{error}</span>
+                </div>
+            )}
+        </div>
+    );
+};
 
 // مكون قائمة منسدلة موحد
 const SelectField = ({ label, name, value, onChange, options, placeholder, disabled = false, error }) => (
@@ -64,11 +99,13 @@ const SelectField = ({ label, name, value, onChange, options, placeholder, disab
 // ==========================================
 // بيانات القوائم
 // ==========================================
-const egyptData = {
-    "Cairo": ["Nasr City", "Maadi", "Heliopolis", "New Cairo"],
-    "Giza": ["6th of October", "Dokki", "Mohandessin"],
-    "Alexandria": ["Smouha", "Miami"],
-};
+const EGYPT_CITIES = [
+    "Cairo", "Alexandria", "Giza", "Port Said", "Suez", "Ismailia",
+    "Damietta", "Mansoura", "Zagazig", "Banha", "Kafr El Sheikh",
+    "Tanta", "Shibin El Kom", "Damanhur", "Faiyum", "Beni Suef",
+    "Minya", "Asyut", "Sohag", "Qena", "Luxor", "Aswan",
+    "Hurghada", "Arish", "Sharm El Sheikh", "Mersa Matruh", "Kharga",
+];
 
 const universities = ["Cairo University", "Ain Shams University", "EELU", "AUC", "GUC"];
 const majors = ["Computer Science", "Engineering", "Business", "Medicine", "Pharmacy"];
@@ -81,47 +118,63 @@ const StudentRegister = () => {
     const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState(1);
     
+    const [usernameCustomized, setUsernameCustomized] = useState(false);
+
     const [formData, setFormData] = useState({
-        firstName: '', lastName: '', gender: '', phone: '', dob: '', nationalId: '', governorate: '', city: '',
+        firstName: '', lastName: '', username: '', gender: '', phone: '+20', dob: '', nationalId: '', city: '',
         university: '', academicYear: '', major: '',
         email: '', password: '', confirmPassword: ''
     });
 
     const [errors, setErrors] = useState({});
-    const [availableCities, setAvailableCities] = useState([]);
     const [formError, setFormError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // backend field → { formField, step }
+    const FIELD_MAP = {
+        username:     { field: 'username',   step: 1 },
+        first_name:   { field: 'firstName',  step: 1 },
+        last_name:    { field: 'lastName',   step: 1 },
+        phone_number: { field: 'phone',      step: 1 },
+        national_id:  { field: 'nationalId', step: 1 },
+        email:        { field: 'email',      step: 3 },
+        password:     { field: 'password',   step: 3 },
+    };
+
+    const autoUsername = (fn, ln) =>
+        `${fn}.${ln}`.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9._]/g, '');
+
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: '' }));
-        }
-        if (formError) {
-            setFormError('');
-        }
-
-        if (name === 'governorate') {
-            setAvailableCities(egyptData[value] || []);
-            setFormData(prev => ({ ...prev, governorate: value, city: '' }));
-        }
+        setFormData(prev => {
+            const updated = { ...prev, [name]: value };
+            if ((name === 'firstName' || name === 'lastName') && !usernameCustomized) {
+                const fn = name === 'firstName' ? value : prev.firstName;
+                const ln = name === 'lastName' ? value : prev.lastName;
+                updated.username = autoUsername(fn, ln);
+            }
+            return updated;
+        });
+        if (name === 'username') setUsernameCustomized(true);
+        if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+        if (formError) setFormError('');
     };
 
     const validateStep = (step) => {
         let newErrors = {};
-        let isValid = true;
 
         if (step === 1) {
             if (!formData.firstName.trim()) newErrors.firstName = "First name is required";
             if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
+            if (!formData.username.trim()) newErrors.username = "Username is required";
+            else if (!/^[a-z0-9._]{3,}$/.test(formData.username)) newErrors.username = "Lowercase letters, numbers, . and _ only (min 3 chars)";
             if (!formData.gender) newErrors.gender = "Gender is required";
-            if (!formData.phone) newErrors.phone = "Phone is required";
+            const localPhone = formData.phone.replace('+20', '');
+            if (!localPhone) newErrors.phone = "Phone is required";
+            else if (!/^\d{10}$/.test(localPhone)) newErrors.phone = "Enter 10 digits after +20";
             if (!formData.dob) newErrors.dob = "Date of birth is required";
             if (!formData.nationalId) newErrors.nationalId = "National ID is required";
             else if (!/^\d{14}$/.test(formData.nationalId)) newErrors.nationalId = "Must be exactly 14 digits";
-            if (!formData.governorate) newErrors.governorate = "Governorate is required";
             if (!formData.city) newErrors.city = "City is required";
         }
 
@@ -134,56 +187,65 @@ const StudentRegister = () => {
         if (step === 3) {
             if (!formData.email.trim()) newErrors.email = "Email is required";
             else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid email";
-            
             if (!formData.password) newErrors.password = "Password is required";
             else if (formData.password.length < 8) newErrors.password = "Min 8 characters";
-
             if (!formData.confirmPassword) newErrors.confirmPassword = "Please confirm your password";
             else if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords do not match";
         }
 
-        if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
-            isValid = false;
-        }
-
-        return isValid;
+        if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return false; }
+        return true;
     };
 
-    const handleNext = async () => { 
-        if (validateStep(currentStep)) {
-            if (currentStep < 3) setCurrentStep(prev => prev + 1); 
-            else {
-                try {
-                    setIsSubmitting(true);
-                    setFormError('');
-                    const payload = {
-                        username: `${formData.firstName}.${formData.lastName}`.toLowerCase().replace(/\s+/g, ""),
-                        email: formData.email,
-                        first_name: formData.firstName,
-                        last_name: formData.lastName,
-                        password: formData.password,
-                        phone_number: formData.phone,
-                        gender: mapGenderToBackend(formData.gender),
-                        date_of_birth: formData.dob,
-                        city: `${formData.city}, ${formData.governorate}`,
-                        role: "student",
-                    };
-                    await registerUser(payload);
-                    await updateMyProfile({
-                        city: `${formData.city}, ${formData.governorate}`,
-                        student_profile: {
-                            university: formData.university,
-                            faculty: formData.major,
-                            year_of_study: formData.academicYear,
-                        },
-                    });
-                    navigate("/home");
-                } catch (error) {
-                    setFormError(getApiErrorMessage(error, "Registration failed"));
-                } finally {
-                    setIsSubmitting(false);
+    const handleApiError = (error) => {
+        const data = error?.data;
+        if (data && typeof data === 'object') {
+            for (const [backendKey, { field, step }] of Object.entries(FIELD_MAP)) {
+                if (data[backendKey]) {
+                    const msg = Array.isArray(data[backendKey]) ? data[backendKey][0] : String(data[backendKey]);
+                    setErrors({ [field]: msg });
+                    setCurrentStep(step);
+                    return;
                 }
+            }
+        }
+        setFormError(getApiErrorMessage(error, "Registration failed"));
+    };
+
+    const handleNext = async () => {
+        if (!validateStep(currentStep)) return;
+        if (currentStep < 3) {
+            setCurrentStep(prev => prev + 1);
+        } else {
+            try {
+                setIsSubmitting(true);
+                setFormError('');
+                const payload = {
+                    username: formData.username,
+                    email: formData.email,
+                    first_name: formData.firstName,
+                    last_name: formData.lastName,
+                    password: formData.password,
+                    phone_number: formData.phone,
+                    gender: mapGenderToBackend(formData.gender),
+                    date_of_birth: formData.dob,
+                    city: formData.city,
+                    role: "student",
+                };
+                await registerUser(payload);
+                await updateMyProfile({
+                    city: formData.city,
+                    student_profile: {
+                        university: formData.university,
+                        faculty: formData.major,
+                        year_of_study: formData.academicYear,
+                    },
+                });
+                navigate("/home");
+            } catch (error) {
+                handleApiError(error);
+            } finally {
+                setIsSubmitting(false);
             }
         }
     };
@@ -224,12 +286,15 @@ const StudentRegister = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
                                 <InputField label="First name" name="firstName" placeholder="Enter First name" value={formData.firstName} onChange={handleChange} error={errors.firstName} />
                                 <InputField label="Last name" name="lastName" placeholder="Enter Last name" value={formData.lastName} onChange={handleChange} error={errors.lastName} />
+                                <div className="md:col-span-2">
+                                    <InputField label="Username" name="username" placeholder="e.g. john.doe" value={formData.username} onChange={handleChange} error={errors.username} />
+                                    <p className="mt-1 text-xs text-gray-400">Auto-generated from your name — you can change it.</p>
+                                </div>
                                 <SelectField label="Gender" name="gender" placeholder="Enter the Gender" value={formData.gender} onChange={handleChange} options={["Male", "Female"]} error={errors.gender} />
-                                <InputField label="Phone" name="phone" placeholder="Enter the Phone" value={formData.phone} onChange={handleChange} error={errors.phone} />
+                                <PhoneField label="Phone" name="phone" value={formData.phone} onChange={handleChange} error={errors.phone} />
                                 <InputField label="Date of birth" name="dob" type="date" value={formData.dob} onChange={handleChange} error={errors.dob} />
                                 <InputField label="National ID" name="nationalId" placeholder="Enter 14 Digits ID" value={formData.nationalId} onChange={handleChange} maxLength={14} error={errors.nationalId} />
-                                <SelectField label="Governorate" name="governorate" placeholder="Enter the Governorate" value={formData.governorate} onChange={handleChange} options={Object.keys(egyptData)} error={errors.governorate} />
-                                <SelectField label="City" name="city" placeholder="Enter the City" value={formData.city} onChange={handleChange} options={availableCities} disabled={!formData.governorate} error={errors.city} />
+                                <SelectField label="City" name="city" placeholder="Select your city" value={formData.city} onChange={handleChange} options={EGYPT_CITIES} error={errors.city} />
                             </div>
                         )}
 

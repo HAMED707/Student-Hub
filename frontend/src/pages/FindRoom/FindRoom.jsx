@@ -464,7 +464,7 @@ const FindRoom = () => {
   }, [draftFilters]);
 
   return (
-    <div className="relative min-h-screen bg-[#F8F9FA] pb-16 font-sans text-[#091E42]">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#F8F9FA] pb-16 font-sans text-[#091E42]">
       <style>{`
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes tagPop { from { opacity: 0; transform: scale(.92) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }

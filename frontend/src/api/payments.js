@@ -14,3 +14,15 @@ export const startOnboarding = () =>
 
 export const getLandlordPayouts = () =>
   apiJson("/api/payments/payouts/");
+
+export const requestRemainingPayment = (booking_id) =>
+  apiJson("/api/payments/request-remaining/", {
+    method: "POST",
+    body: JSON.stringify({ booking_id }),
+  });
+
+export const createRemainingCheckoutSession = (booking_id) =>
+  apiJson("/api/payments/pay-remaining/", {
+    method: "POST",
+    body: JSON.stringify({ booking_id }),
+  });

@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent responsive panels, transforms, and wide tables from creating a
+   browser-level horizontal scrollbar. Dedicated overflow-x-auto sections
+   remain independently scrollable. */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  /* Unlike hidden, clip does not create a scroll container that breaks
+     position: sticky descendants (for example the property detail tabs). */
+  overflow-x: clip;
+}
+
 /* Smooth Scrollbar Styling */
 ::-webkit-scrollbar {
   width: 10px;

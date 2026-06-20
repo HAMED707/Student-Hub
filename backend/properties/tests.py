@@ -14,14 +14,16 @@ Run:
 """
 
 from decimal import Decimal
+from io import BytesIO
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
+from PIL import Image
 
 from accounts.models import Users
-from properties.models import Property, PropertyImage, University
+from properties.models import City, Property, PropertyImage, University
 
 
 # ─────────────────────────────────────────────────────────────
@@ -30,7 +32,9 @@ from properties.models import Property, PropertyImage, University
 
 def make_image_file(name="test.jpg"):
     """Minimal valid JPEG bytes so Pillow doesn't reject it."""
-    return SimpleUploadedFile(name, b"\xff\xd8\xff\xe0" + b"\x00" * 16, content_type="image/jpeg")
+    content = BytesIO()
+    Image.new("RGB", (1, 1), color="white").save(content, format="JPEG")
+    return SimpleUploadedFile(name, content.getvalue(), content_type="image/jpeg")
 
 
 def create_landlord(username="landlord1", password="pass1234"):
@@ -63,6 +67,8 @@ def create_property(landlord, universities=None, **kwargs):
         status="available",
     )
     defaults.update(kwargs)
+    if isinstance(defaults["city"], str):
+        defaults["city"] = City.objects.get(name=defaults["city"])
     prop = Property.objects.create(landlord=landlord, **defaults)
     if universities is None:
         universities = University.objects.filter(city=defaults["city"])[:1]
@@ -300,7 +306,7 @@ class PropertySerializerTests(TestCase):
     def setUp(self):
         self.landlord = create_landlord()
         self.prop = create_property(self.landlord, has_internet=True, has_ac=True)
-        self.cairo_uni = University.objects.filter(city="Cairo").first()
+        self.cairo_uni = University.objects.filter(city__name="Cairo").first()
 
     def test_list_serializer_has_cover_image_field(self):
         from api.properties_api.serializers import PropertyListSerializer
@@ -400,9 +406,11 @@ class PropertyAPIBase(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.landlord = create_landlord("landlord_api", "pass1234")
+        self.landlord.kyc_status = "APPROVED"
+        self.landlord.save(update_fields=["kyc_status"])
         self.other_landlord = create_landlord("other_landlord", "pass1234")
         self.student = create_student("student_api", "pass1234")
-        self.cairo_uni = University.objects.filter(city="Cairo").first()
+        self.cairo_uni = University.objects.filter(city__name="Cairo").first()
         self.prop = create_property(self.landlord, title="API Test Property")
         self.featured_prop = create_property(self.landlord, title="Featured", is_featured=True)
 
@@ -452,6 +460,25 @@ class PropertyListViewTests(PropertyAPIBase):
         types = [p["unit_type"] for p in resp.data]
         self.assertTrue(all(t == "room" for t in types))
 
+    def test_limit_caps_the_list_response(self):
+        for index in range(4):
+            create_property(self.landlord, title=f"Limited {index}")
+
+        resp = self.client.get("/api/properties/?limit=2")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 2)
+
+    def test_list_query_count_does_not_grow_per_property(self):
+        for index in range(5):
+            create_property(self.landlord, title=f"Query Test {index}")
+
+        # Main query + prefetched images, universities, and transport types.
+        with self.assertNumQueries(4):
+            resp = self.client.get("/api/properties/")
+
+        self.assertEqual(resp.status_code, 200)
+
 
 class FeaturedPropertiesViewTests(PropertyAPIBase):
 
@@ -496,6 +523,13 @@ class PropertyDetailViewTests(PropertyAPIBase):
         self.assertIn("images", resp.data)
         self.assertIn("landlord_name", resp.data)
 
+    def test_detail_uses_only_local_database_queries(self):
+        # Detail rendering must not wait for Google Maps or issue relation N+1s.
+        with self.assertNumQueries(6):
+            resp = self.client.get(f"/api/properties/{self.prop.id}/")
+
+        self.assertEqual(resp.status_code, 200)
+
     def test_increments_view_count(self):
         initial = self.prop.view_count
         self.client.get(f"/api/properties/{self.prop.id}/")
@@ -534,7 +568,7 @@ class PropertyCreateViewTests(PropertyAPIBase):
             self._create_payload(),
             format="json",
         )
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status_code, 201, resp.data)
         self.assertEqual(resp.data["title"], "New Listing")
 
     def test_student_cannot_create_property(self):
@@ -557,15 +591,19 @@ class PropertyCreateViewTests(PropertyAPIBase):
     def test_create_with_images(self):
         self.auth(self.landlord)
         payload = self._create_payload()
-        payload["uploaded_images"] = [make_image_file("upload1.jpg")]
+        payload["uploaded_images"] = [
+            make_image_file("upload1.jpg"),
+            make_image_file("upload2.jpg"),
+        ]
         resp = self.client.post(
             "/api/properties/create/",
             payload,
             format="multipart",
         )
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status_code, 201, resp.data)
         prop_id = resp.data["id"]
-        self.assertEqual(PropertyImage.objects.filter(property_id=prop_id).count(), 1)
+        self.assertEqual(PropertyImage.objects.filter(property_id=prop_id).count(), 2)
+        self.assertEqual(PropertyImage.objects.filter(property_id=prop_id, is_cover=True).count(), 1)
 
     def test_create_with_invalid_price_rejected(self):
         self.auth(self.landlord)

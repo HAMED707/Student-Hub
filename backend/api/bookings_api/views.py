@@ -94,14 +94,17 @@ class BookingCreateView(APIView):
                     )
 
                 duration_months = serializer.validated_data["duration_months"]
-                total = int(unit_price * 100)  # deposit = 1 month only; duration is informational
+                unit_price_cents    = int(unit_price * 100)
+                deposit_cents       = int(unit_price_cents * 0.20)
+                remaining_cents     = unit_price_cents - deposit_cents
 
                 booking = serializer.save(
-                    tenant             = request.user,
-                    booking_unit       = booking_unit,
-                    total_amount_cents = total,
-                    expires_at         = timezone.now() + timedelta(minutes=30),
-                    status             = "pending_payment",
+                    tenant                     = request.user,
+                    booking_unit               = booking_unit,
+                    total_amount_cents         = deposit_cents,
+                    remaining_amount_cents     = remaining_cents,
+                    expires_at                 = timezone.now() + timedelta(minutes=30),
+                    status                     = "pending_payment",
                 )
 
                 prop.status = "reserved"
