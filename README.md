@@ -23,6 +23,13 @@ Built as a full-stack application with a **Django REST** backend and a **React (
 
 ---
 
+
+## 🎬 Demo
+
+https://github.com/user-attachments/assets/6a37ca06-707e-4558-9385-7f18785c473b
+
+
+ 
 ## ✨ Features
 
 ### 🏠 Accommodation
